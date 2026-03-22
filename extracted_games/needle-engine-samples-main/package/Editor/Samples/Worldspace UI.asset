@@ -1,0 +1,94 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 936d6805986de86459a8710c7bf5c00a, type: 3}
+  m_Name: Worldspace UI
+  m_EditorClassIdentifier: Needle.Engine.Samples.SampleInfo, Needle.Engine.Samples.Editor
+    $ GlobalObjectId_V1-3-18f7c17c5bd6f824d8e1b55f44502a79-11400000-0
+  DisplayName: Worldspace UI
+  Description: Create 3D UIs with Canvas
+  Thumbnail: {fileID: 2800000, guid: e29e41c9d0d02e24c8b67f2af68c4e85, type: 3}
+  LiveUrl: https://engine.needle.tools/samples-uploads/worldspace-ui/
+  Priority: 5
+  Tags:
+  - {fileID: 11400000, guid: b57f842944f6ab7448467462f4b3505e, type: 2}
+  - {fileID: 11400000, guid: d637a1131da5ea14aaa3e463cf59ec92, type: 2}
+  Scene: {fileID: 102900000, guid: 26c5b48b522fc5b479db57be2d275c44, type: 3}
+  RepositoryUrl: 
+  reference: {fileID: 0}
+  UsedComponents:
+  - Component: PlayAnimationExample
+    Path: needle-engine-samples/package/Runtime/UI/Worldspace UI/Scripts/Needle.Samples.UIWorldspace~/PlayAnimationExample.ts
+    MoreInfoUrl: https://github.com/needle-tools/needle-engine-samples//tree/main/package/Runtime/UI/Worldspace
+      UI/Scripts/Needle.Samples.UIWorldspace~/PlayAnimationExample.ts
+  - Component: Animation
+    Path: engine/src/engine-components/Animation.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/component-reference.html
+  - Component: Animator
+    Path: engine/src/engine-components/Animator.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/component-reference.html
+  - Component: AudioListener
+    Path: engine/src/engine-components/AudioListener.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/component-reference.html
+  - Component: Button
+    Path: engine/src/engine-components/ui/Button.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/component-reference.html
+  - Component: Camera
+    Path: engine/src/engine-components/Camera.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/component-reference.html
+  - Component: Canvas
+    Path: engine/src/engine-components/ui/Canvas.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/component-reference.html
+  - Component: Image
+    Path: engine/src/engine-components/ui/Image.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/component-reference.html
+  - Component: RawImage
+    Path: engine/src/engine-components/ui/Image.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/component-reference.html
+  - Component: Light
+    Path: engine/src/engine-components/Light.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/component-reference.html
+  - Component: NeedleMenu
+    Path: engine/src/engine-components/NeedleMenu.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/api/NeedleMenu
+  - Component: OpenURL
+    Path: engine/src/engine-components/utils/OpenURL.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/api/OpenURL
+  - Component: OrbitControls
+    Path: engine/src/engine-components/OrbitControls.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/api/OrbitControls
+  - Component: ParticleSystem
+    Path: engine/src/engine-components/particlesystem/ParticleSystem.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/component-reference.html
+  - Component: ParticleSystemRenderer
+    Path: engine/src/engine-components/particlesystem/ParticleSystem.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/component-reference.html
+  - Component: GraphicRaycaster
+    Path: engine/src/engine-components/ui/Raycaster.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/component-reference.html
+  - Component: MeshRenderer
+    Path: engine/src/engine-components/Renderer.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/component-reference.html
+  - Component: ShadowCatcher
+    Path: engine/src/engine-components/ShadowCatcher.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/api/ShadowCatcher
+  - Component: Text
+    Path: engine/src/engine-components/ui/Text.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/component-reference.html
+  - Component: Volume
+    Path: engine/src/engine-components/postprocessing/Volume.ts
+    MoreInfoUrl: https://docs.unity3d.com/Packages/com.unity.render-pipelines.high-definition@12.1/manual/Volumes.html
+  - Component: WebXR
+    Path: engine/src/engine-components/webxr/WebXR.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/api/WebXR
+  - Component: XRRig
+    Path: engine/src/engine-components/webxr/WebXRRig.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/api/XRRig

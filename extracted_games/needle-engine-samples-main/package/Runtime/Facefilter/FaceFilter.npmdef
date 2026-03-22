@@ -1,0 +1,7 @@
+{
+  "type": 2,
+  "packageName": "@needle-tools/facefilter",
+  "packageVersion": "latest",
+  "localPath": null,
+  "allowCodegen": true
+}

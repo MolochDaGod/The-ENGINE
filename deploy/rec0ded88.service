@@ -1,0 +1,15 @@
+[Unit]
+Description=Rec0deD:88 Gaming Portal
+After=network.target postgresql.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/rec0ded88
+EnvironmentFile=/opt/rec0ded88/.env
+ExecStart=/usr/bin/node dist/index.js
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

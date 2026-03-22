@@ -1,0 +1,83 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 936d6805986de86459a8710c7bf5c00a, type: 3}
+  m_Name: ExternalContent
+  m_EditorClassIdentifier: Needle.Engine.Samples.SampleInfo, Needle.Engine.Samples.Editor
+    $ GlobalObjectId_V1-3-c05e57fa35f8ac14b810fd3c3d78cfb2-11400000-0
+  DisplayName: External Content
+  Description: Download textures & models from external sources
+  Thumbnail: {fileID: 2800000, guid: 8f1c0495cec2bf445b0e553e2178e336, type: 3}
+  Scene: {fileID: 102900000, guid: b78185ceafd3953409f8517ba3e15483, type: 3}
+  LiveUrl: https://engine.needle.tools/samples-uploads/dynamic-content
+  Priority: 17
+  Tags:
+  - {fileID: 11400000, guid: ec519786b0f262c4bbf635a7c4e70f9f, type: 2}
+  - {fileID: 11400000, guid: 0a31a68963a48e04dae4605ac44f73f1, type: 2}
+  reference: {fileID: 0}
+  UsedComponents:
+  - Component: AudioLoading
+    Path: needle-engine-samples/package/Runtime/ExternalContent/Scripts/Needle.Samples.ExternalContent~/AudioLoading.ts
+    MoreInfoUrl: https://github.com/needle-tools/needle-engine-samples//tree/main/package/Runtime/ExternalContent/Scripts/Needle.Samples.ExternalContent~/AudioLoading.ts
+  - Component: ModelLoading
+    Path: needle-engine-samples/package/Runtime/ExternalContent/Scripts/Needle.Samples.ExternalContent~/ModelLoading.ts
+    MoreInfoUrl: https://github.com/needle-tools/needle-engine-samples//tree/main/package/Runtime/ExternalContent/Scripts/Needle.Samples.ExternalContent~/ModelLoading.ts
+  - Component: SkyboxPreviewer
+    Path: needle-engine-samples/package/Runtime/ExternalContent/Scripts/Needle.Samples.ExternalContent~/SkyboxPreviewer.ts
+    MoreInfoUrl: https://github.com/needle-tools/needle-engine-samples//tree/main/package/Runtime/ExternalContent/Scripts/Needle.Samples.ExternalContent~/SkyboxPreviewer.ts
+  - Component: SkyboxWrapper
+    Path: needle-engine-samples/package/Runtime/ExternalContent/Scripts/Needle.Samples.ExternalContent~/SkyboxWrapper.ts
+    MoreInfoUrl: https://github.com/needle-tools/needle-engine-samples//tree/main/package/Runtime/ExternalContent/Scripts/Needle.Samples.ExternalContent~/SkyboxWrapper.ts
+  - Component: TextureLoading
+    Path: needle-engine-samples/package/Runtime/ExternalContent/Scripts/Needle.Samples.ExternalContent~/TextureLoading.ts
+    MoreInfoUrl: https://github.com/needle-tools/needle-engine-samples//tree/main/package/Runtime/ExternalContent/Scripts/Needle.Samples.ExternalContent~/TextureLoading.ts
+  - Component: AudioListener
+    Path: engine/src/engine-components/AudioListener.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/component-reference.html
+  - Component: AudioSource
+    Path: engine/src/engine-components/AudioSource.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/component-reference.html
+  - Component: Button
+    Path: engine/src/engine-components/ui/Button.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/component-reference.html
+  - Component: Camera
+    Path: engine/src/engine-components/Camera.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/component-reference.html
+  - Component: Canvas
+    Path: engine/src/engine-components/ui/Canvas.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/component-reference.html
+  - Component: EventSystem
+    Path: engine/src/engine-components/ui/EventSystem.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/component-reference.html
+  - Component: Image
+    Path: engine/src/engine-components/ui/Image.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/component-reference.html
+  - Component: Light
+    Path: engine/src/engine-components/Light.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/component-reference.html
+  - Component: NeedleMenu
+    Path: engine/src/engine-components/NeedleMenu.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/api/NeedleMenu
+  - Component: OrbitControls
+    Path: engine/src/engine-components/OrbitControls.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/api/OrbitControls
+  - Component: GraphicRaycaster
+    Path: engine/src/engine-components/ui/Raycaster.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/component-reference.html
+  - Component: MeshRenderer
+    Path: engine/src/engine-components/Renderer.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/component-reference.html
+  - Component: RemoteSkybox
+    Path: engine/src/engine-components/Skybox.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/api/RemoteSkybox
+  - Component: Text
+    Path: engine/src/engine-components/ui/Text.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/component-reference.html

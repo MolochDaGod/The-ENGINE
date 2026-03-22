@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" href="favicon.ico">
+  <meta name="viewport" content="width=device-width, user-scalable=no">
+
+  <title>Made with Needle</title>
+  <meta name="description" content="🌵 Made with Needle Engine">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta property="og:title" content="Made with Needle" />
+  <meta property="og:description" content="🌵 Made with Needle Engine" />
+
+  <meta property="twitter:image" content="" />
+  <meta property="og:image" content="" />
+
+  <meta name="robots" content="index,follow">
+  <meta name="url" content="http://needle.tools">
+
+  <link rel="stylesheet" href="./src/styles/style.css">
+
+  <style>
+    html {
+      height: 100%;
+    }
+
+    body {
+      background: linear-gradient(0deg, #c4d3d0 0%, #e8fff4 100%);
+      height: 100%;
+      background-repeat: no-repeat;
+      background-attachment: fixed;
+    }
+
+    div.container {
+      display: flex;
+      align-content: space-around;
+      align-items: center;
+      width: 100vw;
+      height: 100vh;
+      justify-content: space-around;
+      margin-top: -8vh;
+    }
+
+    .content {
+      width: 70vw;
+      height: 70vh;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      transition: width 0.5s, height 0.5s;
+    }
+
+    .content.small {
+      width: 40vw;
+      height: 60vh;
+    }
+
+    .content.wide {
+      width: 80vw;
+      height: 80vh;
+    }
+
+    needle-engine {
+      position: relative;
+      border-radius: 2em;
+      overflow:hidden;
+      box-shadow: 5px 5px 20px 0px rgb(8 52 2 / 32%);
+      flex-grow: 1;
+      transform: translateX(0); /* Webkit needs this for round corners */
+    }
+
+    .content.transparent needle-engine {
+      box-shadow: none;
+    }
+
+    .overlay-container {    
+      position: absolute;
+      left: -5%;
+      bottom: -50px;
+      background-color: #1a695ce3;
+      border-radius: 1em;
+      padding: 10px;
+      backdrop-filter: blur(2px);
+      box-shadow: 0px 0px 20px 0px rgba(245, 245, 245, 0.2);
+      border: 2px solid rgba(21, 59, 45, 0.185);
+    }
+
+    .overlay-container button {
+      display:block;
+      font-size: 2em;
+      padding: 0.2em .4em;
+      border-radius: .3em;
+      color: black;
+      border: none;
+      margin:10px;
+      background-color: rgba(255,255,255);
+      box-shadow: 0px 0px 5px 0px rgba(0, 0, 0, 0.5);
+    }
+    .overlay-container button:hover {
+      cursor: pointer;
+      background-color: rgb(46, 161, 127);
+      color: white;
+    }
+
+    @media screen and (max-width: 768px),
+           screen and (max-height: 1000px)
+     {
+      .headline {
+        font-size: 1.5em;
+        margin-top: 2em;
+      }
+      .content {
+        width: 90vw;
+        height: 90vh;
+      }
+
+      .content.small {
+        width: 50vw;
+        height: 50vh;
+      }
+      .overlay-container button {
+        font-size: 1em;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <script>
+    // hack for simple-peer
+    window.global = window;
+    var parcelRequire;
+  </script>
+  <script type="module" src="./src/generated/gen.js"></script>
+  <script type="module" src="./src/main.ts"></script>
+
+  <div class="container">
+    <div class="content">
+      <h1 class="headline">&lt;needle-engine&gt; is a custom HTML Element<br/>You can style and position it like any other element.</h1>
+      <needle-engine></needle-engine>
+      <p class="overlay-container">
+        <button class="btn-transparent">Make Background Transparent</button>
+        <button class="btn-small">Set Size Small</button>
+        <button class="btn-toggle-visible">Hide HTML Element</button>
+      </p>
+    </div>
+  </div>
+
+  <script type="module">
+    import { Camera, ClearFlags } from '@needle-tools/engine';
+
+    const contentContainer = document.querySelector('div.content');
+    const btnTransparent = document.querySelector('.btn-transparent');
+    const btnSmall = document.querySelector('.btn-small');
+    const btnToggleVisibility = document.querySelector('.btn-toggle-visible');
+
+    btnTransparent.addEventListener('click', () => {
+      contentContainer.classList.toggle('transparent');
+      if (contentContainer.classList.contains('transparent')) {
+        btnTransparent.innerText = 'Make Background Opaque';
+      Needle.findObjectOfType(Camera).clearFlags = ClearFlags.Uninitialized;
+      } else {
+        btnTransparent.innerText = 'Make Background Transparent';
+      Needle.findObjectOfType(Camera).clearFlags = ClearFlags.Skybox;
+      }
+    });
+
+    btnSmall.addEventListener('click', () => {
+      if (contentContainer.classList.contains('small')) {
+        contentContainer.classList.remove('small');
+        contentContainer.classList.add('wide');
+        btnSmall.innerText = 'Set Default Size';
+      } else if (contentContainer.classList.contains('wide')) {
+        contentContainer.classList.remove('small');
+        contentContainer.classList.remove('wide');
+        btnSmall.innerText = 'Set Size Small';
+      } else {
+        contentContainer.classList.add('small');
+        btnSmall.innerText = 'Set Size Big';
+      }
+    });
+
+    btnToggleVisibility.addEventListener('click', () => {
+      // hide with transition
+      const needleEngine = document.querySelector('needle-engine');
+      if (needleEngine.style.visibility === 'hidden') {
+        needleEngine.style.visibility = 'visible';
+        needleEngine.style.display = 'block';
+        btnToggleVisibility.innerText = 'Hide HTML Element';
+      } else {
+        needleEngine.style.visibility = 'hidden';
+        needleEngine.style.display = 'none';
+        btnToggleVisibility.innerText = 'Show HTML Element';
+      }
+    });
+  </script>
+</body>
+</html>

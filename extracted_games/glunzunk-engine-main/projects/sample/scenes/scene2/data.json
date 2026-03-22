@@ -1,0 +1,101 @@
+{
+  "name": "Scee 2",
+  "environment": {
+    "lighting": {
+      "ambient": {
+        "color": "0xff4e4e",
+        "intensity": 5
+      },
+      "shadowType": "Basic"
+    },
+    "tonemapping": {
+      "type": "AgX",
+      "exposure": 0.7
+    },
+    "fog": {
+      "expo": {
+        "color": "0xcccccc",
+        "density": 0.0015
+      }
+    },
+    "sky": {
+      "enable": true,
+      "turbidity": 11.4,
+      "rayleigh": 3,
+      "mieCoefficient": 0.004,
+      "mieDirectionalG": 0.619,
+      "elevation": 0.2,
+      "azimuth": 140,
+      "scale": 450000,
+      "sunlight": {
+        "color": "0xffffff",
+        "intensity": 10,
+        "castShadow": true
+      }
+    }
+  },
+  "objects": {
+    "box": {
+      "type": "box",
+      "color": "0x00ee00",
+      "x": 0,
+      "y": 0,
+      "z": 0,
+      "properties": {
+        "width": 1,
+        "height": 1,
+        "depth": 1,
+        "widthSegments": 1,
+        "heightSegments": 1,
+        "depthSegments": 1
+      }
+    },
+    "bean": {
+      "type": "capsule",
+      "color": "0x00ffff",
+      "x": 1.5,
+      "y": 0,
+      "z": 0,
+      "properties": {
+        "radius": 0.5,
+        "length": 0.7,
+        "capSegments": 10,
+        "radialSegments": 20
+      }
+    },
+    "disc": {
+      "type": "circle",
+      "color": "0xff0000",
+      "x": 3,
+      "y": 0,
+      "z": 0,
+      "properties": {
+        "radius": 0.5,
+        "segments": 8
+      }
+    },
+    "vlc": {
+      "type": "cone",
+      "color": "0xff7b00",
+      "x": 4.5,
+      "y": 0,
+      "z": 0,
+      "properties": {
+        "radius": 0.5,
+        "segments": 8,
+        "radialSegments": 7
+      }
+    },
+    "can": {
+      "type": "cylinder",
+      "color": "0xffff00",
+      "x": 6,
+      "y": 0,
+      "z": 0,
+      "properties": {
+        "radiusTop": 0.5,
+        "radiusBottom": 0.5
+      }
+    }
+  }
+}

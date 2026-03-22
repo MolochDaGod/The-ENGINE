@@ -1,0 +1,59 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 936d6805986de86459a8710c7bf5c00a, type: 3}
+  m_Name: p5js
+  m_EditorClassIdentifier: Needle.Engine.Samples.SampleInfo, Needle.Engine.Samples.Editor
+    $ GlobalObjectId_V1-3-54e95fabbcb87054f836802a6253d134-11400000-0
+  DisplayName: Integrating p5.js
+  Description: Use p5.js to draw dynamic and interactive textures
+  Thumbnail: {fileID: 2800000, guid: 0bd3f55b5c1986d48bad39346fe195b5, type: 3}
+  Scene: {fileID: 102900000, guid: 9e8fd67ad2f7b144ba3795e6346a06b1, type: 3}
+  LiveUrl: https://engine.needle.tools/samples-uploads/p5js
+  Priority: 0
+  Tags:
+  - {fileID: 11400000, guid: 65681cad01b0d5e47a1813a79a10c7ac, type: 2}
+  - {fileID: 11400000, guid: 7c9389e06e70fd44499179508a35f4c5, type: 2}
+  - {fileID: 11400000, guid: e4c5f77ac8329814285ae2eb671b480d, type: 2}
+  - {fileID: 11400000, guid: a2115ec02f1c0d948baffce17ce8d2df, type: 2}
+  reference: {fileID: 0}
+  UsedComponents:
+  - Component: CanvasToObject
+    Path: needle-engine-samples/package/Runtime/Canvas Texture with P5js/P5js~/CanvasToObject.ts
+    MoreInfoUrl: https://github.com/needle-tools/needle-engine-samples//tree/main/package/Runtime/Canvas
+      Texture with P5js/P5js~/CanvasToObject.ts
+  - Component: AudioListener
+    Path: engine/src/engine-components/AudioListener.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/component-reference.html
+  - Component: Camera
+    Path: engine/src/engine-components/Camera.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/component-reference.html
+  - Component: ContactShadows
+    Path: engine/src/engine-components/ContactShadows.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/api/ContactShadows
+  - Component: Light
+    Path: engine/src/engine-components/Light.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/component-reference.html
+  - Component: NeedleMenu
+    Path: engine/src/engine-components/NeedleMenu.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/api/NeedleMenu
+  - Component: OrbitControls
+    Path: engine/src/engine-components/OrbitControls.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/api/OrbitControls
+  - Component: MeshRenderer
+    Path: engine/src/engine-components/Renderer.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/component-reference.html
+  - Component: WebXR
+    Path: engine/src/engine-components/webxr/WebXR.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/api/WebXR
+  - Component: XRRig
+    Path: engine/src/engine-components/webxr/WebXRRig.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/api/XRRig

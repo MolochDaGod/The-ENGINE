@@ -1,0 +1,10 @@
+{
+  "name": "needle.jewelry",
+  "version": "1.0.0",
+  "main": "index.ts",
+  "peerDependencies": {
+	  "@needle-tools/engine": "file:/Users/herbst/git/needle-engine-dev/modules/needle-engine/js/package~",
+	  "three": "npm:@needle-tools/three@^0.169.4",
+	  "three-mesh-bvh": "^0.8.3"
+	}
+}

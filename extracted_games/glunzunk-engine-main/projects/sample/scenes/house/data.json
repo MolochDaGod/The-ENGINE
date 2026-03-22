@@ -1,0 +1,144 @@
+{
+  "name": "House in a Field",
+  "environment": {
+    "lighting": {
+      "ambient": {
+        "color": "0x88ccff",
+        "intensity": 2
+      },
+      "shadowType": "PCFSoft"
+    },
+    "tonemapping": {
+      "type": "reinhard",
+      "exposure": 0.7
+    },
+    "fog": {
+      "linear": {
+        "color": "0xaaffaa",
+        "near": 15,
+        "far": 100
+      }
+    },
+    "sky": {
+      "enable": true,
+      "turbidity": 5,
+      "rayleigh": 2,
+      "mieCoefficient": 0.003,
+      "mieDirectionalG": 0.7,
+      "elevation": 30,
+      "azimuth": 180,
+      "scale": 500000,
+      "sunlight": {
+        "color": "0xfff8dc",
+        "intensity": 10,
+        "castShadow": true
+      }
+    }
+  },
+  "effects": {
+    "n8ao": {
+      "configuration.aoRadius": 5,
+      "configuration.aoSamples": 17,
+      "configuration.distanceFalloff": 1.5,
+      "configuration.halfRes": true,
+      "configuration.accumulate": true,
+      "configuration.intensity": 7.42
+    }
+  },
+  "objects": {
+    "ground": {
+      "type": "box",
+      "color": "0x228b22",
+      "x": 0,
+      "y": -0.5,
+      "z": 0,
+      "properties": {
+        "width": 50,
+        "height": 1,
+        "depth": 50
+      }
+    },
+    "house_base": {
+      "type": "box",
+      "color": "0xffcc99",
+      "x": 0,
+      "y": 1.5,
+      "z": 0,
+      "properties": {
+        "width": 5,
+        "height": 3,
+        "depth": 5
+      }
+    },
+    "roof": {
+      "type": "cone",
+      "color": "0x8b0000",
+      "x": 0,
+      "y": 4,
+      "z": 0,
+      "properties": {
+        "radius": 3.5,
+        "height": 2,
+        "segments": 4
+      }
+    },
+    "door": {
+      "type": "box",
+      "color": "0x654321",
+      "x": 0,
+      "y": 1,
+      "z": 2.51,
+      "properties": {
+        "width": 1,
+        "height": 2,
+        "depth": 0.1
+      }
+    },
+    "window1": {
+      "type": "box",
+      "color": "0x87ceeb",
+      "x": -1.5,
+      "y": 2,
+      "z": 2.51,
+      "properties": {
+        "width": 1,
+        "height": 1,
+        "depth": 0.1
+      }
+    },
+    "window2": {
+      "type": "box",
+      "color": "0x87ceeb",
+      "x": 1.5,
+      "y": 2,
+      "z": 2.51,
+      "properties": {
+        "width": 1,
+        "height": 1,
+        "depth": 0.1
+      }
+    },
+    "tree_trunk": {
+      "type": "cylinder",
+      "color": "0x8b4513",
+      "x": -6,
+      "y": 1.5,
+      "z": -6,
+      "properties": {
+        "radiusTop": 0.5,
+        "radiusBottom": 0.5,
+        "height": 3
+      }
+    },
+    "tree_foliage": {
+      "type": "sphere",
+      "color": "0x228b22",
+      "x": -6,
+      "y": 4,
+      "z": -6,
+      "properties": {
+        "radius": 2
+      }
+    }
+  }
+}

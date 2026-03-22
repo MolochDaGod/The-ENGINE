@@ -1,0 +1,33 @@
+{
+  "folders": [
+    {
+      "path": "."
+    },
+    {
+      "path": "./node_modules/@needle-tools/engine"
+    },
+    {
+      "name": "my-sample-package",
+      "path": "node_modules/my-sample-package"
+    },
+    {
+      "name": "frontend-integration",
+      "path": "node_modules/frontend-integration"
+    },
+    {
+      "name": "@needle-tools/javascript-communication-sample",
+      "path": "node_modules/@needle-tools/javascript-communication-sample"
+    }
+  ],
+  "settings": {
+    "compile-hero.disable-compile-files-on-did-save-code": true,
+    "files.exclude": {
+      "package-lock.json": true,
+      "**/.git": true,
+      "**/.DS_Store": true,
+      "**/node_modules": true,
+      "**/*.meta": true
+    },
+    "window.title": "FrontendIntegration"
+  }
+}

@@ -1,0 +1,11 @@
+Working On: 
+Implementing Editor Panels
+
+Done: 
+Main Menu
+
+Unfinished:
+Proper Editor Controls
+Ability to open projects from main menu
+
+Last Modified: 2024/09/10 9:39PM - SAST/CAT/GMT+2

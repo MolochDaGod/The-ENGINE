@@ -1,0 +1,63 @@
+Connect All Deployments to Single Grudge Backend
+Problem
+Multiple Vercel/Railway deployments still use their own backends (Neon PostgreSQL, Supabase, Vercel serverless functions) instead of the canonical Grudge backend on VPS 74.208.155.229 running MySQL 8 via Docker/Coolify.
+Canonical Backend (Source of Truth)
+Repo: MolochDaGod/grudge-studio-backend
+DB: MySQL 8.0 (grudge_game) on VPS
+Auth: https://id.grudge-studio.com (port 3001)
+Game API: https://api.grudge-studio.com (port 3003)
+Account: https://account.grudge-studio.com (port 3005)
+Launcher: https://launcher.grudge-studio.com (port 3006)
+WebSocket: https://ws.grudge-studio.com (port 3007)
+Assets CDN: https://assets.grudge-studio.com (Cloudflare R2 Worker)
+Current State — What's Already Connected ✅
+warlord-crafting-suite.vercel.app — calls api.grudge-studio.com + id.grudge-studio.com
+gdevelop-assistant.vercel.app — calls api.grudge-studio.com + id.grudge-studio.com
+dash.grudge-studio.com — Cloudflare Worker hitting VPS APIs
+grudge-game-engine — GrudgeAPI.js uses api.grudge-studio.com
+GrudgeWars — references api.grudge-studio.com in AGENTS.md
+GrudgeStudioNPM — GrudgeStudioSDK.js uses api.grudge-studio.com
+starwaygruda-webclient — references VPS endpoints
+grudge-studio-dash — config.ts references api.grudge-studio.com
+What Still Needs Migration ⚠️
+Priority 1 — Active Vercel Frontends with Own Backends
+A. grudge-platform.vercel.app (repo: grudge-platform)
+Has its own Vercel /api/login function — SHOULD forward to id.grudge-studio.com
+Status page (api/toolkit/status.js) already references api.grudge-studio.com but auth is still local
+Action: Replace Vercel API auth routes with calls to id.grudge-studio.com, remove any local DB connection
+B. grudgewarlords.com (unknown repo — may be Warlord-Crafting-Suite or separate)
+Context doc says it still uses "Own Vercel API for auth & game data"
+Action: Replace all /api/auth/* routes with id.grudge-studio.com calls, and game data calls with api.grudge-studio.com
+C. auth-gateway-flax.vercel.app (repo: auth-gateway)
+Legacy auth backend using Neon PostgreSQL + Supabase
+Context doc marks it as replaced by id.grudge-studio.com, but the Vercel deployment may still be live
+Action: Deprecate/delete the Vercel project, or redirect to id.grudge-studio.com
+Priority 2 — grudge-studio Monorepo (Railway + Vercel)
+D. grudge-studio monorepo
+Has both railway.toml (PostgreSQL service) and vercel.json
+.env.example still says DATABASE_URL=postgresql://...
+Has check-drizzle.js — still using Drizzle ORM with PostgreSQL
+The warlord-crafting-suite app inside it may be the one deployed to warlord-crafting-suite.vercel.app
+Action: Remove the PostgreSQL/Drizzle dependency for game data. The frontend apps should call VPS APIs (api.grudge-studio.com) instead of connecting to a DB directly. Keep Railway for hosting the frontend server if needed, but kill the Railway PostgreSQL service.
+Update railway.toml to remove [[services]] db PostgreSQL section
+Update .env.example to remove DATABASE_URL and add GRUDGE_API_URL=https://api.grudge-studio.com and GRUDGE_AUTH_URL=https://id.grudge-studio.com
+Priority 3 — New Game Repos
+E. grim-armada-web — just created, description says "Grudge Backend", likely already set up correctly. Verify.
+F. grudge-pvp-server — PvP matchmaking. Should connect to api.grudge-studio.com/pvp/* or run as a service on the VPS alongside game-api.
+G. grudge-openworld-server — Open world multiplayer. Should connect to VPS MySQL or be added as a Docker service.
+H. nexus-nemesis-game — TCG game with frontend + backend + PvP. Needs Grudge ID auth integration.
+I. grudge-angeler — Fishing game. Needs Grudge ID auth for player persistence.
+Not Grudge (Leave Alone)
+Dope-Budz — Separate Web3 cannabis trading card game with its own Railway backend. Per user rules, leave thc-labz-battle and doepbudz untouched.
+Railway Status
+gruda-legion-production.up.railway.app — DEAD, already replaced with api.grudge-studio.com ✅
+grudge-studio monorepo has railway.toml with a PostgreSQL service — needs to be removed/updated
+No other active Railway services found for Grudge
+Recommended Actions (In Order)
+Audit & clean grudge-platform — Replace Vercel auth functions with id.grudge-studio.com API calls
+Audit & clean grudgewarlords.com — Same: replace all Vercel API routes with VPS backend calls
+Deprecate auth-gateway — Remove Vercel project or redirect, confirm no clients still call it
+Update grudge-studio monorepo — Remove PostgreSQL/Drizzle direct DB, switch to VPS API calls, update railway.toml and .env.example
+Verify new repos (grim-armada-web, grudge-pvp-server, grudge-openworld-server) are using VPS endpoints
+Add new CORS origins to VPS .env for any new frontends being deployed
+Update VPS CORS_ORIGINS if new Vercel deployments are added

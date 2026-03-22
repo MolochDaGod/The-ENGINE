@@ -1,0 +1,84 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 936d6805986de86459a8710c7bf5c00a, type: 3}
+  m_Name: NetworkingPlayer
+  m_EditorClassIdentifier: Needle.Engine.Samples.SampleInfo, Needle.Engine.Samples.Editor
+    $ GlobalObjectId_V1-3-dcd8b18bf18ad2c4687d536c67c1f8df-11400000-0
+  DisplayName: Networking Players
+  Description: Spawn and control networked players. Understand networking lifecycle
+    for PlayerState.
+  Thumbnail: {fileID: 2800000, guid: 158af30540f9b44449bfdfef82acc1a4, type: 3}
+  Scene: {fileID: 102900000, guid: 375db29c7005fb54587043b09654568b, type: 3}
+  LiveUrl: https://networking-players-zubcks1nyee.needle.run/
+  Priority: 5
+  Tags:
+  - {fileID: 11400000, guid: daecf2ba9dd68174e86207b1fc4e2ac2, type: 2}
+  - {fileID: 11400000, guid: ec519786b0f262c4bbf635a7c4e70f9f, type: 2}
+  reference: {fileID: 0}
+  UsedComponents:
+  - Component: PlayerStateUI
+    Path: needle-engine-samples/package/Runtime/Networking/Scripts/Networking~/Player/PlayerStateUI.ts
+    MoreInfoUrl: https://github.com/needle-tools/needle-engine-samples//tree/main/package/Runtime/Networking/Scripts/Networking~/Player/PlayerStateUI.ts
+  - Component: SampleNetworkedPlayer
+    Path: needle-engine-samples/package/Runtime/Networking/Scripts/Networking~/Player/SampleNetworkedPlayer.ts
+    MoreInfoUrl: https://github.com/needle-tools/needle-engine-samples//tree/main/package/Runtime/Networking/Scripts/Networking~/Player/SampleNetworkedPlayer.ts
+  - Component: SpawnSpotHandler
+    Path: needle-engine-samples/package/Runtime/Networking/Scripts/Networking~/Player/SpawnSpotHandler.ts
+    MoreInfoUrl: https://github.com/needle-tools/needle-engine-samples//tree/main/package/Runtime/Networking/Scripts/Networking~/Player/SpawnSpotHandler.ts
+  - Component: AudioListener
+    Path: engine/src/engine-components/AudioListener.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/component-reference.html
+  - Component: Camera
+    Path: engine/src/engine-components/Camera.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/component-reference.html
+  - Component: Canvas
+    Path: engine/src/engine-components/ui/Canvas.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/component-reference.html
+  - Component: BoxCollider
+    Path: engine/src/engine-components/Collider.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/component-reference.html
+  - Component: EventSystem
+    Path: engine/src/engine-components/ui/EventSystem.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/component-reference.html
+  - Component: Light
+    Path: engine/src/engine-components/Light.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/component-reference.html
+  - Component: LookAt
+    Path: engine/src/engine-components/utils/LookAt.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/api/LookAt
+  - Component: NeedleMenu
+    Path: engine/src/engine-components/NeedleMenu.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/api/NeedleMenu
+  - Component: OrbitControls
+    Path: engine/src/engine-components/OrbitControls.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/api/OrbitControls
+  - Component: PlayerState
+    Path: engine/src/engine-components-experimental/networking/PlayerSync.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/api/PlayerState
+  - Component: PlayerSync
+    Path: engine/src/engine-components-experimental/networking/PlayerSync.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/api/PlayerSync
+  - Component: GraphicRaycaster
+    Path: engine/src/engine-components/ui/Raycaster.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/component-reference.html
+  - Component: MeshRenderer
+    Path: engine/src/engine-components/Renderer.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/component-reference.html
+  - Component: SyncedRoom
+    Path: engine/src/engine-components/SyncedRoom.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/api/SyncedRoom
+  - Component: SyncedTransform
+    Path: engine/src/engine-components/SyncedTransform.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/api/SyncedTransform
+  - Component: Text
+    Path: engine/src/engine-components/ui/Text.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/component-reference.html

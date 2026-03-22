@@ -1,0 +1,62 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 936d6805986de86459a8710c7bf5c00a, type: 3}
+  m_Name: Splines
+  m_EditorClassIdentifier: Needle.Engine.Samples.SampleInfo, Needle.Engine.Samples.Editor
+  DisplayName: Splines
+  Description: Paths made out of bezier curves
+  Thumbnail: {fileID: 2800000, guid: 4a365ecf8083fc4419239b1fb8d0ec3b, type: 3}
+  LiveUrl: https://splines-zubcks1p3ij0.needle.run/
+  Priority: 3
+  Tags:
+  - {fileID: 11400000, guid: d637a1131da5ea14aaa3e463cf59ec92, type: 2}
+  - {fileID: 11400000, guid: ec519786b0f262c4bbf635a7c4e70f9f, type: 2}
+  Scene: {fileID: 102900000, guid: 8670391686953f94a8f104190d27cd73, type: 3}
+  RepositoryUrl: 
+  reference: {fileID: 0}
+  UsedComponents:
+  - Component: Animation
+    Path: engine/src/engine-components/Animation.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/component-reference.html
+  - Component: AudioListener
+    Path: engine/src/engine-components/AudioListener.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/component-reference.html
+  - Component: Camera
+    Path: engine/src/engine-components/Camera.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/component-reference.html
+  - Component: Light
+    Path: engine/src/engine-components/Light.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/component-reference.html
+  - Component: NeedleMenu
+    Path: engine/src/engine-components/NeedleMenu.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/api/NeedleMenu
+  - Component: OrbitControls
+    Path: engine/src/engine-components/OrbitControls.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/api/OrbitControls
+  - Component: ParticleSystem
+    Path: engine/src/engine-components/particlesystem/ParticleSystem.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/component-reference.html
+  - Component: ParticleSystemRenderer
+    Path: engine/src/engine-components/particlesystem/ParticleSystem.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/component-reference.html
+  - Component: MeshRenderer
+    Path: engine/src/engine-components/Renderer.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/component-reference.html
+  - Component: SplineContainer
+    Path: engine/src/engine-components/splines/Spline.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/component-reference.html
+  - Component: SplineWalker
+    Path: engine/src/engine-components/splines/SplineWalker.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/api/SplineWalker
+  - Component: WebXR
+    Path: engine/src/engine-components/webxr/WebXR.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/api/WebXR

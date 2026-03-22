@@ -1,0 +1,62 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 936d6805986de86459a8710c7bf5c00a, type: 3}
+  m_Name: XRMeshTracking
+  m_EditorClassIdentifier: Needle.Engine.Samples.SampleInfo, Needle.Engine.Samples.Editor
+    $ GlobalObjectId_V1-3-4b842bffcaf82a2489527789293e3b62-11400000-0
+  DisplayName: XR Mesh Detection
+  Description: Access and render room meshes on Quest 3
+  Thumbnail: {fileID: 2800000, guid: e20f164cf222b4f7f985895ef7738f6a, type: 3}
+  Scene: {fileID: 102900000, guid: 2506087d5d69ebf4c8020c3b735c3639, type: 3}
+  LiveUrl: https://mesh-tracking-zubckszgqtfr.needle.run/
+  Priority: 15
+  Tags:
+  - {fileID: 11400000, guid: ded045f6b24280743a53b82f3f37c499, type: 2}
+  - {fileID: 11400000, guid: 7c9389e06e70fd44499179508a35f4c5, type: 2}
+  reference: {fileID: 0}
+  UsedComponents:
+  - Component: HTMLMenu
+    Path: needle-engine-samples/package/Runtime/_Shared/SampleScripts~/HTMLMenu.ts
+    MoreInfoUrl: https://github.com/needle-tools/needle-engine-samples//tree/main/package/Runtime/_Shared/SampleScripts~/HTMLMenu.ts
+  - Component: XRLifecycleEvents
+    Path: needle-engine-samples/package/Runtime/_Shared/SampleScripts~/XRLifecycleEvents.ts
+    MoreInfoUrl: https://github.com/needle-tools/needle-engine-samples//tree/main/package/Runtime/_Shared/SampleScripts~/XRLifecycleEvents.ts
+  - Component: AudioListener
+    Path: engine/src/engine-components/AudioListener.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/component-reference.html
+  - Component: Camera
+    Path: engine/src/engine-components/Camera.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/component-reference.html
+  - Component: GltfExport
+    Path: engine/src/engine-components/export/gltf/GltfExport.ts
+    MoreInfoUrl: https://fwd.needle.tools/needle-engine/help
+  - Component: NeedleMenu
+    Path: engine/src/engine-components/NeedleMenu.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/api/NeedleMenu
+  - Component: OrbitControls
+    Path: engine/src/engine-components/OrbitControls.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/api/OrbitControls
+  - Component: MeshRenderer
+    Path: engine/src/engine-components/Renderer.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/component-reference.html
+  - Component: WebXR
+    Path: engine/src/engine-components/webxr/WebXR.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/api/WebXR
+  - Component: WebXRPlaneTracking
+    Path: engine/src/engine-components/webxr/WebXRPlaneTracking.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/api/WebXRPlaneTracking
+  - Component: XRRig
+    Path: engine/src/engine-components/webxr/WebXRRig.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/api/XRRig
+  - Component: XRFlag
+    Path: engine/src/engine-components/webxr/XRFlag.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/api/XRFlag

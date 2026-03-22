@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rec0deD:88 Emulator</title>
+<style>
+  html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000; overflow: hidden; }
+  #game { width: 100%; height: 100%; }
+  #loading { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #DAA520; font-family: monospace; text-align: center; }
+  #loading .spinner { width: 40px; height: 40px; border: 3px solid #333; border-top: 3px solid #DAA520; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 12px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #error { display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #ff6b6b; font-family: monospace; text-align: center; }
+</style>
+</head>
+<body>
+<div id="game"></div>
+<div id="loading"><div class="spinner"></div><div id="status">Loading ROM...</div></div>
+<div id="error">Failed to load ROM. Try the Legacy Player.</div>
+<script>
+  var params = new URLSearchParams(window.location.search);
+  var core = params.get('core') || 'nes';
+  var platform = params.get('platform') || '';
+  var gameName = params.get('game') || '';
+
+  var romProxyUrl = '/api/rom-proxy?url=' + encodeURIComponent(
+    'https://rec0ded88.com/wp-content/emu/games/' + platform + '/' + gameName + '.zip'
+  );
+
+  document.getElementById('status').textContent = 'Downloading ' + decodeURIComponent(gameName) + '...';
+
+  fetch(romProxyUrl)
+    .then(function(resp) {
+      if (!resp.ok) throw new Error('ROM not found (HTTP ' + resp.status + ')');
+      document.getElementById('status').textContent = 'Preparing emulator...';
+      return resp.blob();
+    })
+    .then(function(blob) {
+      var blobUrl = URL.createObjectURL(blob);
+      document.getElementById('loading').style.display = 'none';
+
+      window.EJS_player = '#game';
+      window.EJS_core = core;
+      window.EJS_gameUrl = blobUrl;
+      window.EJS_pathtodata = 'https://cdn.emulatorjs.org/stable/data/';
+      window.EJS_color = '#DAA520';
+      window.EJS_startOnLoaded = true;
+      window.EJS_oldCores = true;
+
+      var script = document.createElement('script');
+      script.src = 'https://cdn.emulatorjs.org/stable/data/loader.js';
+      document.body.appendChild(script);
+    })
+    .catch(function(err) {
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('error').style.display = 'block';
+      document.getElementById('error').textContent = 'Failed to load: ' + err.message;
+    });
+</script>
+</body>
+</html>

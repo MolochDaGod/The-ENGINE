@@ -1,0 +1,137 @@
+
+Back to Home
+60 FPS
+Super Engine
+9 Games
+Super Engine Arcade
+Play games built with the Grudge Studio Super Engine — combining Construct3, Three.js, Stratagus, and more into one unified platform.
+
+Grudge Studio
+CloudPilot
+GBUX
+3D
+AI
+Physics
+Particles
+60 FPS
+Wargus RTS
+Strategy
+Classic real-time strategy game powered by the Stratagus engine. Build bases, train armies, and conquer your enemies.
+
+Stratagus Engine
+Play
+
+3D
+AI
+Particles
+60 FPS
+Tower Defense
+Strategy
+Defend your base by strategically placing towers along enemy paths. Upgrade and adapt to survive waves of attackers.
+
+Three.js TD
+Play
+
+3D
+Physics
+AI
+Particles
+60 FPS
+Avernus 3D
+3D Action
+Full 3D combat arena with weapons, abilities, and enemy AI. Battle through the depths of Avernus.
+
+Three.js Combat
+Play
+
+2D
+AI
+Particles
+60 FPS
+Avernus Arena
+2D Action
+2D top-down arena combat. Fight waves of demons in this fast-paced action game.
+
+Canvas 2D
+Play
+
+3D
+Physics
+AI
+60 FPS
+Decay Survival
+Survival Shooter
+Survive a zombie apocalypse in this top-down shooter. Scavenge resources, find weapons, and stay alive.
+
+Three.js Shooter
+Play
+
+3D
+Physics
+Particles
+60 FPS
+Overdrive 3D Racing
+3D Racing
+High-speed 3D racing through obstacle-filled courses. Dodge barriers, collect boosts, and set records.
+
+Three.js Racing
+Play
+
+2D
+AI
+60 FPS
+RPG Maker Studio
+RPG / Editor
+Create your own RPG adventures with a drag-and-drop editor. Design maps, characters, and quests.
+
+Custom RPG Engine
+Play
+
+2D
+Physics
+60 FPS
+Puzzle Platformer
+2D Platformer
+A physics-based puzzle platformer with challenging levels. Jump, push, and think your way to victory.
+
+Stencyl + Custom
+Play
+
+3D
+Physics
+Multiplayer
+60 FPS
+Multiplayer Racing
+Multiplayer
+Compete against other players in real-time racing action. Multiple tracks and vehicles to choose from.
+
+WebSocket Racing
+Play
+
+Classic Retro Games
+1360 Featured
+Play classic console games right in your browser — NES, SNES, Genesis, and more via embedded emulators.
+
+007 Racing
+playstation
+007 – Everything or Nothing
+gba
+007 – The World is Not Enough
+n64
+10-Yard Fight
+nes
+1080 Snowboarding
+n64
+1942
+nes
+1943 – The Battle of Midway
+nes
+3 Ninjas Kick Back
+snes
+3-D WorldRunner
+nes
+8 Eyes
+nes
+A Boy and His Blob
+nes
+A Bug’s Life

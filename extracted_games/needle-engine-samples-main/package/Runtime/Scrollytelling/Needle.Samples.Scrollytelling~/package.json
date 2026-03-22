@@ -1,0 +1,15 @@
+{
+  "name": "needle.samples.scrollytelling",
+  "version": "1.0.0",
+  "main": "index.ts",
+  "dependencies": {},
+  "peerDependencies": {
+	  "@needle-tools/engine": "^3.48.3",
+	  "three": "npm:@needle-tools/three@^0.162.10"
+	},
+  "devDependencies": {
+	  "@needle-tools/engine": "^3.48.3",
+	  "@types/three": "0.162.0",
+	  "three": "npm:@needle-tools/three@^0.162.10"
+	}
+}

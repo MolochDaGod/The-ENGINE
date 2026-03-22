@@ -1,0 +1,110 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 936d6805986de86459a8710c7bf5c00a, type: 3}
+  m_Name: PostProcessing
+  m_EditorClassIdentifier: Needle.Engine.Samples.SampleInfo, Needle.Engine.Samples.Editor
+    $ GlobalObjectId_V1-3-accd58c8bd355a340a68a7d5b7f473ee-11400000-0
+  DisplayName: PostProcessing
+  Description: PostProcessing with DoF, Bloom, SSAO and more
+  Thumbnail: {fileID: 2800000, guid: e5d92437f26b88942849f353848dc844, type: 3}
+  Scene: {fileID: 102900000, guid: 6f11602d2f40d164385e7346fa7d9244, type: 3}
+  LiveUrl: https://engine.needle.tools/samples-uploads/postprocessing
+  Priority: 6
+  Tags:
+  - {fileID: 11400000, guid: 7c9389e06e70fd44499179508a35f4c5, type: 2}
+  - {fileID: 11400000, guid: 79d981553e16c414684f1f23dfca0d8b, type: 2}
+  reference: {fileID: 0}
+  UsedComponents:
+  - Component: FocusDistancer
+    Path: needle-engine-samples/package/Runtime/PostProcessing/Needle.Samples.PostProcessing~/FocusDistancer.ts
+    MoreInfoUrl: https://github.com/needle-tools/needle-engine-samples//tree/main/package/Runtime/PostProcessing/Needle.Samples.PostProcessing~/FocusDistancer.ts
+  - Component: AudioListener
+    Path: engine/src/engine-components/AudioListener.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/component-reference.html
+  - Component: AvatarBlink_Simple
+    Path: engine/src/engine-components/avatar/AvatarBlink_Simple.ts
+    MoreInfoUrl: https://fwd.needle.tools/needle-engine/help
+  - Component: Camera
+    Path: engine/src/engine-components/Camera.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/component-reference.html
+  - Component: SphereCollider
+    Path: engine/src/engine-components/Collider.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/component-reference.html
+  - Component: Deletable
+    Path: engine/src/engine-components/DeleteBox.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/api/Deletable
+  - Component: DeleteBox
+    Path: engine/src/engine-components/DeleteBox.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/api/DeleteBox
+  - Component: DragControls
+    Path: engine/src/engine-components/DragControls.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/api/DragControls
+  - Component: Duplicatable
+    Path: engine/src/engine-components/Duplicatable.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/api/Duplicatable
+  - Component: EventSystem
+    Path: engine/src/engine-components/ui/EventSystem.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/component-reference.html
+  - Component: BoxGizmo
+    Path: engine/src/engine-components/Gizmos.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/api/BoxGizmo
+  - Component: Light
+    Path: engine/src/engine-components/Light.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/component-reference.html
+  - Component: LookAtConstraint
+    Path: engine/src/engine-components/LookAtConstraint.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/component-reference.html
+  - Component: NeedleMenu
+    Path: engine/src/engine-components/NeedleMenu.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/api/NeedleMenu
+  - Component: OrbitControls
+    Path: engine/src/engine-components/OrbitControls.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/api/OrbitControls
+  - Component: PlayerColor
+    Path: engine/src/engine-components/PlayerColor.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/api/PlayerColor
+  - Component: ObjectRaycaster
+    Path: engine/src/engine-components/ui/Raycaster.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/api/ObjectRaycaster
+  - Component: MeshRenderer
+    Path: engine/src/engine-components/Renderer.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/component-reference.html
+  - Component: ScreenSpaceAmbientOcclusion
+    Path: engine/src/engine-components/postprocessing/Effects/ScreenspaceAmbientOcclusion.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/api/ScreenSpaceAmbientOcclusion
+  - Component: SpectatorCamera
+    Path: engine/src/engine-components/SpectatorCamera.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/api/SpectatorCamera
+  - Component: SyncedCamera
+    Path: engine/src/engine-components/SyncedCamera.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/api/SyncedCamera
+  - Component: SyncedRoom
+    Path: engine/src/engine-components/SyncedRoom.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/api/SyncedRoom
+  - Component: SyncedTransform
+    Path: engine/src/engine-components/SyncedTransform.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/api/SyncedTransform
+  - Component: TeleportTarget
+    Path: engine/src/engine-components/webxr/TeleportTarget.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/api/TeleportTarget
+  - Component: Volume
+    Path: engine/src/engine-components/postprocessing/Volume.ts
+    MoreInfoUrl: https://docs.unity3d.com/Packages/com.unity.render-pipelines.high-definition@12.1/manual/Volumes.html
+  - Component: WebARSessionRoot
+    Path: engine/src/engine-components/webxr/WebARSessionRoot.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/api/WebARSessionRoot
+  - Component: XRRig
+    Path: engine/src/engine-components/webxr/WebXRRig.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/api/XRRig
+  - Component: XRFlag
+    Path: engine/src/engine-components/webxr/XRFlag.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/api/XRFlag

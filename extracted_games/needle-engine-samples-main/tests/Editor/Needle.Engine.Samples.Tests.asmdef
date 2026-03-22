@@ -1,0 +1,42 @@
+{
+    "name": "Needle.Engine.Samples.Tests",
+    "rootNamespace": "",
+    "references": [
+        "UnityEngine.TestRunner",
+        "UnityEditor.TestRunner",
+        "UnityGLTFEditor",
+        "Needle.Engine.Samples.Editor",
+        "Needle.MissingReferences",
+        "Unity.ShaderGraph.Editor",
+        "Unity.RenderPipelines.Universal.Editor",
+        "Needle.Engine.Deployment",
+        "Needle.Engine.Common",
+        "Needle.Engine-Samples.Runtime",
+        "Needle.Engine.Editor",
+        "Needle.Engine.ProjectBundle.Editor",
+        "Needle.Engine",
+        "Needle.Engine.Meta"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "nunit.framework.dll",
+        "Newtonsoft.Json.dll"
+    ],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITY_INCLUDE_TESTS"
+    ],
+    "versionDefines": [
+        {
+            "name": "com.unity.render-pipelines.universal",
+            "expression": "10.0.0",
+            "define": "URP_10_OR_NEWER"
+        }
+    ],
+    "noEngineReferences": false
+}

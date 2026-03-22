@@ -1,0 +1,13 @@
+[package]
+name = "workspace"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+avila-gltf = "0.1.0"
+convexhull3d = "0.5.0"
+gltf_opt = "0.1.4"
+lnkit = "0.2.1"
+mshmash = "0.4.2"
+three = "0.4.0"
+voxel-tiler-core = "0.3.2"

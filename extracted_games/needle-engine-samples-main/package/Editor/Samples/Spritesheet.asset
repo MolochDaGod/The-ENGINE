@@ -1,0 +1,51 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 936d6805986de86459a8710c7bf5c00a, type: 3}
+  m_Name: Spritesheet
+  m_EditorClassIdentifier: Needle.Engine.Samples.SampleInfo, Needle.Engine.Samples.Editor
+    $ GlobalObjectId_V1-3-359fbf274f3fb0845950ec66dff97671-11400000-0
+  DisplayName: Spritesheet Animation
+  Description: Animate Sprites using AnimationClips
+  Thumbnail: {fileID: 2800000, guid: 193330d35b8a01c478d741be729fcde3, type: 3}
+  Scene: {fileID: 102900000, guid: 549bb028f55a3384998207088a9aae41, type: 3}
+  LiveUrl: https://engine.needle.tools/samples-uploads/spritesheet/
+  Priority: 0
+  Tags:
+  - {fileID: 11400000, guid: 7c9389e06e70fd44499179508a35f4c5, type: 2}
+  - {fileID: 11400000, guid: d637a1131da5ea14aaa3e463cf59ec92, type: 2}
+  - {fileID: 11400000, guid: 44782f56eb518b640a8ab29550fa117a, type: 2}
+  reference: {fileID: 0}
+  UsedComponents:
+  - Component: Animator
+    Path: engine/src/engine-components/Animator.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/component-reference.html
+  - Component: AudioListener
+    Path: engine/src/engine-components/AudioListener.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/component-reference.html
+  - Component: Camera
+    Path: engine/src/engine-components/Camera.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/component-reference.html
+  - Component: Light
+    Path: engine/src/engine-components/Light.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/component-reference.html
+  - Component: LookAtConstraint
+    Path: engine/src/engine-components/LookAtConstraint.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/component-reference.html
+  - Component: NeedleMenu
+    Path: engine/src/engine-components/NeedleMenu.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/api/NeedleMenu
+  - Component: OrbitControls
+    Path: engine/src/engine-components/OrbitControls.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/api/OrbitControls
+  - Component: SpriteRenderer
+    Path: engine/src/engine-components/SpriteRenderer.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/component-reference.html

@@ -1,0 +1,112 @@
+{
+  "name": "ChatGPT Again (Monstrous Scene)",
+  "environment": {
+    "lighting": {
+      "ambient": {
+        "color": "0x7f007f",
+        "intensity": 20
+      },
+      "shadowType": "PCFSoft"
+    },
+    "tonemapping": {
+      "type": "reinhard",
+      "exposure": 2
+    },
+    "fog": {
+      "linear": {
+        "color": "0x000000",
+        "near": 50,
+        "far": 200
+      }
+    },
+    "sky": {
+      "enable": true,
+      "turbidity": 20,
+      "rayleigh": 10,
+      "mieCoefficient": 0.1,
+      "mieDirectionalG": 0.8,
+      "elevation": 0,
+      "azimuth": 90,
+      "scale": 100000,
+      "sunlight": {
+        "color": "0xff0000",
+        "intensity": 50,
+        "castShadow": true
+      }
+    }
+  },
+  "objects": {
+    "ground": {
+      "type": "box",
+      "properties": {
+        "color": "0x000000",
+        "width": 500,
+        "height": 1,
+        "depth": 500,
+        "x": 0,
+        "y": -1,
+        "z": 0
+      }
+    },
+    "monstrosity1": {
+      "type": "box",
+      "properties": {
+        "color": "0xff0000",
+        "width": 20,
+        "height": 30,
+        "depth": 20,
+        "x": 0,
+        "y": 15,
+        "z": 0
+      }
+    },
+    "monstrosity2": {
+      "type": "cylinder",
+      "properties": {
+        "color": "0x00ff00",
+        "radiusTop": 10,
+        "radiusBottom": 5,
+        "height": 40,
+        "x": -50,
+        "y": 20,
+        "z": 50
+      }
+    },
+    "monstrosity3": {
+      "type": "cone",
+      "properties": {
+        "color": "0x0000ff",
+        "radiusTop": 15,
+        "radiusBottom": 0,
+        "height": 60,
+        "x": 100,
+        "y": 30,
+        "z": -100
+      }
+    },
+    "tower": {
+      "type": "box",
+      "properties": {
+        "color": "0xffff00",
+        "width": 5,
+        "height": 50,
+        "depth": 5,
+        "x": 200,
+        "y": 25,
+        "z": 200
+      }
+    },
+    "random_pyramid": {
+      "type": "cone",
+      "properties": {
+        "color": "0x8800ff",
+        "radiusTop": 10,
+        "radiusBottom": 0,
+        "height": 50,
+        "x": -200,
+        "y": 25,
+        "z": -200
+      }
+    }
+  }
+}

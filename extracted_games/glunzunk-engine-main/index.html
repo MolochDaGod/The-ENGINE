@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<title>Glunzunk Engine</title>
+		<link rel="stylesheet" href="loading.css">
+		<link rel="stylesheet" href="index.css">
+		<link rel="stylesheet" href="assets/css/satoshi.css">
+		<link rel="stylesheet" href="assets/fonts/web/inter.css">
+		<link rel="stylesheet" href="assets/fonts/roboto/style.css">
+		<link rel="manifest" href="manifest.json">	
+		<link rel="icon" type="image/png" href="assets/ui/gzlogo.png">
+		<script src="scripts/mainmenu.js"></script>
+	</head>
+	<body>
+		<div class=loading-screen id=loadig-screen>
+			<svg class="spinner" id=loading viewBox="0 0 16 16" width="29" height="29" xmlns="http://www.w3.org/2000/svg">
+		      <style>
+		        path {
+		          animation: spinner 3s ease-in-out infinite;
+		          stroke-dasharray: 1, 200;
+		          stroke-dashoffset: 0;
+		          fill: none;
+		          stroke-width: 2;
+		          stroke-miterlimit: 10;
+		          stroke-linecap: round;
+		          transform-origin: 50% 50%;
+		          stroke: #e7e9ec;
+		        }
+
+		        @keyframes spinner {
+		          0% {
+		            stroke-dasharray: 0, 200;
+		            stroke-dashoffset: 0;
+		            transform: rotate(0deg);
+		          }
+
+		          100% {
+		            stroke-dasharray: 130, 200;
+		            stroke-dashoffset: -43.9;
+		            transform: rotate(-360deg);
+		          }
+		        }
+		      </style>
+		      <path d="M8 1A1 1 0 008 15 1 1 0 008 1"></path>
+		    </svg>
+		    <p>Redirecting to Editor...</p>
+		</div>
+			<div id=overlay class=overlay>
+				<div class=projectdialog>
+					<p class=projectdialogtitle>Create A New Project</p>
+					<p class=projectdialognametitle>Project Name:</p>
+					<input type="text" id="projectdialogname" name="projectname" class=projectinput>
+					<div class=projectbuttons>
+						<button onclick="createProject()" class=projectbtn>Create</button>
+						<button onclick="projectdialog('hide')" class=projectbtn>Cancel</button>
+					</div>
+				</div>
+			</div>
+		<div class=wrapper>
+			<div id=main class="main">
+				<p class=title>Glunzunk Engine</p>
+				<p class=projectslisttitle>Your Projects</p>
+				<div class=mainactions>
+					<button onclick="projectdialog('show')" class=mainbtn>Create Project</button>
+					<button class=mainbtn>Edit Project</button>
+					<button class=mainbtn>Settings</button>
+				</div>
+				<p class=credittxt>Written by: MTSyntho Dev</p>
+			</div>
+			<div class="projects">
+				<div class="projectlist" id=projectlist>
+					<p class=noprojects id=noprojects>No Projects</p>
+					<a href='editor.html'>temporary editor btn</a>
+<!-- 					<a onclick=''>
+						<div class="projectoption">
+							<p>Project</p>
+						</div>
+					</a>
+					<div class="projectoption">
+						<p>Project</p>
+					</div>
+					<div class="projectoption">
+						<p>Project</p>
+					</div>
+					<div class="projectoption">
+						<p>Project</p>
+					</div>
+					<div class="projectoption">
+						<p>Project</p>
+					</div>
+					<div class="projectoption">
+						<p>Project</p>
+					</div>
+					<div class="projectoption">
+						<p>Project</p>
+					</div>
+					<div class="projectoption">
+						<p>Project</p>
+					</div> -->
+				</div>
+			</div>
+		</div>
+	</body>
+</html>

@@ -1,0 +1,13 @@
+{
+  "name": "needle.hotspots",
+  "version": "1.0.0",
+  "main": "index.ts",
+  "dependencies": {},
+  "peerDependencies": {
+    "@needle-tools/engine": "^3.36.0-beta",
+    "three": "npm:@needle-tools/three@^0.162.2"
+  },
+  "devDependencies": {
+    "@types/three": "0.169.0"
+  }
+}

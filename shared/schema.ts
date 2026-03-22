@@ -1,0 +1,138 @@
+import { pgTable, text, serial, integer, boolean, timestamp, jsonb } from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
+import { z } from "zod";
+
+export const users = pgTable("users", {
+  id: serial("id").primaryKey(),
+  username: text("username").notNull().unique(),
+  password: text("password").notNull(),
+});
+
+export const scrapingJobs = pgTable("scraping_jobs", {
+  id: serial("id").primaryKey(),
+  url: text("url").notNull(),
+  status: text("status").notNull(),
+  maxPages: integer("max_pages").default(10),
+  crawlDepth: integer("crawl_depth").default(1),
+  outputFormat: text("output_format").default("json"),
+  progress: integer("progress").default(0),
+  pagesFound: integer("pages_found").default(0),
+  pagesScraped: integer("pages_scraped").default(0),
+  results: jsonb("results"),
+  error: text("error"),
+  createdAt: timestamp("created_at").defaultNow(),
+  completedAt: timestamp("completed_at"),
+});
+
+export const scrapedPages = pgTable("scraped_pages", {
+  id: serial("id").primaryKey(),
+  jobId: integer("job_id").references(() => scrapingJobs.id),
+  url: text("url").notNull(),
+  title: text("title"),
+  content: text("content"),
+  htmlSource: text("html_source"),
+  contentLength: integer("content_length"),
+  scrapedAt: timestamp("scraped_at").defaultNow(),
+});
+
+export const storeProducts = pgTable("store_products", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description").notNull(),
+  price: integer("price").notNull(),
+  features: text("features").array(),
+  category: text("category").notNull(),
+  image: text("image"),
+  isActive: boolean("is_active").default(true),
+});
+
+export const orders = pgTable("orders", {
+  id: serial("id").primaryKey(),
+  customerEmail: text("customer_email").notNull(),
+  customerName: text("customer_name"),
+  productId: integer("product_id").references(() => storeProducts.id),
+  amount: integer("amount").notNull(),
+  paymentMethod: text("payment_method").notNull(),
+  paymentProvider: text("payment_provider"),
+  transactionId: text("transaction_id"),
+  paymentStatus: text("payment_status").notNull(),
+  billingAddress: text("billing_address"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const gamePlatforms = pgTable("game_platforms", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull().unique(),
+  slug: text("slug").notNull().unique(),
+  description: text("description"),
+  iconEmoji: text("icon_emoji"),
+  gameCount: integer("game_count").default(0),
+});
+
+export const gameLibrary = pgTable("game_library", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  slug: text("slug").notNull(),
+  platformId: integer("platform_id").references(() => gamePlatforms.id),
+  platform: text("platform").notNull(),
+  description: text("description"),
+  thumbnailUrl: text("thumbnail_url"),
+  sourceUrl: text("source_url"),
+  embedUrl: text("embed_url"),
+  category: text("category"),
+  isPlayable: boolean("is_playable").default(false),
+  isFeatured: boolean("is_featured").default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const articles = pgTable("articles", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  slug: text("slug").notNull(),
+  category: text("category"),
+  content: text("content"),
+  excerpt: text("excerpt"),
+  thumbnailUrl: text("thumbnail_url"),
+  author: text("author"),
+  sourceUrl: text("source_url"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const chatMessages = pgTable("chat_messages", {
+  id: serial("id").primaryKey(),
+  username: text("username").notNull(),
+  message: text("message").notNull(),
+  room: text("room").notNull().default("general"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertUserSchema = createInsertSchema(users).omit({ id: true });
+export const insertChatMessageSchema = createInsertSchema(chatMessages).omit({ id: true, createdAt: true });
+export const insertScrapingJobSchema = createInsertSchema(scrapingJobs).omit({
+  id: true, status: true, progress: true, pagesFound: true, pagesScraped: true, results: true, error: true, createdAt: true, completedAt: true,
+});
+export const insertStoreProductSchema = createInsertSchema(storeProducts).omit({ id: true });
+export const insertOrderSchema = createInsertSchema(orders).omit({ id: true, createdAt: true });
+export const insertScrapedPageSchema = createInsertSchema(scrapedPages).omit({ id: true });
+export const insertGamePlatformSchema = createInsertSchema(gamePlatforms).omit({ id: true });
+export const insertGameSchema = createInsertSchema(gameLibrary).omit({ id: true, createdAt: true });
+export const insertArticleSchema = createInsertSchema(articles).omit({ id: true, createdAt: true });
+
+export type InsertUser = z.infer<typeof insertUserSchema>;
+export type User = typeof users.$inferSelect;
+export type InsertScrapingJob = z.infer<typeof insertScrapingJobSchema>;
+export type ScrapingJob = typeof scrapingJobs.$inferSelect;
+export type InsertScrapedPage = z.infer<typeof insertScrapedPageSchema>;
+export type ScrapedPage = typeof scrapedPages.$inferSelect;
+export type InsertStoreProduct = z.infer<typeof insertStoreProductSchema>;
+export type StoreProduct = typeof storeProducts.$inferSelect;
+export type InsertOrder = z.infer<typeof insertOrderSchema>;
+export type Order = typeof orders.$inferSelect;
+export type InsertGamePlatform = z.infer<typeof insertGamePlatformSchema>;
+export type GamePlatform = typeof gamePlatforms.$inferSelect;
+export type InsertGame = z.infer<typeof insertGameSchema>;
+export type Game = typeof gameLibrary.$inferSelect;
+export type InsertArticle = z.infer<typeof insertArticleSchema>;
+export type Article = typeof articles.$inferSelect;
+export type InsertChatMessage = z.infer<typeof insertChatMessageSchema>;
+export type ChatMessage = typeof chatMessages.$inferSelect;

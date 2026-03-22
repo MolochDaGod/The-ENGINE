@@ -1,0 +1,48 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 936d6805986de86459a8710c7bf5c00a, type: 3}
+  m_Name: DigitalLandscape
+  m_EditorClassIdentifier: Needle.Engine.Samples.SampleInfo, Needle.Engine.Samples.Editor
+  DisplayName: Digital Landscape
+  Description: Custom shader showcasing terrain visualization
+  Thumbnail: {fileID: 2800000, guid: 6513f39d4787ab5418f691a4d3fc83eb, type: 3}
+  Scene: {fileID: 102900000, guid: 25d62f79ab419984abf45f9c64f5bedf, type: 3}
+  LiveUrl: https://engine.needle.tools/samples-uploads/digital-landscape/
+  Priority: 7
+  Tags:
+  - {fileID: 11400000, guid: 7c9389e06e70fd44499179508a35f4c5, type: 2}
+  reference: {fileID: 0}
+  UsedComponents:
+  - Component: DepthOfFieldController
+    Path: needle-engine-samples/package/Runtime/_Shared/SampleScripts~/DepthOfFieldController.ts
+    MoreInfoUrl: https://github.com/needle-tools/needle-engine-samples//tree/main/package/Runtime/_Shared/SampleScripts~/DepthOfFieldController.ts
+  - Component: AudioListener
+    Path: engine/src/engine-components/AudioListener.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/component-reference.html
+  - Component: Camera
+    Path: engine/src/engine-components/Camera.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/component-reference.html
+  - Component: Light
+    Path: engine/src/engine-components/Light.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/component-reference.html
+  - Component: NeedleMenu
+    Path: engine/src/engine-components/NeedleMenu.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/api/NeedleMenu
+  - Component: OrbitControls
+    Path: engine/src/engine-components/OrbitControls.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/api/OrbitControls
+  - Component: MeshRenderer
+    Path: engine/src/engine-components/Renderer.ts
+    MoreInfoUrl: https://engine.needle.tools/docs/component-reference.html
+  - Component: Volume
+    Path: engine/src/engine-components/postprocessing/Volume.ts
+    MoreInfoUrl: https://docs.unity3d.com/Packages/com.unity.render-pipelines.high-definition@12.1/manual/Volumes.html
