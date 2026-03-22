@@ -9,6 +9,47 @@ import { db } from "./db";
 import * as cheerio from "cheerio";
 import * as fs from "fs";
 import * as path from "path";
+import crypto from "crypto";
+
+const ADMIN_SESSION_COOKIE = "gs_admin_session";
+const ADMIN_SESSION_TTL_MS = 1000 * 60 * 60 * 12; // 12 hours
+
+function parseCookies(cookieHeader?: string): Record<string, string> {
+  if (!cookieHeader) return {};
+  return cookieHeader.split(";").reduce<Record<string, string>>((acc, segment) => {
+    const [rawKey, ...rest] = segment.trim().split("=");
+    if (!rawKey || rest.length === 0) return acc;
+    acc[rawKey] = decodeURIComponent(rest.join("="));
+    return acc;
+  }, {});
+}
+
+function safeCompare(a: string, b: string): boolean {
+  const aBuf = Buffer.from(a, "utf8");
+  const bBuf = Buffer.from(b, "utf8");
+  if (aBuf.length !== bBuf.length) return false;
+  return crypto.timingSafeEqual(aBuf, bBuf);
+}
+
+function createAdminSessionToken(secret: string) {
+  const expiresAt = Date.now() + ADMIN_SESSION_TTL_MS;
+  const payload = `${expiresAt}.${crypto.randomBytes(8).toString("hex")}`;
+  const sig = crypto.createHmac("sha256", secret).update(payload).digest("hex");
+  return `${payload}.${sig}`;
+}
+
+function verifyAdminSessionToken(token: string, secret: string) {
+  const parts = token.split(".");
+  if (parts.length < 3) return false;
+
+  const expiresAt = Number(parts[0]);
+  if (!Number.isFinite(expiresAt) || expiresAt < Date.now()) return false;
+
+  const sig = parts[parts.length - 1];
+  const payload = parts.slice(0, -1).join(".");
+  const expectedSig = crypto.createHmac("sha256", secret).update(payload).digest("hex");
+  return safeCompare(sig, expectedSig);
+}
 
 // Mock scraping functionality - in production, use Puppeteer
 async function scrapePage(url: string): Promise<{ title: string; content: string; htmlSource: string; links: string[] }> {
@@ -148,6 +189,63 @@ async function processScrapingJob(jobId: number) {
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  app.post("/api/admin/login", (req, res) => {
+    const submittedPasscode = String(req.body?.passcode || "");
+    const expectedPasscode = process.env.ADMIN_PASSCODE;
+    const sessionSecret = process.env.ADMIN_SESSION_SECRET || process.env.SESSION_SECRET;
+
+    if (!expectedPasscode || !sessionSecret) {
+      return res.status(500).json({ authenticated: false, error: "Admin auth is not configured" });
+    }
+
+    if (!safeCompare(submittedPasscode, expectedPasscode)) {
+      return res.status(401).json({ authenticated: false, error: "Invalid credentials" });
+    }
+
+    const sessionToken = createAdminSessionToken(sessionSecret);
+    const isSecure = process.env.NODE_ENV === "production";
+    const cookieParts = [
+      `${ADMIN_SESSION_COOKIE}=${encodeURIComponent(sessionToken)}`,
+      "HttpOnly",
+      "Path=/",
+      "SameSite=Lax",
+      `Max-Age=${Math.floor(ADMIN_SESSION_TTL_MS / 1000)}`,
+    ];
+
+    if (isSecure) cookieParts.push("Secure");
+    res.setHeader("Set-Cookie", cookieParts.join("; "));
+    return res.json({ authenticated: true });
+  });
+
+  app.get("/api/admin/session", (req, res) => {
+    const sessionSecret = process.env.ADMIN_SESSION_SECRET || process.env.SESSION_SECRET;
+    if (!sessionSecret) {
+      return res.status(500).json({ authenticated: false, error: "Admin auth is not configured" });
+    }
+
+    const cookies = parseCookies(req.headers.cookie);
+    const token = cookies[ADMIN_SESSION_COOKIE];
+    if (!token || !verifyAdminSessionToken(token, sessionSecret)) {
+      return res.status(401).json({ authenticated: false });
+    }
+
+    return res.json({ authenticated: true });
+  });
+
+  app.post("/api/admin/logout", (_req, res) => {
+    const isSecure = process.env.NODE_ENV === "production";
+    const cookieParts = [
+      `${ADMIN_SESSION_COOKIE}=`,
+      "HttpOnly",
+      "Path=/",
+      "SameSite=Lax",
+      "Max-Age=0",
+    ];
+
+    if (isSecure) cookieParts.push("Secure");
+    res.setHeader("Set-Cookie", cookieParts.join("; "));
+    return res.json({ success: true });
+  });
   // Engine launching API - returns navigation URL for in-browser engine
   app.post("/api/launch-engine", async (req, res) => {
     try {
