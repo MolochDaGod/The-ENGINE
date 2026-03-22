@@ -14,3 +14,5 @@ The-ENGINE/
 # Added by cargo
 
 /target
+
+.vercel
