@@ -78,7 +78,10 @@ export default function Chat() {
     if (!username || wsRef.current) return;
 
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const ws = new WebSocket(`${protocol}//${window.location.host}/ws/chat`);
+    const wsBase = import.meta.env.VITE_WS_URL
+      ? String(import.meta.env.VITE_WS_URL).replace(/\/$/, "")
+      : `${protocol}//${window.location.host}`;
+    const ws = new WebSocket(`${wsBase}/ws/chat`);
     wsRef.current = ws;
 
     ws.onopen = () => {

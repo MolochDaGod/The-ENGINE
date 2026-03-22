@@ -11,7 +11,8 @@ import {
   type ChatMessage, type InsertChatMessage
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, ilike, like, desc, sql, and } from "drizzle-orm";
+import { eq, ilike, desc, sql, and } from "drizzle-orm";
+import { CATALOG } from "./catalog-data";
 
 export interface IStorage {
   getUser(id: number): Promise<User | undefined>;
@@ -152,6 +153,48 @@ export class DatabaseStorage implements IStorage {
     ];
 
     await db.insert(gamePlatforms).values(platforms);
+  }
+
+  async initializeGames() {
+    const existing = await db.select().from(gameLibrary).limit(1);
+    if (existing.length > 0) return;
+    await this._seedGamesFromCatalog();
+  }
+
+  async reseedGames() {
+    await db.delete(gameLibrary);
+    await this._seedGamesFromCatalog();
+  }
+
+  private async _seedGamesFromCatalog() {
+    const BATCH = 50;
+    for (let i = 0; i < CATALOG.length; i += BATCH) {
+      const batch = CATALOG.slice(i, i + BATCH);
+      const values = batch.map(([, title, slug, platform, embedUrl, isFeatured]) => ({
+        title,
+        slug,
+        platform,
+        platformId: null,
+        description: `Play ${title} online`,
+        thumbnailUrl: null,
+        sourceUrl: null,
+        embedUrl,
+        category: "retro",
+        isPlayable: true,
+        isFeatured,
+      }));
+      await db.insert(gameLibrary).values(values);
+    }
+
+    // Update platform game counts
+    const platformSlugs = ["nes", "snes", "genesis", "n64", "neogeo", "playstation", "gameboy", "gba", "nds"];
+    for (const slug of platformSlugs) {
+      const [{ count }] = await db
+        .select({ count: sql<number>`cast(count(*) as int)` })
+        .from(gameLibrary)
+        .where(eq(gameLibrary.platform, slug));
+      await db.update(gamePlatforms).set({ gameCount: count }).where(eq(gamePlatforms.slug, slug));
+    }
   }
 
   async getUser(id: number): Promise<User | undefined> {
@@ -300,6 +343,7 @@ const storage = new DatabaseStorage();
 (async () => {
   await storage.initializeStoreProducts();
   await storage.initializePlatforms();
+  await storage.initializeGames();
 })();
 
 export { storage };

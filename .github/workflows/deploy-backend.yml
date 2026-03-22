@@ -1,0 +1,105 @@
+name: Deploy Backend (portal-api)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "server/**"
+      - "shared/**"
+      - "drizzle.config.ts"
+      - "Dockerfile"
+      - "package.json"
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository_owner }}/the-engine-backend
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=sha,prefix=sha-
+            type=raw,value=latest
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy to VPS
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            # Login and pull latest image
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            docker pull ghcr.io/${{ env.IMAGE_NAME }}:latest
+
+            # Start PostgreSQL for portal-api if not already running
+            if ! docker ps --format '{{.Names}}' | grep -q '^portal-postgres$'; then
+              docker volume create portal-db-data 2>/dev/null || true
+              docker run -d \
+                --name portal-postgres \
+                --restart unless-stopped \
+                --network coolify \
+                -e POSTGRES_DB=rec0ded88 \
+                -e POSTGRES_USER=rec0ded_user \
+                -e POSTGRES_PASSWORD="${{ secrets.PORTAL_DB_PASSWORD }}" \
+                -v portal-db-data:/var/lib/postgresql/data \
+                postgres:16-alpine
+              echo "Waiting for postgres..."
+              sleep 8
+            fi
+
+            # Deploy the portal API container
+            docker stop the-engine-backend 2>/dev/null || true
+            docker rm the-engine-backend 2>/dev/null || true
+            docker run -d \
+              --name the-engine-backend \
+              --restart unless-stopped \
+              --network coolify \
+              -e DATABASE_URL="postgresql://rec0ded_user:${{ secrets.PORTAL_DB_PASSWORD }}@portal-postgres:5432/rec0ded88" \
+              -e PORT=5000 \
+              -e NODE_ENV=production \
+              -e ADMIN_PASSCODE="${{ secrets.PORTAL_ADMIN_PASSCODE }}" \
+              -e ADMIN_SESSION_SECRET="${{ secrets.PORTAL_SESSION_SECRET }}" \
+              -e CORS_ORIGINS="https://grudge-studio.com,http://localhost:5173" \
+              -l "traefik.enable=true" \
+              -l "traefik.http.routers.portal-api.rule=Host(\`portal-api.grudge-studio.com\`)" \
+              -l "traefik.http.routers.portal-api.entrypoints=https" \
+              -l "traefik.http.routers.portal-api.tls.certresolver=letsencrypt" \
+              -l "traefik.http.services.portal-api.loadbalancer.server.port=5000" \
+              -l "traefik.docker.network=coolify" \
+              ghcr.io/${{ env.IMAGE_NAME }}:latest
+            echo "Deploy complete"

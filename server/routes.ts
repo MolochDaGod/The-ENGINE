@@ -232,6 +232,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     return res.json({ authenticated: true });
   });
 
+  app.post("/api/admin/seed-games", async (req, res) => {
+    const sessionSecret = process.env.ADMIN_SESSION_SECRET || process.env.SESSION_SECRET;
+    if (!sessionSecret) return res.status(500).json({ error: "Admin auth not configured" });
+    const cookies = parseCookies(req.headers.cookie);
+    const token = cookies[ADMIN_SESSION_COOKIE];
+    if (!token || !verifyAdminSessionToken(token, sessionSecret)) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+    try {
+      await storage.reseedGames();
+      res.json({ success: true, message: "Game catalog re-seeded (1360 games)" });
+    } catch (error) {
+      res.status(500).json({ error: error instanceof Error ? error.message : "Seed failed" });
+    }
+  });
+
   app.post("/api/admin/logout", (_req, res) => {
     const isSecure = process.env.NODE_ENV === "production";
     const cookieParts = [
