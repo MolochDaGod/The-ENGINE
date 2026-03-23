@@ -1,7 +1,8 @@
 // Shared game/platform data for Vercel serverless functions.
 // Loaded from the embedded catalog — no database required.
+// NOTE: uses relative path from api/ to root server/ directory
 
-import { CATALOG } from '../server/catalog-data';
+import { CATALOG } from './catalog-data';
 
 export interface GameEntry {
   id: number;

@@ -1,7 +1,6 @@
-import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { verifyToken, parseCookies, COOKIE_NAME } from '../_auth';
 
-export default function handler(req: VercelRequest, res: VercelResponse) {
+export default function handler(req: any, res: any) {
   const secret = process.env.ADMIN_SESSION_SECRET;
   if (!secret) {
     return res.status(500).json({ authenticated: false, error: 'Admin auth not configured' });
