@@ -2,7 +2,7 @@
 // Loaded from the embedded catalog — no database required.
 // NOTE: uses relative path from api/ to root server/ directory
 
-import { CATALOG } from './catalog-data';
+import { CATALOG } from './_catalog-data';
 
 export interface GameEntry {
   id: number;
