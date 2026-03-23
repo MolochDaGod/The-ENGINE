@@ -238,14 +238,28 @@ export default function GameLibrary() {
               const initial = (game.title[0] || '?').toUpperCase();
               return (
                 <div key={game.id} className="fantasy-panel overflow-hidden hover:animate-gem-glow transition group relative card-hover cursor-pointer" onClick={() => setLocation(`/play/${game.id}`)}>
-                  <div className="aspect-video flex items-center justify-center relative overflow-hidden" style={{ background: colors.bg }}>
-                    <span className="text-4xl font-heading font-bold opacity-20 select-none" style={{ color: colors.accent }}>{initial}</span>
-                    <Gamepad2 className="absolute bottom-1 right-1 w-4 h-4 opacity-20" style={{ color: colors.accent }} />
-                    <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition bg-black/50">
+                  <div className="aspect-video relative overflow-hidden" style={{ background: colors.bg }}>
+                    {/* Gradient placeholder — always visible as base layer */}
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <span className="text-4xl font-heading font-bold opacity-20 select-none" style={{ color: colors.accent }}>{initial}</span>
+                      <Gamepad2 className="absolute bottom-1 right-1 w-4 h-4 opacity-20" style={{ color: colors.accent }} />
+                    </div>
+                    {/* Cover art from libretro-thumbnails CDN — hides on 404 */}
+                    {(game as any).thumbnailUrl && (
+                      <img
+                        src={(game as any).thumbnailUrl}
+                        alt={game.title}
+                        className="absolute inset-0 w-full h-full object-cover"
+                        loading="lazy"
+                        onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                      />
+                    )}
+                    {/* Hover play overlay */}
+                    <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition bg-black/60 z-10">
                       <Play className="w-8 h-8 text-[hsl(43,85%,55%)]" />
                     </div>
                     {game.isFeatured && (
-                      <Star className="absolute top-1 right-1 w-3 h-3 text-[hsl(43,85%,55%)] fill-[hsl(43,85%,55%)]" />
+                      <Star className="absolute top-1 left-1 w-3 h-3 text-[hsl(43,85%,55%)] fill-[hsl(43,85%,55%)] z-10" />
                     )}
                   </div>
                   <div className="p-2">

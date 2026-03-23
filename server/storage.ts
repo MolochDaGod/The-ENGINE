@@ -64,7 +64,7 @@ export class DatabaseStorage implements IStorage {
         price: 49900,
         features: ["Gaming launcher platform", "White-label solution", "Monetization tools", "Full customization"],
         category: "software",
-        image: "/attached_assets/store/grudge_launcher.png",
+        image: "/assets/store/grudge_launcher.png",
         isActive: true,
       },
       {
@@ -73,16 +73,16 @@ export class DatabaseStorage implements IStorage {
         price: 79900,
         features: ["3D RTS engine with Three.js", "cannon-es physics system", "AI opponent logic", "Full source code"],
         category: "software",
-        image: "/attached_assets/store/wargus_rts_engine.png",
+        image: "/assets/store/wargus_rts_engine.png",
         isActive: true,
       },
       {
         name: "Retro Game Library",
-        description: "1,360+ scraped retro games across 9 platforms with EmulatorJS integration, ROM proxy, and a full game library browser.",
+        description: "1,360+ retro games across 9 platforms with EmulatorJS integration, ROM proxy, and full game library browser.",
         price: 29900,
-        features: ["1,360+ games, 9 platforms", "EmulatorJS in-app player", "Search and filter system", "Scraping tools included"],
+        features: ["1,360+ games, 9 platforms", "EmulatorJS in-app player", "Search and filter system", "Platform cover art"],
         category: "software",
-        image: "/attached_assets/store/retro_library.png",
+        image: "/assets/store/retro_library.png",
         isActive: true,
       },
       {
@@ -91,7 +91,7 @@ export class DatabaseStorage implements IStorage {
         price: 149900,
         features: ["MMO architecture", "Real-time multiplayer", "Custom game mechanics", "Full source code"],
         category: "enterprise",
-        image: "/attached_assets/store/mmo_development.png",
+        image: "/assets/store/mmo_development.png",
         isActive: true,
       },
       {
@@ -100,7 +100,7 @@ export class DatabaseStorage implements IStorage {
         price: 199900,
         features: ["Custom development", "Scalable architecture", "Ongoing support", "Performance optimization"],
         category: "enterprise",
-        image: "/attached_assets/store/custom_development.png",
+        image: "/assets/store/custom_development.png",
         isActive: true,
       },
       {
@@ -109,7 +109,7 @@ export class DatabaseStorage implements IStorage {
         price: 4900,
         features: ["20+ environment scenes", "Seamless tiling textures", "PBR materials included"],
         category: "asset",
-        image: "/attached_assets/store/dark_fantasy_scenes.png",
+        image: "/assets/store/dark_fantasy_scenes.png",
         isActive: true,
       },
       {
@@ -118,7 +118,7 @@ export class DatabaseStorage implements IStorage {
         price: 4900,
         features: ["15+ environment scenes", "Emissive/glow materials", "Modular building pieces"],
         category: "asset",
-        image: "/attached_assets/store/scifi_environment.png",
+        image: "/assets/store/scifi_environment.png",
         isActive: true,
       },
       {
@@ -127,7 +127,7 @@ export class DatabaseStorage implements IStorage {
         price: 3900,
         features: ["50+ character sprites", "Walk/attack/idle animations", "Multiple factions included"],
         category: "asset",
-        image: "/attached_assets/store/character_sprites.png",
+        image: "/assets/store/character_sprites.png",
         isActive: true,
       },
     ];
