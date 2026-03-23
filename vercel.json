@@ -2,10 +2,7 @@
   "framework": "vite",
   "buildCommand": "npm run build",
   "outputDirectory": "dist/public",
-  "functions": {
-    "api/rom-proxy.ts": { "runtime": "edge" }
-  },
-  "rewrites": [
+  "rewrites":
     {
       "source": "/((?!api/).*)",
       "destination": "/index.html"
