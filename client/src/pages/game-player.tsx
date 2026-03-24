@@ -198,7 +198,12 @@ export default function GamePlayer() {
           </div>
         )}
 
-        <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="mt-6 grid grid-cols-1 md:grid-cols-4 gap-4">
+          {(game as any).thumbnailUrl && (
+            <div className="fantasy-panel p-3 flex items-center justify-center">
+              <img src={(game as any).thumbnailUrl} alt={game.title} className="max-h-48 object-contain rounded" />
+            </div>
+          )}
           <div className="fantasy-panel p-4">
             <h3 className="text-sm font-heading text-[hsl(43,85%,55%)] uppercase mb-2 tracking-wider" style={{ WebkitTextFillColor: 'unset' }}>Controls</h3>
             <div className="space-y-1 text-sm text-[hsl(45,30%,90%)] font-body">
