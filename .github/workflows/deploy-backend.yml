@@ -5,8 +5,10 @@ on:
     branches: [main]
     paths:
       - "server/**"
+      - "client/**"
       - "shared/**"
       - "drizzle.config.ts"
+      - "vite.config.ts"
       - "Dockerfile"
       - "package.json"
 
@@ -94,7 +96,7 @@ jobs:
               -e NODE_ENV=production \
               -e ADMIN_PASSCODE="${{ secrets.PORTAL_ADMIN_PASSCODE }}" \
               -e ADMIN_SESSION_SECRET="${{ secrets.PORTAL_SESSION_SECRET }}" \
-              -e CORS_ORIGINS="https://grudge-studio.com,http://localhost:5173" \
+              -e CORS_ORIGINS="https://grudge-studio.com,https://grudgewarlords.com,https://id.grudge-studio.com,http://localhost:5173" \
               -l "traefik.enable=true" \
               -l "traefik.http.routers.portal-api.rule=Host(\`portal-api.grudge-studio.com\`)" \
               -l "traefik.http.routers.portal-api.entrypoints=https" \
