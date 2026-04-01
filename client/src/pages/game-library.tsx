@@ -232,22 +232,23 @@ export default function GameLibrary() {
             </div>
           )}
 
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
             {paginatedGames.map((game) => {
               const colors = PLATFORM_COLORS[game.platform || ''] || { bg: 'linear-gradient(135deg, hsl(225,25%,15%), hsl(225,30%,10%))', accent: 'hsl(43,85%,55%)' };
               const initial = (game.title[0] || '?').toUpperCase();
+              const thumbUrl = (game as any).thumbnailUrl;
               return (
                 <div key={game.id} className="fantasy-panel overflow-hidden hover:animate-gem-glow transition group relative card-hover cursor-pointer" onClick={() => setLocation(`/play/${game.id}`)}>
-                  <div className="aspect-video relative overflow-hidden" style={{ background: colors.bg }}>
+                  <div className="aspect-[3/4] relative overflow-hidden" style={{ background: colors.bg }}>
                     {/* Gradient placeholder — always visible as base layer */}
                     <div className="absolute inset-0 flex items-center justify-center">
                       <span className="text-4xl font-heading font-bold opacity-20 select-none" style={{ color: colors.accent }}>{initial}</span>
                       <Gamepad2 className="absolute bottom-1 right-1 w-4 h-4 opacity-20" style={{ color: colors.accent }} />
                     </div>
                     {/* Cover art from libretro-thumbnails CDN — hides on 404 */}
-                    {(game as any).thumbnailUrl && (
+                    {thumbUrl && (
                       <img
-                        src={(game as any).thumbnailUrl}
+                        src={thumbUrl}
                         alt={game.title}
                         className="absolute inset-0 w-full h-full object-cover"
                         loading="lazy"
@@ -256,14 +257,14 @@ export default function GameLibrary() {
                     )}
                     {/* Hover play overlay */}
                     <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition bg-black/60 z-10">
-                      <Play className="w-8 h-8 text-[hsl(43,85%,55%)]" />
+                      <Play className="w-8 h-8 text-[hsl(43,85%,55%)] drop-shadow-lg" />
                     </div>
                     {game.isFeatured && (
                       <Star className="absolute top-1 left-1 w-3 h-3 text-[hsl(43,85%,55%)] fill-[hsl(43,85%,55%)] z-10" />
                     )}
                   </div>
                   <div className="p-2">
-                    <h3 className="text-sm font-heading text-[hsl(45,30%,90%)] truncate" style={{ WebkitTextFillColor: 'unset' }}>{game.title}</h3>
+                    <h3 className="text-xs font-heading text-[hsl(45,30%,90%)] truncate" style={{ WebkitTextFillColor: 'unset' }}>{game.title}</h3>
                     <div className="flex items-center justify-between mt-1">
                       <Badge variant="outline" className="text-[10px] border-[hsl(43,60%,30%)]/50 text-[hsl(43,85%,55%)]">{game.platform?.toUpperCase()}</Badge>
                       <span className="text-[10px] text-[hsl(43,85%,55%)] flex items-center gap-1 font-heading">
