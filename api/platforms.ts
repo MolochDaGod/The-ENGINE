@@ -1,5 +1,5 @@
 const PLATFORMS = [
-  { id: 1, name: 'NES',              slug: 'nes',         description: 'Nintendo Entertainment System',       iconEmoji: '\ud83c\udfae', gameCount: 158 },
+  { id: 1, name: 'NES',              slug: 'nes',         description: 'Nintendo Entertainment System',       iconEmoji: '\ud83c\udfae', gameCount: 148 },
   { id: 2, name: 'SNES',             slug: 'snes',        description: 'Super Nintendo Entertainment System', iconEmoji: '\ud83d\udd79\ufe0f', gameCount: 132 },
   { id: 3, name: 'Sega Genesis',     slug: 'genesis',     description: 'Sega Genesis / Mega Drive',           iconEmoji: '\ud83c\udfaf', gameCount: 107 },
   { id: 4, name: 'Nintendo 64',      slug: 'n64',         description: 'Nintendo 64',                         iconEmoji: '\ud83c\udfc6', gameCount: 188 },
