@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, Maximize2, Minimize2, Gamepad2, Loader2, Play } from "lucide-react";
 import type { Game } from "@shared/schema";
 import grudgeLogo from "@assets/uXpJmRe_1773828784729.png";
+import NotFound from "@/pages/not-found";
 
 const PLATFORM_CORE_MAP: Record<string, string> = {
   nes: "nes",
@@ -89,14 +90,7 @@ export default function GamePlayer() {
   }
 
   if (!game) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center" style={{ background: 'hsl(225,30%,6%)' }}>
-        <Gamepad2 className="w-16 h-16 text-[hsl(43,60%,30%)] mb-4" />
-        <h2 className="text-xl font-heading gold-text mb-2">Game Not Found</h2>
-        <p className="text-[hsl(45,15%,60%)] font-body mb-4">This game doesn't exist in our library.</p>
-        <Button onClick={() => setLocation("/games")} className="gilded-button">Back to Library</Button>
-      </div>
-    );
+    return <NotFound />;
   }
 
   const emulatorSrc = buildEmulatorUrl(game);
