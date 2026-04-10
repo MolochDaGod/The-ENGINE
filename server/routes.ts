@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import { storage } from "./storage";
-import { insertScrapingJobSchema, insertOrderSchema, insertGameSchema, insertArticleSchema, gameLibrary } from "@shared/schema";
+import { insertScrapingJobSchema, insertOrderSchema, insertGameSchema, insertArticleSchema, gameLibrary, scores, users } from "@shared/schema";
 import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { db } from "./db";
@@ -10,9 +10,26 @@ import * as cheerio from "cheerio";
 import * as fs from "fs";
 import * as path from "path";
 import crypto from "crypto";
+import {
+  loadPlayer, requirePlayer, getPlayer,
+  hashPassword, verifyPassword, generateGrudgeId,
+  createPlayerToken, setPlayerCookie, clearPlayerCookie, verifyPlayerToken,
+  parseCookies as parsePlayerCookies, PLAYER_COOKIE,
+} from "./auth";
+import { sendDiscordWebhook, DiscordEmbedType, trackNowPlaying } from "./discord-webhooks";
 
 const ADMIN_SESSION_COOKIE = "gs_admin_session";
 const ADMIN_SESSION_TTL_MS = 1000 * 60 * 60 * 12; // 12 hours
+
+/** Normalize smart/curly punctuation to ASCII so ROM filenames resolve on rec0ded88.com */
+function normalizeRomName(name: string): string {
+  return name
+    .replace(/[\u2018\u2019\u201A\u2032]/g, "'")
+    .replace(/[\u201C\u201D\u201E\u2033]/g, '"')
+    .replace(/[\u2013\u2014]/g, "-")
+    .replace(/[\u2026]/g, "...")
+    .replace(/[\u00A0]/g, " ");
+}
 
 function parseCookies(cookieHeader?: string): Record<string, string> {
   if (!cookieHeader) return {};
@@ -189,6 +206,507 @@ async function processScrapingJob(jobId: number) {
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Attach player session to every request (non-blocking)
+  app.use(loadPlayer);
+
+  // ═══════════════════════════════════════════════════════════════
+  // PLAYER AUTH
+  // ═══════════════════════════════════════════════════════════════
+
+  app.post("/api/auth/register", async (req, res) => {
+    try {
+      const { username, password, email, displayName } = req.body;
+      if (!username || !password || typeof username !== "string" || typeof password !== "string") {
+        return res.status(400).json({ error: "username and password are required" });
+      }
+      if (username.length < 3 || username.length > 30) {
+        return res.status(400).json({ error: "username must be 3-30 characters" });
+      }
+      if (password.length < 6) {
+        return res.status(400).json({ error: "password must be at least 6 characters" });
+      }
+
+      // Check uniqueness
+      const existing = await storage.getUserByUsername(username);
+      if (existing) return res.status(409).json({ error: "Username already taken" });
+      if (email) {
+        const emailUser = await storage.getUserByEmail(email);
+        if (emailUser) return res.status(409).json({ error: "Email already registered" });
+      }
+
+      const grudgeId = generateGrudgeId();
+      const hashed = hashPassword(password);
+
+      const user = await storage.createUser({
+        username,
+        password: hashed,
+        grudgeId,
+        email: email || null,
+        displayName: displayName || username,
+        puterId: null,
+        avatarUrl: null,
+        gbuxBalance: "0",
+        role: "player",
+      });
+
+      const token = createPlayerToken(user.id);
+      setPlayerCookie(res, token);
+
+      return res.json({
+        id: user.id,
+        username: user.username,
+        grudgeId: user.grudgeId,
+        displayName: user.displayName,
+        avatarUrl: user.avatarUrl,
+        gbuxBalance: user.gbuxBalance,
+        role: user.role,
+      });
+    } catch (error) {
+      console.error("Register error:", error);
+      return res.status(500).json({ error: "Registration failed" });
+    }
+  });
+
+  app.post("/api/auth/login", async (req, res) => {
+    try {
+      const { username, password } = req.body;
+      if (!username || !password) {
+        return res.status(400).json({ error: "username and password are required" });
+      }
+
+      const user = await storage.getUserByUsername(username);
+      if (!user || !verifyPassword(password, user.password)) {
+        return res.status(401).json({ error: "Invalid credentials" });
+      }
+
+      await storage.updateUser(user.id, { lastLoginAt: new Date() });
+
+      const token = createPlayerToken(user.id);
+      setPlayerCookie(res, token);
+
+      return res.json({
+        id: user.id,
+        username: user.username,
+        grudgeId: user.grudgeId,
+        displayName: user.displayName,
+        avatarUrl: user.avatarUrl,
+        gbuxBalance: user.gbuxBalance,
+        role: user.role,
+      });
+    } catch (error) {
+      console.error("Login error:", error);
+      return res.status(500).json({ error: "Login failed" });
+    }
+  });
+
+  app.get("/api/auth/me", (req, res) => {
+    const player = getPlayer(req);
+    if (!player) return res.status(401).json({ error: "Not authenticated" });
+    return res.json({
+      id: player.id,
+      username: player.username,
+      grudgeId: player.grudgeId,
+      puterId: player.puterId,
+      email: player.email,
+      displayName: player.displayName,
+      avatarUrl: player.avatarUrl,
+      gbuxBalance: player.gbuxBalance,
+      role: player.role,
+      createdAt: player.createdAt,
+    });
+  });
+
+  app.post("/api/auth/logout", (_req, res) => {
+    clearPlayerCookie(res);
+    return res.json({ success: true });
+  });
+
+  /** Puter SSO: auto-create or link a Grudge account from a Puter ID */
+  app.post("/api/auth/puter-sso", async (req, res) => {
+    try {
+      const { puterId, puterUsername, email } = req.body;
+      if (!puterId || typeof puterId !== "string") {
+        return res.status(400).json({ error: "puterId is required" });
+      }
+
+      // Check if puter account already linked
+      let user = await storage.getUserByPuterId(puterId);
+      if (user) {
+        await storage.updateUser(user.id, { lastLoginAt: new Date() });
+        const token = createPlayerToken(user.id);
+        setPlayerCookie(res, token);
+        return res.json({
+          id: user.id, username: user.username, grudgeId: user.grudgeId,
+          displayName: user.displayName, avatarUrl: user.avatarUrl,
+          gbuxBalance: user.gbuxBalance, role: user.role, isNew: false,
+        });
+      }
+
+      // Auto-create a Grudge account for this Puter user
+      const grudgeId = generateGrudgeId();
+      const username = puterUsername || `puter_${puterId.slice(0, 8)}`;
+      // Generate a random password (user can set one later)
+      const randomPass = crypto.randomBytes(16).toString("hex");
+
+      user = await storage.createUser({
+        username,
+        password: hashPassword(randomPass),
+        grudgeId,
+        puterId,
+        email: email || null,
+        displayName: puterUsername || username,
+        avatarUrl: null,
+        gbuxBalance: "0",
+        role: "player",
+      });
+
+      const token = createPlayerToken(user.id);
+      setPlayerCookie(res, token);
+
+      return res.json({
+        id: user.id, username: user.username, grudgeId: user.grudgeId,
+        displayName: user.displayName, avatarUrl: user.avatarUrl,
+        gbuxBalance: user.gbuxBalance, role: user.role, isNew: true,
+      });
+    } catch (error) {
+      console.error("Puter SSO error:", error);
+      return res.status(500).json({ error: "SSO failed" });
+    }
+  });
+
+  // ═══════════════════════════════════════════════════════════════
+  // LEADERBOARDS / SCORES
+  // ═══════════════════════════════════════════════════════════════
+
+  app.post("/api/scores", requirePlayer, async (req, res) => {
+    try {
+      const player = getPlayer(req)!;
+      const { gameId, score } = req.body;
+      if (!gameId || score == null) {
+        return res.status(400).json({ error: "gameId and score are required" });
+      }
+
+      const game = await storage.getGame(parseInt(gameId));
+      if (!game) return res.status(404).json({ error: "Game not found" });
+
+      // Determine personal best / global record flags
+      const prevBest = await storage.getPlayerBestScore(player.id, game.id);
+      const globalBest = await storage.getGlobalBestScore(game.id);
+
+      const isPersonalBest = !prevBest || score > prevBest.score;
+      const isGlobalRecord = !globalBest || score > globalBest.score;
+
+      // If new personal best, un-flag old one
+      if (isPersonalBest && prevBest) {
+        await db.update(scores).set({ isPersonalBest: false }).where(eq(scores.id, prevBest.id));
+      }
+      if (isGlobalRecord && globalBest) {
+        await db.update(scores).set({ isGlobalRecord: false }).where(eq(scores.id, globalBest.id));
+      }
+
+      const newScore = await storage.createScore({
+        userId: player.id,
+        gameId: game.id,
+        score: parseInt(score),
+      });
+
+      // Update flags on the new score
+      await db.update(scores).set({ isPersonalBest, isGlobalRecord }).where(eq(scores.id, newScore.id));
+
+      // Track activity + fire Discord webhooks
+      trackNowPlaying(player.displayName || player.username, game.title);
+
+      if (isPersonalBest) {
+        sendDiscordWebhook(DiscordEmbedType.PERSONAL_BEST, {
+          username: player.displayName || player.username,
+          gameTitle: game.title,
+          score: parseInt(score),
+        });
+      }
+      if (isGlobalRecord) {
+        sendDiscordWebhook(DiscordEmbedType.GLOBAL_RECORD, {
+          username: player.displayName || player.username,
+          gameTitle: game.title,
+          score: parseInt(score),
+          thumbnailUrl: game.thumbnailUrl || undefined,
+        });
+      }
+
+      return res.json({ ...newScore, isPersonalBest, isGlobalRecord });
+    } catch (error) {
+      console.error("Score submit error:", error);
+      return res.status(500).json({ error: "Failed to submit score" });
+    }
+  });
+
+  app.get("/api/leaderboards/:gameId", async (req, res) => {
+    try {
+      const gameId = parseInt(req.params.gameId);
+      const limit = Math.min(parseInt(req.query.limit as string) || 50, 100);
+      const topScores = await storage.getTopScores(gameId, limit);
+      return res.json(topScores);
+    } catch (error) {
+      return res.status(500).json({ error: "Failed to fetch leaderboard" });
+    }
+  });
+
+  app.get("/api/leaderboards/:gameId/me", requirePlayer, async (req, res) => {
+    try {
+      const player = getPlayer(req)!;
+      const gameId = parseInt(req.params.gameId);
+      const best = await storage.getPlayerBestScore(player.id, gameId);
+      if (!best) return res.json({ rank: null, score: null });
+
+      // Compute rank: count how many distinct personal-best scores are higher
+      const [{ count }] = await db
+        .select({ count: sql<number>`cast(count(*) as int)` })
+        .from(scores)
+        .where(
+          sql`${scores.gameId} = ${gameId} AND ${scores.isPersonalBest} = true AND ${scores.score} > ${best.score}`
+        );
+
+      return res.json({ rank: (count || 0) + 1, score: best.score });
+    } catch (error) {
+      return res.status(500).json({ error: "Failed to fetch player rank" });
+    }
+  });
+
+  // ═══════════════════════════════════════════════════════════════
+  // PVP CHALLENGES
+  // ═══════════════════════════════════════════════════════════════
+
+  app.post("/api/challenges", requirePlayer, async (req, res) => {
+    try {
+      const player = getPlayer(req)!;
+      const { opponentId, gameId, gbuxWager } = req.body;
+      if (!opponentId || !gameId) {
+        return res.status(400).json({ error: "opponentId and gameId are required" });
+      }
+      if (opponentId === player.id) {
+        return res.status(400).json({ error: "Cannot challenge yourself" });
+      }
+
+      const opponent = await storage.getUser(parseInt(opponentId));
+      if (!opponent) return res.status(404).json({ error: "Opponent not found" });
+
+      const game = await storage.getGame(parseInt(gameId));
+      if (!game) return res.status(404).json({ error: "Game not found" });
+
+      const wager = parseFloat(gbuxWager || "0");
+
+      // Verify challenger has enough GBUX for wager
+      if (wager > 0 && parseFloat(player.gbuxBalance) < wager) {
+        return res.status(400).json({ error: "Insufficient GBUX balance" });
+      }
+
+      // Escrow wager from challenger
+      if (wager > 0) {
+        const newBalance = parseFloat(player.gbuxBalance) - wager;
+        await storage.updateUser(player.id, { gbuxBalance: newBalance.toFixed(4) });
+        await storage.createTransaction({
+          userId: player.id,
+          type: "wager_escrow",
+          amount: (-wager).toFixed(4),
+          balanceAfter: newBalance.toFixed(4),
+          referenceType: "challenge",
+          description: `Wager escrow for challenge vs ${opponent.displayName || opponent.username}`,
+        });
+      }
+
+      const challenge = await storage.createChallenge({
+        challengerId: player.id,
+        opponentId: parseInt(opponentId),
+        gameId: parseInt(gameId),
+        gbuxWager: wager.toFixed(4),
+      });
+
+      return res.json(challenge);
+    } catch (error) {
+      console.error("Challenge create error:", error);
+      return res.status(500).json({ error: "Failed to create challenge" });
+    }
+  });
+
+  app.post("/api/challenges/:id/accept", requirePlayer, async (req, res) => {
+    try {
+      const player = getPlayer(req)!;
+      const challenge = await storage.getChallenge(parseInt(req.params.id));
+      if (!challenge) return res.status(404).json({ error: "Challenge not found" });
+      if (challenge.opponentId !== player.id) return res.status(403).json({ error: "Not your challenge" });
+      if (challenge.status !== "pending") return res.status(400).json({ error: "Challenge is not pending" });
+
+      const wager = parseFloat(challenge.gbuxWager);
+
+      // Escrow wager from opponent
+      if (wager > 0) {
+        if (parseFloat(player.gbuxBalance) < wager) {
+          return res.status(400).json({ error: "Insufficient GBUX balance" });
+        }
+        const newBalance = parseFloat(player.gbuxBalance) - wager;
+        await storage.updateUser(player.id, { gbuxBalance: newBalance.toFixed(4) });
+        await storage.createTransaction({
+          userId: player.id,
+          type: "wager_escrow",
+          amount: (-wager).toFixed(4),
+          balanceAfter: newBalance.toFixed(4),
+          referenceType: "challenge",
+          referenceId: challenge.id,
+          description: `Wager escrow for accepted challenge`,
+        });
+      }
+
+      const updated = await storage.updateChallenge(challenge.id, { status: "active" });
+      return res.json(updated);
+    } catch (error) {
+      return res.status(500).json({ error: "Failed to accept challenge" });
+    }
+  });
+
+  app.post("/api/challenges/:id/decline", requirePlayer, async (req, res) => {
+    try {
+      const player = getPlayer(req)!;
+      const challenge = await storage.getChallenge(parseInt(req.params.id));
+      if (!challenge) return res.status(404).json({ error: "Challenge not found" });
+      if (challenge.opponentId !== player.id) return res.status(403).json({ error: "Not your challenge" });
+      if (challenge.status !== "pending") return res.status(400).json({ error: "Challenge is not pending" });
+
+      // Refund challenger wager
+      const wager = parseFloat(challenge.gbuxWager);
+      if (wager > 0) {
+        const challenger = await storage.getUser(challenge.challengerId);
+        if (challenger) {
+          const newBalance = parseFloat(challenger.gbuxBalance) + wager;
+          await storage.updateUser(challenger.id, { gbuxBalance: newBalance.toFixed(4) });
+          await storage.createTransaction({
+            userId: challenger.id,
+            type: "wager_refund",
+            amount: wager.toFixed(4),
+            balanceAfter: newBalance.toFixed(4),
+            referenceType: "challenge",
+            referenceId: challenge.id,
+            description: "Challenge declined — wager refunded",
+          });
+        }
+      }
+
+      const updated = await storage.updateChallenge(challenge.id, { status: "declined" });
+      return res.json(updated);
+    } catch (error) {
+      return res.status(500).json({ error: "Failed to decline challenge" });
+    }
+  });
+
+  app.post("/api/challenges/:id/result", requirePlayer, async (req, res) => {
+    try {
+      const player = getPlayer(req)!;
+      const challenge = await storage.getChallenge(parseInt(req.params.id));
+      if (!challenge) return res.status(404).json({ error: "Challenge not found" });
+      if (challenge.status !== "active") return res.status(400).json({ error: "Challenge is not active" });
+      if (challenge.challengerId !== player.id && challenge.opponentId !== player.id) {
+        return res.status(403).json({ error: "Not a participant" });
+      }
+
+      const { challengerScore, opponentScore } = req.body;
+      if (challengerScore == null || opponentScore == null) {
+        return res.status(400).json({ error: "Both scores are required" });
+      }
+
+      const cScore = parseInt(challengerScore);
+      const oScore = parseInt(opponentScore);
+      const winnerId = cScore >= oScore ? challenge.challengerId : challenge.opponentId;
+      const loserId = winnerId === challenge.challengerId ? challenge.opponentId : challenge.challengerId;
+      const wager = parseFloat(challenge.gbuxWager);
+
+      // Pay out wager to winner (both escrows combined)
+      if (wager > 0) {
+        const winner = await storage.getUser(winnerId);
+        if (winner) {
+          const payout = wager * 2;
+          const newBalance = parseFloat(winner.gbuxBalance) + payout;
+          await storage.updateUser(winner.id, { gbuxBalance: newBalance.toFixed(4) });
+          await storage.createTransaction({
+            userId: winner.id,
+            type: "wager_win",
+            amount: payout.toFixed(4),
+            balanceAfter: newBalance.toFixed(4),
+            referenceType: "challenge",
+            referenceId: challenge.id,
+            description: `Won challenge wager`,
+          });
+        }
+      }
+
+      const updated = await storage.updateChallenge(challenge.id, {
+        challengerScore: cScore,
+        opponentScore: oScore,
+        winnerId,
+        status: "completed",
+        resolvedAt: new Date(),
+      });
+
+      // Discord webhook
+      const challenger = await storage.getUser(challenge.challengerId);
+      const opponent = await storage.getUser(challenge.opponentId);
+      const game = await storage.getGame(challenge.gameId);
+      if (challenger && opponent && game) {
+        const winnerUser = winnerId === challenger.id ? challenger : opponent;
+        const loserUser = winnerId === challenger.id ? opponent : challenger;
+        sendDiscordWebhook(DiscordEmbedType.CHALLENGE_RESULT, {
+          winnerName: winnerUser.displayName || winnerUser.username,
+          loserName: loserUser.displayName || loserUser.username,
+          gameTitle: game.title,
+          gbuxWager: wager,
+          winnerScore: winnerId === challenger.id ? cScore : oScore,
+          loserScore: winnerId === challenger.id ? oScore : cScore,
+        });
+      }
+
+      return res.json(updated);
+    } catch (error) {
+      console.error("Challenge result error:", error);
+      return res.status(500).json({ error: "Failed to submit result" });
+    }
+  });
+
+  app.get("/api/challenges/active", requirePlayer, async (req, res) => {
+    try {
+      const player = getPlayer(req)!;
+      const active = await storage.listActiveChallenges(player.id);
+      return res.json(active);
+    } catch (error) {
+      return res.status(500).json({ error: "Failed to fetch challenges" });
+    }
+  });
+
+  app.get("/api/challenges/pending", requirePlayer, async (req, res) => {
+    try {
+      const player = getPlayer(req)!;
+      const pending = await storage.listPendingChallenges(player.id);
+      return res.json(pending);
+    } catch (error) {
+      return res.status(500).json({ error: "Failed to fetch challenges" });
+    }
+  });
+
+  // ═══════════════════════════════════════════════════════════════
+  // GBUX TRANSACTIONS
+  // ═══════════════════════════════════════════════════════════════
+
+  app.get("/api/transactions", requirePlayer, async (req, res) => {
+    try {
+      const player = getPlayer(req)!;
+      const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);
+      const txs = await storage.listTransactions(player.id, limit);
+      return res.json(txs);
+    } catch (error) {
+      return res.status(500).json({ error: "Failed to fetch transactions" });
+    }
+  });
+
+  // ═══════════════════════════════════════════════════════════════
+  // ADMIN AUTH (existing)
+  // ═══════════════════════════════════════════════════════════════
+
   app.post("/api/admin/login", (req, res) => {
     const submittedPasscode = String(req.body?.passcode || "");
     const expectedPasscode = process.env.ADMIN_PASSCODE;
@@ -1028,11 +1546,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.get("/api/rom-proxy", async (req, res) => {
-    const { url } = req.query;
+    let { url } = req.query;
     if (!url || typeof url !== 'string') {
       return res.status(400).json({ error: "Missing url parameter" });
     }
     try {
+      // Normalize smart punctuation in the URL so ROM filenames match server files
+      url = normalizeRomName(decodeURIComponent(url));
+      url = encodeURI(url);
+
       const allowed = url.startsWith('https://rec0ded88.com/') || url.startsWith('https://cdn.emulatorjs.org/');
       if (!allowed) {
         return res.status(403).json({ error: "URL not allowed" });
@@ -1258,7 +1780,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const embedFile = PLATFORM_EMBED_MAP[game.platform];
         if (!embedFile) continue;
 
-        const gameName = encodeURIComponent(game.title);
+        const gameName = encodeURIComponent(normalizeRomName(game.title));
         const embedUrl = `/wp-content/emu/html/${embedFile}?gameName=${gameName}.zip&gameID=${game.id}`;
 
         await db.update(gameLibrary).set({ embedUrl }).where(eq(gameLibrary.id, game.id));
@@ -1304,7 +1826,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
 
   const wss = new WebSocketServer({ server: httpServer, path: "/ws/chat" });
-  const clients = new Map<WebSocket, { username: string; room: string }>();
+  const clients = new Map<WebSocket, { username: string; room: string; userId: number | null }>();
 
   function broadcastToRoom(room: string, data: object) {
     const msg = JSON.stringify(data);
@@ -1325,15 +1847,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
     return [...new Set(users)];
   }
 
-  wss.on("connection", (ws) => {
+  wss.on("connection", (ws, req) => {
     ws.on("message", async (raw) => {
       try {
         const data = JSON.parse(raw.toString());
 
         if (data.type === "join") {
-          const username = (data.username || "Anonymous").slice(0, 30);
+          let username = (data.username || "Anonymous").slice(0, 30);
+          let userId: number | null = null;
           const room = (data.room || "general").slice(0, 50);
-          clients.set(ws, { username, room });
+
+          // If the client has a player session cookie, prefer real account
+          const cookies = parsePlayerCookies(req.headers.cookie);
+          const token = cookies[PLAYER_COOKIE];
+          if (token) {
+            const resolvedId = verifyPlayerToken(token);
+            if (resolvedId !== null) {
+              const player = await storage.getUser(resolvedId);
+              if (player) {
+                username = player.displayName || player.username;
+                userId = player.id;
+              }
+            }
+          }
+
+          clients.set(ws, { username, room, userId });
           broadcastToRoom(room, { type: "users", users: getRoomUsers(room) });
           broadcastToRoom(room, { type: "system", message: `${username} joined the room` });
         }
@@ -1348,6 +1886,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             username: info.username,
             message: text,
             room: info.room,
+            userId: info.userId,
           });
 
           broadcastToRoom(info.room, {

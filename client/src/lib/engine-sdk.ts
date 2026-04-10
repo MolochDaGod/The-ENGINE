@@ -4,7 +4,8 @@
  * Provides:
  *  - Emulator score injection via postMessage
  *  - Socket.IO connection to ws.grudge-studio.com/engine
- *  - Score submission to /api/scores
+ *  - Score submission to /api/scores (cookie-authenticated)
+ *  - Leaderboard fetch from /api/leaderboards/:gameId
  *  - Challenge interaction
  *  - Presence tracking
  */
@@ -12,31 +13,42 @@
 const WS_URL = import.meta.env.VITE_WS_URL || "https://ws.grudge-studio.com";
 const API_BASE = "";  // same origin
 
-// ── Auth helpers ──────────────────────────────────────────────
-function getGrudgeAuth(): { token: string; grudgeId: string; username: string } | null {
-  const token = localStorage.getItem("grudge_auth_token");
-  if (!token) return null;
+// ── Auth helpers (cookie-based, same session as /api/auth/*) ──
+interface CachedPlayer {
+  id: number;
+  username: string;
+  grudgeId: string;
+  displayName: string | null;
+}
+
+let _cachedPlayer: CachedPlayer | null | undefined = undefined; // undefined = not checked yet
+
+/** Resolves the current player from the session cookie via /api/auth/me.
+ *  Caches the result until clearPlayerCache() is called. */
+async function resolvePlayer(): Promise<CachedPlayer | null> {
+  if (_cachedPlayer !== undefined) return _cachedPlayer;
   try {
-    const payload = JSON.parse(atob(token.split(".")[1]));
-    return {
-      token,
-      grudgeId: payload.grudge_id || payload.grudgeId || "",
-      username: payload.username || localStorage.getItem("grudge_username") || "Guest",
-    };
+    const resp = await fetch(`${API_BASE}/api/auth/me`, { credentials: "include" });
+    if (!resp.ok) { _cachedPlayer = null; return null; }
+    const data = await resp.json();
+    _cachedPlayer = { id: data.id, username: data.username, grudgeId: data.grudgeId, displayName: data.displayName };
+    return _cachedPlayer;
   } catch {
+    _cachedPlayer = null;
     return null;
   }
 }
+
+/** Call after login/logout to force re-fetch on next SDK call. */
+export function clearPlayerCache() { _cachedPlayer = undefined; }
 
 // ── Score submission ──────────────────────────────────────────
 export async function submitScore(
   gameId: number,
   score: number,
-  scoreType: string = "points",
-  metadata?: Record<string, any>
 ): Promise<{ isPersonalBest: boolean; isGlobalRecord: boolean } | null> {
-  const auth = getGrudgeAuth();
-  if (!auth) {
+  const player = await resolvePlayer();
+  if (!player) {
     console.log("[engine-sdk] Not authenticated — score not submitted");
     return null;
   }
@@ -44,18 +56,9 @@ export async function submitScore(
   try {
     const resp = await fetch(`${API_BASE}/api/scores`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${auth.token}`,
-      },
-      body: JSON.stringify({
-        gameId,
-        grudgeId: auth.grudgeId,
-        username: auth.username,
-        score,
-        scoreType,
-        metadata,
-      }),
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ gameId, score }),
     });
 
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
@@ -69,23 +72,21 @@ export async function submitScore(
 // ── Fetch leaderboard ─────────────────────────────────────────
 export async function fetchLeaderboard(gameId: number, limit: number = 10) {
   try {
-    const resp = await fetch(`${API_BASE}/api/scores/${gameId}?limit=${limit}`);
-    if (!resp.ok) return { gameId, leaderboard: [] };
+    const resp = await fetch(`${API_BASE}/api/leaderboards/${gameId}?limit=${limit}`);
+    if (!resp.ok) return [];
     return await resp.json();
   } catch {
-    return { gameId, leaderboard: [] };
+    return [];
   }
 }
 
 // ── Fetch personal best ───────────────────────────────────────
 export async function fetchPersonalBest(gameId: number) {
-  const auth = getGrudgeAuth();
-  if (!auth) return null;
   try {
-    const resp = await fetch(`${API_BASE}/api/scores/${gameId}/personal?grudgeId=${auth.grudgeId}`);
+    const resp = await fetch(`${API_BASE}/api/leaderboards/${gameId}/me`, { credentials: "include" });
     if (!resp.ok) return null;
     const data = await resp.json();
-    return data.personalBest;
+    return data.score ?? null;
   } catch {
     return null;
   }
@@ -118,7 +119,7 @@ export function startScoreListener(
       const score = Number(data.score);
       if (!isFinite(score) || score <= 0) return;
 
-      const result = await submitScore(gameId, score, "points", data.metadata);
+      const result = await submitScore(gameId, score);
       if (result && onScore) {
         onScore({ score, isPersonalBest: result.isPersonalBest, isGlobalRecord: result.isGlobalRecord });
       }
@@ -144,10 +145,10 @@ export async function connectEngine() {
   try {
     // Dynamically import socket.io-client to avoid bundling if not needed
     const { io } = await import("socket.io-client");
-    const auth = getGrudgeAuth();
+    const player = await resolvePlayer();
 
     engineSocket = io(`${WS_URL}/engine`, {
-      auth: auth ? { token: auth.token } : undefined,
+      auth: player ? { grudgeId: player.grudgeId, username: player.username } : undefined,
       transports: ["websocket", "polling"],
       reconnection: true,
       reconnectionDelay: 2000,
@@ -205,7 +206,7 @@ export function onActivity(callback: (data: any) => void) {
 // ── Challenge helpers ─────────────────────────────────────────
 export async function fetchOpenChallenges() {
   try {
-    const resp = await fetch(`${API_BASE}/api/challenges`);
+    const resp = await fetch(`${API_BASE}/api/challenges`, { credentials: "include" });
     if (!resp.ok) return [];
     return await resp.json();
   } catch {
@@ -215,27 +216,18 @@ export async function fetchOpenChallenges() {
 
 export async function createChallenge(
   gameId: number,
-  challengeType: string,
   gbuxWager: number,
-  challengedId?: string,
-  challengedName?: string
+  opponentId: number,
 ) {
-  const auth = getGrudgeAuth();
-  if (!auth) return null;
+  const player = await resolvePlayer();
+  if (!player) return null;
 
   try {
     const resp = await fetch(`${API_BASE}/api/challenges`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${auth.token}` },
-      body: JSON.stringify({
-        challengerId: auth.grudgeId,
-        challengerName: auth.username,
-        challengedId,
-        challengedName,
-        gameId,
-        challengeType,
-        gbuxWager,
-      }),
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ opponentId, gameId, gbuxWager }),
     });
     if (!resp.ok) return null;
     return await resp.json();
@@ -245,14 +237,11 @@ export async function createChallenge(
 }
 
 export async function acceptChallenge(challengeId: number) {
-  const auth = getGrudgeAuth();
-  if (!auth) return null;
-
   try {
     const resp = await fetch(`${API_BASE}/api/challenges/${challengeId}/accept`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${auth.token}` },
-      body: JSON.stringify({ grudgeId: auth.grudgeId, username: auth.username }),
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
     });
     if (!resp.ok) return null;
     return await resp.json();

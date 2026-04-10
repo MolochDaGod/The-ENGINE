@@ -20,16 +20,44 @@ const PLATFORM_CORE_MAP: Record<string, string> = {
   nds: "nds",
 };
 
+/** Normalize smart/curly punctuation to ASCII so ROM filenames resolve on the server. */
+function normalizeRomName(name: string): string {
+  return name
+    .replace(/[\u2018\u2019\u201A\u2032]/g, "'")   // curly single quotes → '
+    .replace(/[\u201C\u201D\u201E\u2033]/g, '"')   // curly double quotes → "
+    .replace(/[\u2013\u2014]/g, "-")                // en/em dash → -
+    .replace(/[\u2026]/g, "...")                     // ellipsis → ...
+    .replace(/[\u00A0]/g, " ");                      // non-breaking space → space
+}
+
+/** Also normalize percent-encoded embed URLs that already contain Unicode escapes. */
+function normalizeEmbedUrl(url: string): string {
+  // Decode, normalize, re-encode the gameName parameter
+  try {
+    const decoded = decodeURIComponent(url);
+    const normalized = normalizeRomName(decoded);
+    // Re-split on the query string boundary so only the param values get encoded
+    const qIdx = normalized.indexOf("?");
+    if (qIdx === -1) return normalized;
+    const base = normalized.slice(0, qIdx);
+    const qs = new URLSearchParams(normalized.slice(qIdx + 1));
+    return `${base}?${qs.toString()}`;
+  } catch {
+    return url;
+  }
+}
+
 function buildEmulatorUrl(game: Game): string | null {
   const core = PLATFORM_CORE_MAP[game.platform];
   if (!core) return null;
 
-  return `/emulator.html?core=${core}&platform=${encodeURIComponent(game.platform)}&game=${encodeURIComponent(game.title)}`;
+  const title = normalizeRomName(game.title);
+  return `/emulator.html?core=${core}&platform=${encodeURIComponent(game.platform)}&game=${encodeURIComponent(title)}`;
 }
 
 function buildLegacyEmbedUrl(game: Game): string | null {
   if (game.embedUrl) {
-    return `https://rec0ded88.com${game.embedUrl}`;
+    return `https://rec0ded88.com${normalizeEmbedUrl(game.embedUrl)}`;
   }
   const platformMap: Record<string, string> = {
     nes: "play-nes.html",
@@ -44,7 +72,8 @@ function buildLegacyEmbedUrl(game: Game): string | null {
   };
   const embedFile = platformMap[game.platform];
   if (!embedFile) return null;
-  return `https://rec0ded88.com/wp-content/emu/html/${embedFile}?gameName=${encodeURIComponent(game.title)}.zip&gameID=${game.id}`;
+  const title = normalizeRomName(game.title);
+  return `https://rec0ded88.com/wp-content/emu/html/${embedFile}?gameName=${encodeURIComponent(title)}.zip&gameID=${game.id}`;
 }
 
 export default function GamePlayer() {

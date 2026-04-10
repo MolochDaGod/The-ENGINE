@@ -1,5 +1,6 @@
 import { 
   users, scrapingJobs, scrapedPages, storeProducts, orders, gamePlatforms, gameLibrary, articles, chatMessages,
+  scores, challenges, transactions,
   type User, type InsertUser,
   type ScrapingJob, type InsertScrapingJob,
   type ScrapedPage, type InsertScrapedPage,
@@ -8,10 +9,13 @@ import {
   type GamePlatform, type InsertGamePlatform,
   type Game, type InsertGame,
   type Article, type InsertArticle,
-  type ChatMessage, type InsertChatMessage
+  type ChatMessage, type InsertChatMessage,
+  type Score, type InsertScore,
+  type Challenge, type InsertChallenge,
+  type Transaction, type InsertTransaction,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, ilike, desc, sql, and } from "drizzle-orm";
+import { eq, ilike, desc, asc, sql, and, or } from "drizzle-orm";
 import { CATALOG } from "./catalog-data";
 
 export interface IStorage {
@@ -50,6 +54,29 @@ export interface IStorage {
 
   listChatMessages(room: string, limit?: number): Promise<ChatMessage[]>;
   createChatMessage(msg: InsertChatMessage): Promise<ChatMessage>;
+
+  // Extended user lookups
+  getUserByEmail(email: string): Promise<User | undefined>;
+  getUserByPuterId(puterId: string): Promise<User | undefined>;
+  getUserByGrudgeId(grudgeId: string): Promise<User | undefined>;
+  updateUser(id: number, updates: Partial<User>): Promise<User | undefined>;
+
+  // Scores / Leaderboards
+  createScore(score: InsertScore): Promise<Score>;
+  getTopScores(gameId: number, limit?: number): Promise<(Score & { username: string; displayName: string | null })[]>;
+  getPlayerBestScore(userId: number, gameId: number): Promise<Score | undefined>;
+  getGlobalBestScore(gameId: number): Promise<Score | undefined>;
+
+  // Challenges
+  createChallenge(challenge: InsertChallenge): Promise<Challenge>;
+  getChallenge(id: number): Promise<Challenge | undefined>;
+  updateChallenge(id: number, updates: Partial<Challenge>): Promise<Challenge | undefined>;
+  listActiveChallenges(userId: number): Promise<Challenge[]>;
+  listPendingChallenges(userId: number): Promise<Challenge[]>;
+
+  // Transactions
+  createTransaction(tx: InsertTransaction): Promise<Transaction>;
+  listTransactions(userId: number, limit?: number): Promise<Transaction[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -335,6 +362,116 @@ export class DatabaseStorage implements IStorage {
   async createChatMessage(msg: InsertChatMessage): Promise<ChatMessage> {
     const [m] = await db.insert(chatMessages).values(msg).returning();
     return m;
+  }
+
+  // ── Extended user lookups ──────────────────────────────────────
+
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.email, email));
+    return user || undefined;
+  }
+
+  async getUserByPuterId(puterId: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.puterId, puterId));
+    return user || undefined;
+  }
+
+  async getUserByGrudgeId(grudgeId: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.grudgeId, grudgeId));
+    return user || undefined;
+  }
+
+  async updateUser(id: number, updates: Partial<User>): Promise<User | undefined> {
+    const [user] = await db.update(users).set(updates).where(eq(users.id, id)).returning();
+    return user || undefined;
+  }
+
+  // ── Scores / Leaderboards ─────────────────────────────────────
+
+  async createScore(insertScore: InsertScore): Promise<Score> {
+    const [s] = await db.insert(scores).values(insertScore).returning();
+    return s;
+  }
+
+  async getTopScores(gameId: number, limit: number = 50): Promise<(Score & { username: string; displayName: string | null })[]> {
+    const rows = await db
+      .select({
+        id: scores.id,
+        userId: scores.userId,
+        gameId: scores.gameId,
+        score: scores.score,
+        isPersonalBest: scores.isPersonalBest,
+        isGlobalRecord: scores.isGlobalRecord,
+        createdAt: scores.createdAt,
+        username: users.username,
+        displayName: users.displayName,
+      })
+      .from(scores)
+      .innerJoin(users, eq(scores.userId, users.id))
+      .where(and(eq(scores.gameId, gameId), eq(scores.isPersonalBest, true)))
+      .orderBy(desc(scores.score))
+      .limit(limit);
+    return rows as any;
+  }
+
+  async getPlayerBestScore(userId: number, gameId: number): Promise<Score | undefined> {
+    const [s] = await db.select().from(scores)
+      .where(and(eq(scores.userId, userId), eq(scores.gameId, gameId), eq(scores.isPersonalBest, true)));
+    return s || undefined;
+  }
+
+  async getGlobalBestScore(gameId: number): Promise<Score | undefined> {
+    const [s] = await db.select().from(scores)
+      .where(and(eq(scores.gameId, gameId), eq(scores.isGlobalRecord, true)));
+    return s || undefined;
+  }
+
+  // ── Challenges ────────────────────────────────────────────────
+
+  async createChallenge(insertChallenge: InsertChallenge): Promise<Challenge> {
+    const [c] = await db.insert(challenges).values(insertChallenge).returning();
+    return c;
+  }
+
+  async getChallenge(id: number): Promise<Challenge | undefined> {
+    const [c] = await db.select().from(challenges).where(eq(challenges.id, id));
+    return c || undefined;
+  }
+
+  async updateChallenge(id: number, updates: Partial<Challenge>): Promise<Challenge | undefined> {
+    const [c] = await db.update(challenges).set(updates).where(eq(challenges.id, id)).returning();
+    return c || undefined;
+  }
+
+  async listActiveChallenges(userId: number): Promise<Challenge[]> {
+    return await db.select().from(challenges)
+      .where(
+        and(
+          or(eq(challenges.challengerId, userId), eq(challenges.opponentId, userId)),
+          or(eq(challenges.status, "pending"), eq(challenges.status, "accepted"), eq(challenges.status, "active"))
+        )
+      )
+      .orderBy(desc(challenges.createdAt));
+  }
+
+  async listPendingChallenges(userId: number): Promise<Challenge[]> {
+    return await db.select().from(challenges)
+      .where(and(eq(challenges.opponentId, userId), eq(challenges.status, "pending")))
+      .orderBy(desc(challenges.createdAt));
+  }
+
+  // ── Transactions ──────────────────────────────────────────────
+
+  async createTransaction(tx: InsertTransaction): Promise<Transaction> {
+    const [t] = await db.insert(transactions).values(tx).returning();
+    return t;
+  }
+
+  async listTransactions(userId: number, limit: number = 50): Promise<Transaction[]> {
+    return await db.select().from(transactions)
+      .where(eq(transactions.userId, userId))
+      .orderBy(desc(transactions.createdAt))
+      .limit(limit);
   }
 }
 
