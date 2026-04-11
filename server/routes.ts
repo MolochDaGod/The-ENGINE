@@ -1,6 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
+import { setupArenaRooms } from "./arena-rooms";
 import { storage } from "./storage";
 import { insertScrapingJobSchema, insertOrderSchema, insertGameSchema, insertArticleSchema, gameLibrary, scores, users } from "@shared/schema";
 import { z } from "zod";
@@ -1921,6 +1922,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     });
   });
+
+  setupArenaRooms(httpServer);
 
   return httpServer;
 }

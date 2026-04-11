@@ -35,6 +35,8 @@ import GamePlayer from "@/pages/game-player";
 import Chat from "@/pages/chat";
 import AdminLogin from "@/pages/admin-login";
 import NotFound from "@/pages/not-found";
+import MageArena from "@/pages/mage-arena";
+import AnnihilateDemo from "@/pages/annihilate-demo";
 import AdminGuard from "@/components/admin-guard";
 import AdminEntryButton from "@/components/admin-entry-button";
 
@@ -79,6 +81,8 @@ function Router() {
       <Route path="/avernus-arena" component={AvernusArena} />
       <Route path="/wargus" component={Wargus} />
       <Route path="/chat" component={Chat} />
+      <Route path="/mage-arena" component={MageArena} />
+      <Route path="/annihilate-demo" component={AnnihilateDemo} />
       <Route path="/admin-login" component={AdminLogin} />
       <Route component={NotFound} />
     </Switch>
