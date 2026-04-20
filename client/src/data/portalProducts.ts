@@ -136,13 +136,12 @@ export const PORTAL_PRODUCTS: PortalProduct[] = [
   {
     id: "my-cloud",
     name: "My Grudge Cloud",
-    href: "https://grudgecloud-85c9p.puter.site",
+    href: "/cloud",
     description: "Your personal Puter cloud, stylized for Grudge Studio — scenes, games, characters, wallet visuals, and saves across every Grudge tool.",
-    status: "planned",
+    status: "beta",
     section: "studio",
-    external: true,
     authRequired: true,
-    note: "Puter · redesign in flight",
+    note: "Puter · Phase 1 shell live",
   },
   {
     id: "asset-store",

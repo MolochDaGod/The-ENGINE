@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ChevronRight, ExternalLink, Flame, Home, Layers3, Library, LogIn, LogOut, Menu, Sparkles, Swords, Trophy, UserCircle, Wrench, X } from "lucide-react";
+import { ChevronRight, Cloud, ExternalLink, Flame, Home, Layers3, Library, LogIn, LogOut, Menu, Sparkles, Swords, Trophy, UserCircle, Wrench, X } from "lucide-react";
 import grudgeLogo from "@assets/uXpJmRe_1773828784729.png";
 import { useAuth } from "@/components/auth-provider";
 import { useAuthModal } from "@/components/auth-modal";
@@ -129,6 +129,11 @@ export default function Header() {
                     <span className="font-body">{player.displayName || player.username}</span>
                     <span className="text-[10px] text-[hsl(43,85%,55%)] font-heading">{Number(player.gbuxBalance || 0).toFixed(0)}¤</span>
                   </Link>
+                  <Link href="/cloud" className="hidden md:inline-flex">
+                    <Button variant="ghost" size="sm" className="text-[hsl(45,30%,90%)] hover:text-[hsl(43,85%,55%)] hover:bg-[hsl(225,25%,15%)]">
+                      <Cloud className="w-4 h-4 mr-1" /> My Cloud
+                    </Button>
+                  </Link>
                   <Button variant="ghost" size="sm" className="text-[hsl(45,30%,90%)] hover:text-[hsl(43,85%,55%)] hover:bg-[hsl(225,25%,15%)] hidden sm:flex" onClick={() => logout()}>
                     <LogOut className="w-4 h-4 mr-1" /> Sign Out
                   </Button>
@@ -198,6 +203,11 @@ export default function Header() {
                   <Link href="/account">
                     <Button variant="ghost" className="w-full justify-start text-left text-[hsl(45,30%,90%)] hover:bg-[hsl(225,25%,20%)] hover:text-[hsl(43,85%,55%)]" onClick={() => setMenuOpen(false)}>
                       <UserCircle className="w-4 h-4 mr-2" /> My Account
+                    </Button>
+                  </Link>
+                  <Link href="/cloud">
+                    <Button variant="ghost" className="w-full justify-start text-left text-[hsl(45,30%,90%)] hover:bg-[hsl(225,25%,20%)] hover:text-[hsl(43,85%,55%)]" onClick={() => setMenuOpen(false)}>
+                      <Cloud className="w-4 h-4 mr-2" /> My Cloud
                     </Button>
                   </Link>
                   <Button variant="ghost" className="w-full justify-start text-left text-[hsl(45,30%,90%)] hover:bg-[hsl(225,25%,20%)] hover:text-[hsl(43,85%,55%)]" onClick={() => { setMenuOpen(false); logout(); }}>

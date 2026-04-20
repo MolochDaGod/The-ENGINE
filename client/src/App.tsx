@@ -14,6 +14,7 @@ import LeaderboardsPage from "@/pages/leaderboards";
 import PvpPage from "@/pages/pvp";
 import AuthPopup from "@/pages/auth-popup";
 import CatalogPage from "@/pages/catalog";
+import CloudPage from "@/pages/cloud";
 import Scraping from "@/pages/scraping";
 import Store from "@/pages/store";
 import TowerDefense from "@/pages/tower-defense";
@@ -66,6 +67,7 @@ function Router() {
       <Route path="/pvp" component={PvpPage} />
       <Route path="/auth/popup" component={AuthPopup} />
       <Route path="/catalog" component={CatalogPage} />
+      <Route path="/cloud" component={CloudPage} />
       <Route path="/games" component={GameLibrary} />
       <Route path="/game-library" component={GameLibrary} />
       <Route path="/play/:id" component={GamePlayer} />
