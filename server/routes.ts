@@ -279,7 +279,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "username and password are required" });
       }
 
-      const user = await storage.getUserByUsername(username);
+      // Accept username, email, or Grudge ID as the login identifier.
+      let user = await storage.getUserByUsername(username);
+      if (!user && typeof username === "string" && username.includes("@")) {
+        user = await storage.getUserByEmail(username);
+      }
+      if (!user && typeof username === "string" && username.toUpperCase().startsWith("GRUDGE-")) {
+        user = await storage.getUserByGrudgeId(username);
+      }
       if (!user || !verifyPassword(password, user.password)) {
         return res.status(401).json({ error: "Invalid credentials" });
       }
@@ -415,6 +422,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         role: "guest",
         solanaAddress: null,
         discordId: null,
+        githubId: null,
+        googleId: null,
         phone: null,
         needsProfile: true,
       });
@@ -514,6 +523,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           role: "player",
           solanaAddress: address,
           discordId: null,
+          githubId: null,
+          googleId: null,
           phone: null,
           needsProfile: true,
         });
@@ -528,6 +539,107 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Phantom verify error:", error);
       return res.status(500).json({ error: "Wallet auth failed" });
+    }
+  });
+
+  // Google OAuth --------------------------------------------------
+  const googleOauthState = new Map<string, { redirect: string; expiresAt: number }>();
+
+  app.get("/api/auth/google/start", (req, res) => {
+    const clientId = process.env.GOOGLE_CLIENT_ID;
+    const redirectUri = process.env.GOOGLE_REDIRECT_URI;
+    if (!clientId || !redirectUri) {
+      return res.status(501).json({ error: "Google OAuth not configured. Set GOOGLE_CLIENT_ID and GOOGLE_REDIRECT_URI." });
+    }
+    pruneMap(googleOauthState);
+    const state = crypto.randomBytes(16).toString("hex");
+    const redirect = typeof req.query.redirect === "string" ? req.query.redirect : "/";
+    googleOauthState.set(state, { redirect, expiresAt: Date.now() + DISCORD_STATE_TTL_MS });
+    const url = new URL("https://accounts.google.com/o/oauth2/v2/auth");
+    url.searchParams.set("client_id", clientId);
+    url.searchParams.set("redirect_uri", redirectUri);
+    url.searchParams.set("response_type", "code");
+    url.searchParams.set("scope", "openid email profile");
+    url.searchParams.set("access_type", "online");
+    url.searchParams.set("prompt", "select_account");
+    url.searchParams.set("state", state);
+    return res.redirect(url.toString());
+  });
+
+  app.get("/api/auth/google/callback", async (req, res) => {
+    try {
+      const clientId = process.env.GOOGLE_CLIENT_ID;
+      const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+      const redirectUri = process.env.GOOGLE_REDIRECT_URI;
+      if (!clientId || !clientSecret || !redirectUri) {
+        return res.status(501).json({ error: "Google OAuth not configured." });
+      }
+      const code = typeof req.query.code === "string" ? req.query.code : "";
+      const state = typeof req.query.state === "string" ? req.query.state : "";
+      if (!code || !state) return res.status(400).send("Missing code or state");
+      const stateEntry = googleOauthState.get(state);
+      if (!stateEntry || stateEntry.expiresAt < Date.now()) {
+        googleOauthState.delete(state);
+        return res.status(400).send("Invalid or expired state");
+      }
+      googleOauthState.delete(state);
+
+      const tokenResp = await fetch("https://oauth2.googleapis.com/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          client_id: clientId,
+          client_secret: clientSecret,
+          grant_type: "authorization_code",
+          code,
+          redirect_uri: redirectUri,
+        }).toString(),
+      });
+      if (!tokenResp.ok) return res.status(502).send("Google token exchange failed");
+      const tokenJson = (await tokenResp.json()) as { access_token?: string };
+      if (!tokenJson.access_token) return res.status(502).send("No Google access_token");
+
+      const userResp = await fetch("https://openidconnect.googleapis.com/v1/userinfo", {
+        headers: { Authorization: `Bearer ${tokenJson.access_token}` },
+      });
+      if (!userResp.ok) return res.status(502).send("Google userinfo failed");
+      const gUser = (await userResp.json()) as { sub: string; email?: string; email_verified?: boolean; name?: string; given_name?: string; picture?: string };
+
+      let user = await storage.getUserByGoogleId(gUser.sub);
+      let isNew = false;
+      if (!user) {
+        const base = gUser.given_name || gUser.name || (gUser.email ? gUser.email.split("@")[0] : `google_${gUser.sub.slice(-6)}`);
+        const username = await uniqueUsername(base);
+        user = await storage.createUser({
+          username,
+          password: hashPassword(crypto.randomBytes(16).toString("hex")),
+          grudgeId: generateGrudgeId(),
+          puterId: null,
+          email: gUser.email_verified && gUser.email ? gUser.email : null,
+          displayName: gUser.name || username,
+          avatarUrl: gUser.picture || null,
+          gbuxBalance: "0",
+          role: "player",
+          solanaAddress: null,
+          discordId: null,
+          githubId: null,
+          googleId: gUser.sub,
+          phone: null,
+          needsProfile: false,
+        });
+        isNew = true;
+      } else {
+        await storage.updateUser(user.id, { lastLoginAt: new Date() });
+      }
+
+      const token = createPlayerToken(user.id);
+      setPlayerCookie(res, token);
+      const target = stateEntry.redirect && stateEntry.redirect.startsWith("/") ? stateEntry.redirect : "/";
+      const sep = target.includes("?") ? "&" : "?";
+      return res.redirect(`${target}${sep}auth=google&new=${isNew ? 1 : 0}`);
+    } catch (error) {
+      console.error("Google callback error:", error);
+      return res.status(500).send("Google auth failed");
     }
   });
 
@@ -624,6 +736,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           solanaAddress: null,
           discordId: null,
           githubId: ghIdString,
+          googleId: null,
           phone: null,
           needsProfile: false,
         });
@@ -721,6 +834,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           role: "player",
           solanaAddress: null,
           discordId: dUser.id,
+          githubId: null,
+          googleId: null,
           phone: null,
           needsProfile: false,
         });
@@ -829,6 +944,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           role: "player",
           solanaAddress: null,
           discordId: null,
+          githubId: null,
+          googleId: null,
           phone: normalized,
           needsProfile: true,
         });
@@ -854,6 +971,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/auth/allowed-origins", (_req, res) => {
     res.json({ origins: allowedAuthOrigins() });
+  });
+
+  // Public landing feed ----------------------------------------------
+  // Drives the Squarespace-hosted grudgeplatform.io landing so the page
+  // can be updated server-side without republishing the Squarespace HTML.
+  app.get("/api/public/landing", (_req, res) => {
+    res.setHeader("Cache-Control", "public, max-age=60");
+    res.json({
+      version: "2.5.0",
+      updatedAt: new Date().toISOString(),
+      status: [
+        { label: "grudge-studio.com", state: "online" },
+        { label: "grudgewarlords.com", state: "online" },
+        { label: "grudgeplatform.io", state: "online" },
+        { label: "Puter Workers", state: "warn" },
+        { label: "Solana Devnet", state: "online" },
+      ],
+      sites: [
+        { tag: "Main · AI Dev Platform", name: "Grudge Studio", url: "https://grudge-studio.com" },
+        { tag: "Game · Dark Fantasy RPG", name: "Grudge Warlords", url: "https://grudgewarlords.com" },
+        { tag: "Platform · Web3 NFT Wallet", name: "Grudge Platform", url: "https://grudgeplatform.com" },
+      ],
+      puter: [
+        { tag: "Auth", name: "Warlords Auth", url: "https://grudgecloud-85c9p.puter.site" },
+        { tag: "Catalog", name: "Item Catalog (590)", url: "https://grudge-launcher-xu9q5.puter.site" },
+        { tag: "Studio", name: "Crafting Suite", url: "https://grudge-crafting.puter.site" },
+        { tag: "Nexus", name: "Grudge Platform", url: "https://grudgeplatform.puter.site" },
+      ],
+      workers: [
+        { name: "grudge-server-worker", type: "Main Backend · Port 5000", state: "puter" },
+        { name: "grudge-ai-worker", type: "AI Agent Service", state: "puter" },
+        { name: "the-grench-worker", type: "GrudaChain Core", state: "live" },
+        { name: "ai-agent-service", type: "Claude · GPT-4o · DALL-E 3", state: "live" },
+        { name: "grudge-studio-api", type: "Studio API", state: "puter" },
+        { name: "grudge-sprites", type: "Asset Pipeline", state: "puter" },
+      ],
+      agents: [
+        { icon: "💻", name: "Code Agent", model: "Claude Sonnet 4" },
+        { icon: "🎨", name: "Art Agent", model: "DALL-E 3" },
+        { icon: "📜", name: "Lore Agent", model: "GPT-4o" },
+        { icon: "⚖️", name: "Balance Agent", model: "Claude" },
+        { icon: "🔍", name: "QA Agent", model: "GPT-4o" },
+        { icon: "🗺️", name: "Mission Agent", model: "Claude" },
+      ],
+      auth: {
+        popupHost: process.env.AUTH_POPUP_HOST || "https://grudgewarlords.com",
+        embedScript: (process.env.AUTH_POPUP_HOST || "https://grudgewarlords.com") + "/embed/auth.js",
+      },
+    });
   });
 
   app.post("/api/auth/popup-token", requirePlayer, (req, res) => {

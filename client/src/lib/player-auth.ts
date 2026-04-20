@@ -175,6 +175,11 @@ export function githubSignIn(redirectTo: string = "/") {
   window.location.href = url;
 }
 
+export function googleSignIn(redirectTo: string = "/") {
+  const url = `/api/auth/google/start?redirect=${encodeURIComponent(redirectTo)}`;
+  window.location.href = url;
+}
+
 // ── Cross-domain popup handoff ─────────────────────────────────
 
 export interface PopupTokenResponse {
@@ -212,7 +217,7 @@ export function openAuthPopup(options: {
   width?: number;
   height?: number;
 } = {}): Promise<{ token: string; player: PlayerProfile }> {
-  const authHost = (options.authHost || "https://grudge-studio.com").replace(/\/$/, "");
+  const authHost = (options.authHost || "https://grudgewarlords.com").replace(/\/$/, "");
   const audience = options.audience || window.location.origin;
   const width = options.width || 420;
   const height = options.height || 640;

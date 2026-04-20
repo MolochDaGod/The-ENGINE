@@ -62,6 +62,7 @@ export interface IStorage {
   getUserBySolanaAddress(address: string): Promise<User | undefined>;
   getUserByDiscordId(discordId: string): Promise<User | undefined>;
   getUserByGithubId(githubId: string): Promise<User | undefined>;
+  getUserByGoogleId(googleId: string): Promise<User | undefined>;
   getUserByPhone(phone: string): Promise<User | undefined>;
   updateUser(id: number, updates: Partial<User>): Promise<User | undefined>;
 
@@ -411,6 +412,11 @@ export class DatabaseStorage implements IStorage {
 
   async getUserByGithubId(githubId: string): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.githubId, githubId));
+    return user || undefined;
+  }
+
+  async getUserByGoogleId(googleId: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.googleId, googleId));
     return user || undefined;
   }
 

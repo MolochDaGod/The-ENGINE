@@ -17,6 +17,7 @@ export const users = pgTable("users", {
   solanaAddress: text("solana_address").unique(),
   discordId: text("discord_id").unique(),
   githubId: text("github_id").unique(),
+  googleId: text("google_id").unique(),
   phone: text("phone").unique(),
   needsProfile: boolean("needs_profile").default(false).notNull(),
   createdAt: timestamp("created_at").defaultNow(),

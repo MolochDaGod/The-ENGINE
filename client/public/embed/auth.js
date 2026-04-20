@@ -17,7 +17,10 @@
  * The caller's origin must be in AUTH_ALLOWED_ORIGINS on the server.
  */
 (function (global) {
-  var DEFAULT_HOST = "https://grudge-studio.com";
+  // Canonical popup host — the sign-in UI lives at grudgewarlords.com/auth/popup
+  // (which proxies or runs the same portal build as grudge-studio.com).
+  // Callers can override with GrudgeAuth.open({ authHost: "https://grudge-studio.com" }).
+  var DEFAULT_HOST = "https://grudgewarlords.com";
 
   function open(options) {
     options = options || {};

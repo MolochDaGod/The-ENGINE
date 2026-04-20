@@ -1,17 +1,15 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useLocation } from "wouter";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, ChevronDown, ChevronRight, Github, Gamepad2, Loader2, MessageCircle, Phone, ShieldAlert, Sparkles, Wallet } from "lucide-react";
-import grudgeLogo from "@assets/uXpJmRe_1773828784729.png";
+import { Github, Loader2, MessageCircle, Phone as PhoneIcon, Shield, ShieldAlert, Sparkles, UserCircle, Wallet } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
 import {
   completeProfile,
   discordSignIn,
   githubSignIn,
+  googleSignIn,
   guestSignIn,
   loginPlayer,
   phantomSignIn,
@@ -22,9 +20,8 @@ import {
   twilioVerify,
 } from "@/lib/player-auth";
 
-type AuthModalOptions = { redirectTo?: string; initialTab?: AuthTab; reason?: string; popupMode?: boolean; audience?: string };
 type AuthTab = "signin" | "register" | "quick";
-type Screen = "landing" | "grudge" | "more";
+type AuthModalOptions = { redirectTo?: string; initialTab?: AuthTab; reason?: string; popupMode?: boolean; audience?: string };
 
 interface AuthModalContextValue {
   open: (opts?: AuthModalOptions) => void;
@@ -66,39 +63,41 @@ export function AuthModalProvider({ children }: { children: ReactNode }) {
   );
 }
 
-// ── Modal ──────────────────────────────────────────────────────────
+// ── Modal ──────────────────────────────────────────────────────────────────────
 
 function AuthModalDialog({ isOpen, onClose, options }: { isOpen: boolean; onClose: () => void; options: AuthModalOptions }) {
   const { player, refresh } = useAuth();
   const [, setLocation] = useLocation();
-  const [tab, setTab] = useState<AuthTab>(options.initialTab === "register" ? "register" : "signin");
-  const [screen, setScreen] = useState<Screen>(
-    options.initialTab === "quick" ? "more" : options.initialTab === "register" || options.initialTab === "signin" ? "grudge" : "landing",
-  );
+  const [tab, setTab] = useState<"signin" | "register">(options.initialTab === "register" ? "register" : "signin");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
+  const [phoneStep, setPhoneStep] = useState<"hidden" | "idle" | "sent">("hidden");
+  const [phone, setPhone] = useState("");
+  const [phoneCode, setPhoneCode] = useState("");
+  const [phoneHint, setPhoneHint] = useState<string | null>(null);
+  const [identifier, setIdentifier] = useState("");
+  const [password, setPassword] = useState("");
+  const [regEmail, setRegEmail] = useState("");
+  const [regUsername, setRegUsername] = useState("");
+  const [regPassword, setRegPassword] = useState("");
 
   useEffect(() => {
-    if (isOpen) {
-      const initial = options.initialTab;
-      setTab(initial === "register" ? "register" : "signin");
-      setScreen(
-        initial === "quick" ? "more" : initial === "register" || initial === "signin" ? "grudge" : "landing",
-      );
-      setError("");
-      setBusy(null);
-    }
+    if (!isOpen) return;
+    setTab(options.initialTab === "register" ? "register" : "signin");
+    setError("");
+    setBusy(null);
+    setPhoneStep("hidden");
+    setPhone(""); setPhoneCode(""); setPhoneHint(null);
+    setIdentifier(""); setPassword("");
+    setRegEmail(""); setRegUsername(""); setRegPassword("");
   }, [isOpen, options.initialTab]);
 
   const afterAuth = useCallback(async () => {
     await refresh();
-    // If we're running as an embedded popup for another frontend, mint a
-    // short-lived launch token and postMessage it back to window.opener.
     if (options.popupMode && window.opener) {
       const audience = options.audience || undefined;
       const mint = await requestPopupToken(audience);
       if (mint.ok) {
-        // Fetch our own /api/auth/me so we include the fresh profile in the payload.
         try {
           const meRes = await fetch("/api/auth/me", { credentials: "include" });
           const profile = meRes.ok ? await meRes.json() : null;
@@ -107,612 +106,400 @@ function AuthModalDialog({ isOpen, onClose, options }: { isOpen: boolean; onClos
             audience || "*",
           );
         } catch {
-          window.opener.postMessage(
-            { type: "grudge:auth:error", error: "Failed to read profile" },
-            audience || "*",
-          );
+          window.opener.postMessage({ type: "grudge:auth:error", error: "Failed to read profile" }, audience || "*");
         }
       } else {
-        window.opener.postMessage(
-          { type: "grudge:auth:error", error: mint.error },
-          options.audience || "*",
-        );
+        window.opener.postMessage({ type: "grudge:auth:error", error: mint.error }, options.audience || "*");
       }
-      // Give the browser a tick to deliver the message, then close.
       setTimeout(() => window.close(), 150);
       return;
     }
     if (options.redirectTo && options.redirectTo !== window.location.pathname) {
       setLocation(options.redirectTo);
     }
-    // If profile is incomplete the modal stays open on "complete" step.
   }, [refresh, options.popupMode, options.audience, options.redirectTo, setLocation]);
 
   const needsProfile = !!player?.needsProfile;
 
-  const handleDiscord = () => discordSignIn(options.redirectTo || window.location.pathname);
-  const handleGuest = async () => {
-    setBusy("guest"); setError("");
-    const res = await guestSignIn();
+  const run = async (key: string, fn: () => Promise<{ ok: boolean; error?: string }>) => {
+    setBusy(key); setError("");
+    const r = await fn();
     setBusy(null);
-    if (!res.ok) return setError(res.error);
+    if (!r.ok) return setError(r.error || "Failed");
+    await afterAuth();
+  };
+  const handleDiscord = () => discordSignIn(options.redirectTo || window.location.pathname);
+  const handleGoogle = () => googleSignIn(options.redirectTo || window.location.pathname);
+  const handleGithub = () => githubSignIn(options.redirectTo || window.location.pathname);
+  const handlePhantom = () => run("phantom", phantomSignIn);
+  const handlePuter = () => run("puter", async () => {
+    const puter = (window as any).puter;
+    if (!puter?.auth?.signIn) return { ok: false, error: "Puter SDK not loaded." };
+    try {
+      await puter.auth.signIn();
+      const u = await puter.auth.getUser();
+      if (!u?.uuid) return { ok: false, error: "Puter sign-in did not return a user." };
+      return await puterSSO({ puterId: u.uuid, puterUsername: u.username, email: u.email });
+    } catch (err: any) {
+      return { ok: false, error: err?.message || "Puter sign-in failed" };
+    }
+  });
+  const handleGuest = () => run("guest", guestSignIn);
+  const handlePhoneStart = async () => {
+    if (!phone.trim()) return setError("Enter a phone number in E.164 format, e.g. +15551234567");
+    setBusy("phone-start"); setError(""); setPhoneHint(null);
+    const r = await twilioStart(phone.trim());
+    setBusy(null);
+    if (!r.ok) return setError(r.error);
+    if (r.dev) setPhoneHint("Dev mode: SMS not sent. Check server logs for the code.");
+    setPhoneStep("sent");
+  };
+  const handlePhoneVerify = async () => {
+    setBusy("phone-verify"); setError("");
+    const r = await twilioVerify(phone.trim(), phoneCode.trim());
+    setBusy(null);
+    if (!r.ok) return setError(r.error);
     await afterAuth();
   };
 
-  const errorBanner = error ? (
-    <div className="mb-3 flex items-start gap-2 p-2 rounded bg-[hsl(0,60%,30%)]/15 border border-[hsl(0,60%,45%)]/40 text-[hsl(0,70%,80%)] text-sm">
-      <ShieldAlert className="w-4 h-4 mt-0.5 flex-shrink-0" />
-      <span>{error}</span>
-    </div>
-  ) : null;
+  const submitSignIn = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBusy("signin"); setError("");
+    const r = await loginPlayer({ username: identifier, password });
+    setBusy(null);
+    if (!r.ok) return setError(r.error);
+    await afterAuth();
+  };
+  const submitRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBusy("register"); setError("");
+    const r = await registerPlayer({ username: regUsername, password: regPassword, email: regEmail || undefined });
+    setBusy(null);
+    if (!r.ok) return setError(r.error);
+    await afterAuth();
+  };
 
   return (
     <Dialog open={isOpen} onOpenChange={(next) => (!next ? onClose() : null)}>
-      <DialogContent className="max-w-md p-0 overflow-hidden bg-[hsl(225,30%,6%)] border-[hsl(43,60%,30%)]">
-        <div className="relative overflow-hidden">
-          <div className="absolute inset-0 opacity-[0.06] pointer-events-none" style={{ backgroundImage: "radial-gradient(circle at 20% 15%, hsl(43,85%,55%) 1px, transparent 1px)", backgroundSize: "28px 28px" }} />
-          <div className="relative px-6 pt-8 pb-5 text-center" style={{ background: "linear-gradient(180deg, hsl(225,35%,10%), hsl(225,30%,6%))" }}>
-            <div className="flex flex-col items-center gap-2">
-              <img src={grudgeLogo} alt="Grudge Studio" className="w-14 h-14 rounded-full ring-2 ring-[hsl(43,85%,55%)]/40" />
-              <DialogHeader className="space-y-1">
-                <DialogTitle className="font-heading text-2xl gold-text tracking-wider" style={{ WebkitTextFillColor: "unset" }}>
-                  GRUDGE STUDIO
-                </DialogTitle>
-                <DialogDescription className="text-xs uppercase tracking-[0.22em] text-[hsl(45,15%,60%)]">
-                  {options.reason || "One account · every Grudge product"}
-                </DialogDescription>
-              </DialogHeader>
-            </div>
+      <DialogContent
+        className="max-w-md p-0 overflow-hidden border"
+        style={{
+          background: "linear-gradient(180deg, hsl(225,35%,8%), hsl(225,30%,5%))",
+          borderColor: "rgba(200,153,26,0.35)",
+          boxShadow: "0 20px 60px rgba(0,0,0,0.6), 0 0 0 1px rgba(200,153,26,0.15) inset",
+        }}
+      >
+        <div className="flex items-center justify-between px-6 pt-6 pb-4">
+          <div className="flex items-center gap-2">
+            <Shield className="w-5 h-5" style={{ color: "#c8991a" }} />
+            <DialogTitle className="font-heading text-xl tracking-wider" style={{ color: "#c8991a", WebkitTextFillColor: "unset" }}>
+              GRUDGE ID
+            </DialogTitle>
           </div>
+          <DialogDescription className="sr-only">{options.reason || "Sign in to Grudge Studio"}</DialogDescription>
         </div>
 
-        <div className="p-5">
-          {errorBanner}
-          {player && needsProfile ? (
-            <CompleteProfileStep onDone={onClose} onError={setError} error="" />
-          ) : player ? (
-            <SignedInStep onClose={onClose} />
-          ) : screen === "landing" ? (
-            <LandingScreen
-              onGrudge={() => { setScreen("grudge"); setTab("signin"); setError(""); }}
-              onDiscord={handleDiscord}
-              onGuest={handleGuest}
-              onMore={() => { setScreen("more"); setError(""); }}
-              busy={busy}
-            />
-          ) : screen === "grudge" ? (
-            <GrudgeSignInScreen
-              tab={tab}
-              setTab={setTab}
-              busy={busy}
-              setBusy={setBusy}
-              onError={setError}
-              onSuccess={afterAuth}
-              onBack={() => { setScreen("landing"); setError(""); }}
-            />
-          ) : (
-            <MoreLinksScreen
-              busy={busy}
-              setBusy={setBusy}
-              onError={setError}
-              onSuccess={afterAuth}
-              redirectTo={options.redirectTo}
-              onBack={() => { setScreen("landing"); setError(""); }}
-            />
-          )}
-        </div>
+        {player && needsProfile ? (
+          <div className="px-6 pb-6"><CompleteProfileInline onDone={onClose} /></div>
+        ) : player ? (
+          <div className="px-6 pb-6"><SignedInInline onClose={onClose} /></div>
+        ) : (
+          <div className="px-6 pb-6 space-y-4">
+            <div className="grid grid-cols-3 gap-2">
+              <ProviderButton label="Discord" icon={<MessageCircle className="w-3.5 h-3.5" />} onClick={handleDiscord} disabled={!!busy} style={{ background: "#5865F2", color: "white", borderColor: "#4752C4" }} />
+              <ProviderButton label="Google" icon={<GoogleMark />} onClick={handleGoogle} disabled={!!busy} style={{ background: "#ffffff", color: "#202124", borderColor: "#dadce0" }} />
+              <ProviderButton label="GitHub" icon={<Github className="w-3.5 h-3.5" />} onClick={handleGithub} disabled={!!busy} style={{ background: "#0d1117", color: "white", borderColor: "#30363d" }} />
+              <ProviderButton label="Phantom" icon={<Wallet className="w-3.5 h-3.5" />} onClick={handlePhantom} disabled={!!busy} busy={busy === "phantom"} style={{ background: "#ab9ff2", color: "#2d1a5f", borderColor: "#8f84d6" }} />
+              <ProviderButton label="Puter" icon={<Sparkles className="w-3.5 h-3.5" />} onClick={handlePuter} disabled={!!busy} busy={busy === "puter"} style={{ background: "#2b6cb0", color: "white", borderColor: "#1e4b7e" }} />
+              <ProviderButton label="Phone" icon={<PhoneIcon className="w-3.5 h-3.5" />} onClick={() => setPhoneStep(phoneStep === "hidden" ? "idle" : "hidden")} disabled={!!busy} style={{ background: "#14b869", color: "white", borderColor: "#0f8c50" }} />
+            </div>
+
+            {phoneStep !== "hidden" && (
+              <PhoneForm
+                phone={phone} setPhone={setPhone}
+                code={phoneCode} setCode={setPhoneCode}
+                step={phoneStep} busy={busy}
+                onStart={handlePhoneStart}
+                onVerify={handlePhoneVerify}
+                onReset={() => { setPhoneStep("idle"); setPhoneCode(""); setPhoneHint(null); }}
+                hint={phoneHint}
+              />
+            )}
+
+            {error && (
+              <div className="flex items-start gap-2 p-2 rounded bg-[hsl(0,60%,30%)]/15 border border-[hsl(0,60%,45%)]/40 text-[hsl(0,70%,80%)] text-sm">
+                <ShieldAlert className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                <span>{error}</span>
+              </div>
+            )}
+
+            <div className="flex items-center gap-3 text-[10px] uppercase tracking-[0.3em] text-[hsl(45,15%,45%)] font-body">
+              <div className="flex-1 h-px bg-[hsl(43,60%,30%)]/30" />
+              or
+              <div className="flex-1 h-px bg-[hsl(43,60%,30%)]/30" />
+            </div>
+
+            <div className="grid grid-cols-2 gap-0 rounded overflow-hidden" style={{ border: "1px solid rgba(200,153,26,0.25)" }}>
+              <TabBtn active={tab === "signin"} onClick={() => { setTab("signin"); setError(""); }}>Sign In</TabBtn>
+              <TabBtn active={tab === "register"} onClick={() => { setTab("register"); setError(""); }}>Create Account</TabBtn>
+            </div>
+
+            {tab === "signin" ? (
+              <form onSubmit={submitSignIn} className="space-y-2">
+                <Input
+                  value={identifier}
+                  onChange={(e) => setIdentifier(e.target.value)}
+                  placeholder="Email, username, or Grudge ID"
+                  autoComplete="username"
+                  required
+                  className="bg-[hsl(225,25%,12%)] border-[hsl(43,60%,30%)]/40"
+                />
+                <Input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Password"
+                  autoComplete="current-password"
+                  required
+                  className="bg-[hsl(225,25%,12%)] border-[hsl(43,60%,30%)]/40"
+                />
+                <Button
+                  type="submit"
+                  disabled={!!busy}
+                  className="w-full font-heading tracking-widest uppercase text-sm py-3"
+                  style={{ background: "linear-gradient(180deg, #d9a829, #b88718)", color: "#1a1005", border: "1px solid #7a5c0e" }}
+                >
+                  {busy === "signin" ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+                  Sign In
+                </Button>
+              </form>
+            ) : (
+              <form onSubmit={submitRegister} className="space-y-2">
+                <Input
+                  value={regUsername}
+                  onChange={(e) => setRegUsername(e.target.value)}
+                  placeholder="Username (required, 3-30 chars)"
+                  minLength={3} maxLength={30} required
+                  className="bg-[hsl(225,25%,12%)] border-[hsl(43,60%,30%)]/40"
+                />
+                <Input
+                  type="email"
+                  value={regEmail}
+                  onChange={(e) => setRegEmail(e.target.value)}
+                  placeholder="Email (optional)"
+                  className="bg-[hsl(225,25%,12%)] border-[hsl(43,60%,30%)]/40"
+                />
+                <Input
+                  type="password"
+                  value={regPassword}
+                  onChange={(e) => setRegPassword(e.target.value)}
+                  placeholder="Password (min 6 chars)"
+                  minLength={6} required
+                  className="bg-[hsl(225,25%,12%)] border-[hsl(43,60%,30%)]/40"
+                />
+                <Button
+                  type="submit"
+                  disabled={!!busy}
+                  className="w-full font-heading tracking-widest uppercase text-sm py-3"
+                  style={{ background: "linear-gradient(180deg, #d9a829, #b88718)", color: "#1a1005", border: "1px solid #7a5c0e" }}
+                >
+                  {busy === "register" ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+                  Create Account
+                </Button>
+              </form>
+            )}
+
+            <Button
+              variant="outline"
+              onClick={handleGuest}
+              disabled={!!busy}
+              className="w-full font-heading tracking-widest uppercase text-xs border-[hsl(43,60%,30%)]/40 text-[hsl(45,30%,85%)] hover:bg-[hsl(225,25%,16%)]"
+            >
+              {busy === "guest" ? <Loader2 className="w-3.5 h-3.5 mr-2 animate-spin" /> : <UserCircle className="w-3.5 h-3.5 mr-2" />}
+              Continue as Guest
+            </Button>
+
+            <div className="pt-3 text-center">
+              <p className="text-[10px] uppercase tracking-[0.22em] text-[hsl(45,15%,45%)] font-body">
+                Every account gets a Puter Cloud ID for sync &amp; storage
+              </p>
+            </div>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );
 }
 
-// ── Landing screen (the grudgewarlords.com card style) ────────────────────
+// ── Building blocks ──────────────────────────────────────────────────────────
 
-function ActionCard({
-  title, subtitle, icon, onClick, accent, busy, busyKey,
+function ProviderButton({
+  label, icon, onClick, disabled, busy, style,
 }: {
-  title: string;
-  subtitle: string;
+  label: string;
   icon: ReactNode;
   onClick: () => void;
-  accent: string;
-  busy: string | null;
-  busyKey?: string;
+  disabled?: boolean;
+  busy?: boolean;
+  style?: React.CSSProperties;
 }) {
-  const isBusy = busyKey && busy === busyKey;
   return (
     <button
       onClick={onClick}
-      disabled={!!busy}
-      className="w-full text-left rounded-lg border transition-all group hover:-translate-y-0.5 hover:shadow-lg disabled:opacity-60 disabled:cursor-not-allowed"
-      style={{ borderColor: `${accent}55`, background: "linear-gradient(180deg, hsl(225,25%,13%), hsl(225,25%,9%))" }}
+      disabled={disabled}
+      className="flex items-center justify-center gap-1.5 rounded text-[11px] font-bold uppercase tracking-wider py-2 border transition disabled:opacity-60 disabled:cursor-not-allowed hover:brightness-110"
+      style={style}
     >
-      <div className="flex items-center gap-4 p-4">
-        <div className="w-11 h-11 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: `${accent}22`, border: `1px solid ${accent}55` }}>
-          {isBusy ? <Loader2 className="w-5 h-5 animate-spin" style={{ color: accent }} /> : icon}
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="font-heading text-sm tracking-wider uppercase" style={{ color: accent }}>{title}</div>
-          <div className="text-xs text-[hsl(45,15%,65%)] font-body mt-0.5">{subtitle}</div>
-        </div>
-        <ChevronRight className="w-4 h-4 text-[hsl(45,15%,50%)] group-hover:text-[hsl(43,85%,55%)] transition-colors" />
-      </div>
+      {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : icon}
+      {label}
     </button>
   );
 }
 
-function LandingScreen({
-  onGrudge, onDiscord, onGuest, onMore, busy,
+function TabBtn({ active, onClick, children }: { active: boolean; onClick: () => void; children: ReactNode }) {
+  return (
+    <button
+      onClick={onClick}
+      className="py-2 text-xs uppercase tracking-widest font-heading transition-colors"
+      style={{
+        background: active ? "linear-gradient(180deg, #8c6a17, #6e5410)" : "transparent",
+        color: active ? "#f0c040" : "hsl(45,15%,55%)",
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+function GoogleMark() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="14" height="14" aria-hidden="true">
+      <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+      <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+      <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+      <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+    </svg>
+  );
+}
+
+function PhoneForm({
+  phone, setPhone, code, setCode, step, busy, onStart, onVerify, onReset, hint,
 }: {
-  onGrudge: () => void;
-  onDiscord: () => void;
-  onGuest: () => void;
-  onMore: () => void;
+  phone: string; setPhone: (v: string) => void;
+  code: string; setCode: (v: string) => void;
+  step: "hidden" | "idle" | "sent";
   busy: string | null;
+  onStart: () => void;
+  onVerify: () => void;
+  onReset: () => void;
+  hint: string | null;
 }) {
   return (
-    <div className="space-y-3">
-      <ActionCard
-        title="Login with Grudge"
-        subtitle="Sign in to save progress"
-        icon={<Sparkles className="w-5 h-5" style={{ color: "hsl(43,85%,55%)" }} />}
-        accent="hsl(43,85%,55%)"
-        onClick={onGrudge}
-        busy={busy}
-      />
-      <ActionCard
-        title="Login with Discord"
-        subtitle="Sync community & leaderboards"
-        icon={<MessageCircle className="w-5 h-5" style={{ color: "hsl(235,70%,70%)" }} />}
-        accent="hsl(235,70%,60%)"
-        onClick={onDiscord}
-        busy={busy}
-      />
-      <ActionCard
-        title="Play as Guest"
-        subtitle="No account needed"
-        icon={<Gamepad2 className="w-5 h-5" style={{ color: "hsl(120,60%,60%)" }} />}
-        accent="hsl(120,60%,55%)"
-        onClick={onGuest}
-        busy={busy}
-        busyKey="guest"
-      />
-      <button
-        onClick={onMore}
-        className="w-full flex items-center justify-center gap-1 mt-2 py-2 text-xs uppercase tracking-widest text-[hsl(45,15%,55%)] hover:text-[hsl(43,85%,55%)] font-body transition-colors"
-      >
-        More ways to sign in <ChevronDown className="w-3 h-3" />
-      </button>
-    </div>
-  );
-}
-
-// ── Grudge (username/password) screen ───────────────────────────────
-
-function GrudgeSignInScreen({
-  tab, setTab, busy, setBusy, onError, onSuccess, onBack,
-}: {
-  tab: AuthTab;
-  setTab: (t: AuthTab) => void;
-  busy: string | null;
-  setBusy: (s: string | null) => void;
-  onError: (e: string) => void;
-  onSuccess: () => Promise<void>;
-  onBack: () => void;
-}) {
-  return (
-    <div className="space-y-4">
-      <button onClick={onBack} className="flex items-center gap-1 text-xs uppercase tracking-widest text-[hsl(45,15%,55%)] hover:text-[hsl(43,85%,55%)] font-body">
-        <ArrowLeft className="w-3 h-3" /> Back
-      </button>
-      <Tabs value={tab} onValueChange={(v) => setTab(v as AuthTab)} className="w-full">
-        <TabsList className="grid w-full grid-cols-2 bg-[hsl(225,25%,15%)]">
-          <TabsTrigger value="signin">Sign In</TabsTrigger>
-          <TabsTrigger value="register">Register</TabsTrigger>
-        </TabsList>
-        <TabsContent value="signin" className="pt-4">
-          <SignInForm busy={busy} setBusy={setBusy} onError={onError} onSuccess={onSuccess} />
-        </TabsContent>
-        <TabsContent value="register" className="pt-4">
-          <RegisterForm busy={busy} setBusy={setBusy} onError={onError} onSuccess={onSuccess} />
-        </TabsContent>
-      </Tabs>
-    </div>
-  );
-}
-
-// ── More ways wrapper ──────────────────────────────────────────
-
-function MoreLinksScreen({
-  busy, setBusy, onError, onSuccess, redirectTo, onBack,
-}: {
-  busy: string | null;
-  setBusy: (s: string | null) => void;
-  onError: (e: string) => void;
-  onSuccess: () => Promise<void>;
-  redirectTo?: string;
-  onBack: () => void;
-}) {
-  return (
-    <div className="space-y-4">
-      <button onClick={onBack} className="flex items-center gap-1 text-xs uppercase tracking-widest text-[hsl(45,15%,55%)] hover:text-[hsl(43,85%,55%)] font-body">
-        <ArrowLeft className="w-3 h-3" /> Back
-      </button>
-      <QuickLinks busy={busy} setBusy={setBusy} onError={onError} onSuccess={onSuccess} redirectTo={redirectTo} />
-    </div>
-  );
-}
-
-// ── Sign In (username + password) ──────────────────────────────────
-
-function SignInForm({
-  busy, setBusy, onError, onSuccess,
-}: { busy: string | null; setBusy: (s: string | null) => void; onError: (e: string) => void; onSuccess: () => Promise<void> }) {
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const submitting = busy === "signin";
-
-  const onSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setBusy("signin");
-    onError("");
-    const result = await loginPlayer({ username, password });
-    setBusy(null);
-    if (!result.ok) return onError(result.error);
-    await onSuccess();
-  };
-
-  return (
-    <form onSubmit={onSubmit} className="space-y-3">
-      <Input
-        value={username}
-        onChange={(e) => setUsername(e.target.value)}
-        placeholder="Username"
-        autoComplete="username"
-        required
-        className="border-[hsl(43,60%,30%)] bg-[hsl(225,25%,12%)]"
-      />
-      <Input
-        type="password"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-        placeholder="Password"
-        autoComplete="current-password"
-        required
-        className="border-[hsl(43,60%,30%)] bg-[hsl(225,25%,12%)]"
-      />
-      <Button type="submit" className="w-full gilded-button" disabled={submitting}>
-        {submitting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
-        Sign In
-      </Button>
-    </form>
-  );
-}
-
-// ── Register (username required) ───────────────────────────────────
-
-function RegisterForm({
-  busy, setBusy, onError, onSuccess,
-}: { busy: string | null; setBusy: (s: string | null) => void; onError: (e: string) => void; onSuccess: () => Promise<void> }) {
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [email, setEmail] = useState("");
-  const [displayName, setDisplayName] = useState("");
-  const submitting = busy === "register";
-
-  const onSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setBusy("register");
-    onError("");
-    const result = await registerPlayer({ username, password, email: email || undefined, displayName: displayName || undefined });
-    setBusy(null);
-    if (!result.ok) return onError(result.error);
-    await onSuccess();
-  };
-
-  return (
-    <form onSubmit={onSubmit} className="space-y-3">
-      <Input
-        value={username}
-        onChange={(e) => setUsername(e.target.value)}
-        placeholder="Username (required, 3-30 chars)"
-        minLength={3}
-        maxLength={30}
-        required
-        className="border-[hsl(43,60%,30%)] bg-[hsl(225,25%,12%)]"
-      />
-      <Input
-        type="password"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-        placeholder="Password (min 6 chars)"
-        minLength={6}
-        required
-        className="border-[hsl(43,60%,30%)] bg-[hsl(225,25%,12%)]"
-      />
-      <Input
-        type="email"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-        placeholder="Email (optional)"
-        className="border-[hsl(43,60%,30%)] bg-[hsl(225,25%,12%)]"
-      />
-      <Input
-        value={displayName}
-        onChange={(e) => setDisplayName(e.target.value)}
-        placeholder="Display name (optional)"
-        maxLength={60}
-        className="border-[hsl(43,60%,30%)] bg-[hsl(225,25%,12%)]"
-      />
-      <Button type="submit" className="w-full gilded-button" disabled={submitting}>
-        {submitting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
-        Create account
-      </Button>
-      <p className="text-xs text-[hsl(45,15%,55%)] font-body">
-        One Grudge ID across Warlords, Launcher, Dashboard, AI, and Assets.
-      </p>
-    </form>
-  );
-}
-
-// ── Quick links (Phantom, Discord, Puter, Phone, Guest) ────────────
-
-function QuickLinks({
-  busy, setBusy, onError, onSuccess, redirectTo,
-}: {
-  busy: string | null;
-  setBusy: (s: string | null) => void;
-  onError: (e: string) => void;
-  onSuccess: () => Promise<void>;
-  redirectTo?: string;
-}) {
-  const [phoneStep, setPhoneStep] = useState<"idle" | "sent">("idle");
-  const [phone, setPhone] = useState("");
-  const [code, setCode] = useState("");
-  const [phoneHint, setPhoneHint] = useState<string | null>(null);
-
-  const handlePhantom = async () => {
-    setBusy("phantom");
-    onError("");
-    const res = await phantomSignIn();
-    setBusy(null);
-    if (!res.ok) return onError(res.error);
-    await onSuccess();
-  };
-
-  const handleGuest = async () => {
-    setBusy("guest");
-    onError("");
-    const res = await guestSignIn();
-    setBusy(null);
-    if (!res.ok) return onError(res.error);
-    await onSuccess();
-  };
-
-  const handlePuter = async () => {
-    setBusy("puter");
-    onError("");
-    const puter = (window as any).puter;
-    if (!puter?.auth?.signIn) {
-      setBusy(null);
-      return onError("Puter SDK not loaded. Add the Puter script tag to index.html.");
-    }
-    try {
-      await puter.auth.signIn();
-      const user = await puter.auth.getUser();
-      if (!user?.uuid) {
-        setBusy(null);
-        return onError("Puter sign-in did not return a user.");
-      }
-      const result = await puterSSO({ puterId: user.uuid, puterUsername: user.username, email: user.email });
-      setBusy(null);
-      if (!result.ok) return onError(result.error);
-      await onSuccess();
-    } catch (err: any) {
-      setBusy(null);
-      onError(err?.message || "Puter sign-in failed");
-    }
-  };
-
-  const handleDiscord = () => {
-    discordSignIn(redirectTo || window.location.pathname);
-  };
-
-  const handlePhoneStart = async () => {
-    setBusy("phone-start");
-    onError("");
-    setPhoneHint(null);
-    const res = await twilioStart(phone);
-    setBusy(null);
-    if (!res.ok) return onError(res.error);
-    if (res.dev) setPhoneHint("Dev mode: SMS not sent. Your 6-digit code is in the server logs.");
-    setPhoneStep("sent");
-  };
-
-  const handlePhoneVerify = async () => {
-    setBusy("phone-verify");
-    onError("");
-    const res = await twilioVerify(phone, code);
-    setBusy(null);
-    if (!res.ok) return onError(res.error);
-    await onSuccess();
-  };
-
-  return (
-    <div className="space-y-3">
-      <Button
-        variant="outline"
-        className="w-full justify-between border-[hsl(280,60%,45%)] text-[hsl(280,70%,85%)] hover:bg-[hsl(280,60%,30%)]/30"
-        onClick={handlePhantom}
-        disabled={!!busy}
-      >
-        <span className="flex items-center gap-2"><Wallet className="w-4 h-4" /> Phantom (Solana)</span>
-        {busy === "phantom" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Badge variant="outline" className="text-[10px]">web3</Badge>}
-      </Button>
-
-      <Button
-        variant="outline"
-        className="w-full justify-between border-[hsl(235,60%,50%)] text-[hsl(235,70%,80%)] hover:bg-[hsl(235,60%,30%)]/30"
-        onClick={handleDiscord}
-        disabled={!!busy}
-      >
-        <span className="flex items-center gap-2">Continue with Discord</span>
-        <Badge variant="outline" className="text-[10px]">OAuth</Badge>
-      </Button>
-
-      <Button
-        variant="outline"
-        className="w-full justify-between border-[hsl(220,10%,35%)] text-[hsl(45,30%,90%)] hover:bg-[hsl(220,10%,15%)]"
-        onClick={() => githubSignIn(window.location.pathname)}
-        disabled={!!busy}
-      >
-        <span className="flex items-center gap-2"><Github className="w-4 h-4" /> Continue with GitHub</span>
-        <Badge variant="outline" className="text-[10px]">OAuth</Badge>
-      </Button>
-
-      <Button
-        variant="outline"
-        className="w-full justify-between border-[hsl(43,60%,30%)] text-[hsl(45,30%,90%)] hover:bg-[hsl(225,25%,18%)]"
-        onClick={handlePuter}
-        disabled={!!busy}
-      >
-        <span className="flex items-center gap-2">
-          <Sparkles className="w-4 h-4 text-[hsl(43,85%,55%)]" /> Continue with Puter
-        </span>
-        {busy === "puter" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Badge variant="outline" className="text-[10px]">google/email</Badge>}
-      </Button>
-
-      <div className="rounded border border-[hsl(43,60%,30%)]/40 p-3 space-y-2 bg-[hsl(225,25%,12%)]">
-        <div className="flex items-center gap-2 text-sm">
-          <Phone className="w-4 h-4 text-[hsl(43,85%,55%)]" /> Continue with phone (SMS)
+    <div className="rounded border border-[hsl(43,60%,30%)]/30 bg-[hsl(225,25%,10%)] p-3 space-y-2">
+      {step !== "sent" ? (
+        <div className="flex gap-2">
+          <Input
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            placeholder="+15551234567"
+            className="bg-[hsl(225,25%,8%)] border-[hsl(43,60%,30%)]/40"
+          />
+          <Button onClick={onStart} disabled={!!busy} className="font-heading tracking-wider uppercase text-xs" style={{ background: "linear-gradient(180deg, #d9a829, #b88718)", color: "#1a1005" }}>
+            {busy === "phone-start" ? <Loader2 className="w-4 h-4 animate-spin" /> : "Send Code"}
+          </Button>
         </div>
-        {phoneStep === "idle" ? (
+      ) : (
+        <div className="space-y-2">
+          <div className="text-[11px] text-[hsl(45,15%,60%)] font-body uppercase tracking-widest">Code sent to {phone}</div>
           <div className="flex gap-2">
             <Input
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              placeholder="+15551234567"
-              className="border-[hsl(43,60%,30%)] bg-[hsl(225,25%,10%)]"
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+              placeholder="6-digit code"
+              className="bg-[hsl(225,25%,8%)] border-[hsl(43,60%,30%)]/40"
             />
-            <Button onClick={handlePhoneStart} disabled={!!busy} className="gilded-button">
-              {busy === "phone-start" ? <Loader2 className="w-4 h-4 animate-spin" /> : "Send code"}
+            <Button onClick={onVerify} disabled={!!busy} className="font-heading tracking-wider uppercase text-xs" style={{ background: "linear-gradient(180deg, #d9a829, #b88718)", color: "#1a1005" }}>
+              {busy === "phone-verify" ? <Loader2 className="w-4 h-4 animate-spin" /> : "Verify"}
             </Button>
           </div>
-        ) : (
-          <div className="space-y-2">
-            <div className="text-xs text-[hsl(45,15%,60%)] font-body">Code sent to {phone}.</div>
-            <div className="flex gap-2">
-              <Input
-                value={code}
-                onChange={(e) => setCode(e.target.value)}
-                placeholder="6-digit code"
-                className="border-[hsl(43,60%,30%)] bg-[hsl(225,25%,10%)]"
-              />
-              <Button onClick={handlePhoneVerify} disabled={!!busy} className="gilded-button">
-                {busy === "phone-verify" ? <Loader2 className="w-4 h-4 animate-spin" /> : "Verify"}
-              </Button>
-            </div>
-            {phoneHint && <p className="text-xs text-[hsl(43,85%,65%)] font-body">{phoneHint}</p>}
-            <button
-              className="text-xs text-[hsl(45,15%,60%)] hover:text-[hsl(43,85%,55%)] font-body underline"
-              onClick={() => { setPhoneStep("idle"); setCode(""); }}
-            >Use a different number</button>
-          </div>
-        )}
-      </div>
-
-      <Button
-        variant="ghost"
-        className="w-full text-[hsl(45,15%,70%)] hover:text-[hsl(43,85%,55%)]"
-        onClick={handleGuest}
-        disabled={!!busy}
-      >
-        <Gamepad2 className="w-4 h-4 mr-2" />
-        {busy === "guest" ? "Creating guest..." : "Continue as guest"}
-      </Button>
-      <p className="text-[11px] text-[hsl(45,15%,55%)] font-body text-center">
-        Quick links create a Grudge ID automatically. You'll pick a username next.
-      </p>
+          {hint && <p className="text-[11px] text-[hsl(43,85%,65%)] font-body">{hint}</p>}
+          <button onClick={onReset} className="text-[11px] text-[hsl(45,15%,60%)] hover:text-[hsl(43,85%,55%)] font-body underline">
+            Use a different number
+          </button>
+        </div>
+      )}
     </div>
   );
 }
 
-// ── Complete Profile step (shown after quick-link signup) ──────────
-
-function CompleteProfileStep({
-  onDone, onError, error,
-}: { onDone: () => void; onError: (e: string) => void; error: string }) {
+function CompleteProfileInline({ onDone }: { onDone: () => void }) {
   const { player, refresh } = useAuth();
-  const [username, setUsername] = useState(player?.username?.startsWith("guest_") || player?.username?.startsWith("sol_") || player?.username?.startsWith("phone_") ? "" : player?.username || "");
-  const [displayName, setDisplayName] = useState(player?.displayName || "");
+  const [username, setUsername] = useState(
+    player?.username?.startsWith("guest_") || player?.username?.startsWith("sol_") || player?.username?.startsWith("phone_") ? "" : player?.username || "",
+  );
   const [email, setEmail] = useState(player?.email || "");
   const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
 
-  const onSubmit = async (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setBusy(true);
-    onError("");
-    const res = await completeProfile({ username: username || undefined, displayName: displayName || undefined, email: email || undefined });
+    setBusy(true); setErr("");
+    const r = await completeProfile({ username: username || undefined, email: email || undefined });
     setBusy(false);
-    if (!res.ok) return onError(res.error);
+    if (!r.ok) return setErr(r.error);
     await refresh();
     onDone();
   };
 
   return (
-    <div className="p-5 space-y-3">
-      <p className="text-sm text-[hsl(45,15%,60%)] font-body">
-        Pick a username — this is your public name across all Grudge Studio products. You can change your display name any time.
+    <div className="space-y-3">
+      <p className="text-xs text-[hsl(45,15%,60%)] font-body">
+        Pick a username — public name across every Grudge product.
       </p>
-      {error && (
-        <div className="flex items-start gap-2 p-2 rounded bg-[hsl(0,60%,30%)]/15 border border-[hsl(0,60%,45%)]/40 text-[hsl(0,70%,80%)] text-sm">
-          <ShieldAlert className="w-4 h-4 mt-0.5 flex-shrink-0" />
-          <span>{error}</span>
-        </div>
-      )}
-      <form onSubmit={onSubmit} className="space-y-3">
+      {err && <p className="text-sm text-red-400">{err}</p>}
+      <form onSubmit={submit} className="space-y-2">
         <Input
           value={username}
           onChange={(e) => setUsername(e.target.value)}
           placeholder="Username (3-30 chars)"
-          minLength={3}
-          maxLength={30}
-          required
-          className="border-[hsl(43,60%,30%)] bg-[hsl(225,25%,12%)]"
-        />
-        <Input
-          value={displayName}
-          onChange={(e) => setDisplayName(e.target.value)}
-          placeholder="Display name (optional)"
-          maxLength={60}
-          className="border-[hsl(43,60%,30%)] bg-[hsl(225,25%,12%)]"
+          minLength={3} maxLength={30} required
+          className="bg-[hsl(225,25%,12%)] border-[hsl(43,60%,30%)]/40"
         />
         <Input
           type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           placeholder="Email (optional)"
-          className="border-[hsl(43,60%,30%)] bg-[hsl(225,25%,12%)]"
+          className="bg-[hsl(225,25%,12%)] border-[hsl(43,60%,30%)]/40"
         />
-        <Button type="submit" className="w-full gilded-button" disabled={busy}>
+        <Button
+          type="submit"
+          disabled={busy}
+          className="w-full font-heading tracking-widest uppercase text-sm py-3"
+          style={{ background: "linear-gradient(180deg, #d9a829, #b88718)", color: "#1a1005" }}
+        >
           {busy ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
-          Claim username
+          Claim Username
         </Button>
       </form>
     </div>
   );
 }
 
-function SignedInStep({ onClose }: { onClose: () => void }) {
+function SignedInInline({ onClose }: { onClose: () => void }) {
   const { player, logout } = useAuth();
   return (
-    <div className="p-5 space-y-3">
+    <div className="space-y-3">
       <p className="text-sm text-[hsl(45,30%,90%)] font-body">
-        You're signed in as <span className="text-[hsl(43,85%,55%)] font-medium">{player?.displayName || player?.username}</span>.
+        Signed in as <span className="text-[#c8991a] font-medium">{player?.displayName || player?.username}</span>.
       </p>
       <div className="flex gap-2">
-        <Button className="flex-1 gilded-button" onClick={onClose}>Continue</Button>
-        <Button variant="outline" className="border-[hsl(43,60%,30%)]" onClick={() => { logout(); onClose(); }}>Sign out</Button>
+        <Button onClick={onClose} className="flex-1 font-heading tracking-widest uppercase text-sm" style={{ background: "linear-gradient(180deg, #d9a829, #b88718)", color: "#1a1005" }}>
+          Continue
+        </Button>
+        <Button variant="outline" onClick={() => { logout(); onClose(); }} className="border-[hsl(43,60%,30%)]/40">
+          Sign Out
+        </Button>
       </div>
     </div>
   );
