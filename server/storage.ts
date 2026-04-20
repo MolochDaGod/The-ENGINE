@@ -61,6 +61,7 @@ export interface IStorage {
   getUserByGrudgeId(grudgeId: string): Promise<User | undefined>;
   getUserBySolanaAddress(address: string): Promise<User | undefined>;
   getUserByDiscordId(discordId: string): Promise<User | undefined>;
+  getUserByGithubId(githubId: string): Promise<User | undefined>;
   getUserByPhone(phone: string): Promise<User | undefined>;
   updateUser(id: number, updates: Partial<User>): Promise<User | undefined>;
 
@@ -405,6 +406,11 @@ export class DatabaseStorage implements IStorage {
 
   async getUserByDiscordId(discordId: string): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.discordId, discordId));
+    return user || undefined;
+  }
+
+  async getUserByGithubId(githubId: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.githubId, githubId));
     return user || undefined;
   }
 

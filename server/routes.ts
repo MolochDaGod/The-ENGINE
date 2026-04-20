@@ -18,6 +18,8 @@ import {
   hashPassword, verifyPassword, generateGrudgeId,
   createPlayerToken, setPlayerCookie, clearPlayerCookie, verifyPlayerToken,
   parseCookies as parsePlayerCookies, PLAYER_COOKIE,
+  createLaunchToken, verifyLaunchToken, LAUNCH_TOKEN_TTL_MS,
+  allowedAuthOrigins, isOriginAllowed,
 } from "./auth";
 import { sendDiscordWebhook, DiscordEmbedType, trackNowPlaying } from "./discord-webhooks";
 
@@ -529,6 +531,118 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // GitHub OAuth --------------------------------------------------
+  const githubOauthState = new Map<string, { redirect: string; expiresAt: number }>();
+
+  app.get("/api/auth/github/start", (req, res) => {
+    const clientId = process.env.GITHUB_CLIENT_ID;
+    const redirectUri = process.env.GITHUB_REDIRECT_URI;
+    if (!clientId || !redirectUri) {
+      return res.status(501).json({ error: "GitHub OAuth not configured. Set GITHUB_CLIENT_ID and GITHUB_REDIRECT_URI." });
+    }
+    pruneMap(githubOauthState);
+    const state = crypto.randomBytes(16).toString("hex");
+    const redirect = typeof req.query.redirect === "string" ? req.query.redirect : "/";
+    githubOauthState.set(state, { redirect, expiresAt: Date.now() + DISCORD_STATE_TTL_MS });
+    const url = new URL("https://github.com/login/oauth/authorize");
+    url.searchParams.set("client_id", clientId);
+    url.searchParams.set("redirect_uri", redirectUri);
+    url.searchParams.set("scope", "read:user user:email");
+    url.searchParams.set("state", state);
+    return res.redirect(url.toString());
+  });
+
+  app.get("/api/auth/github/callback", async (req, res) => {
+    try {
+      const clientId = process.env.GITHUB_CLIENT_ID;
+      const clientSecret = process.env.GITHUB_CLIENT_SECRET;
+      const redirectUri = process.env.GITHUB_REDIRECT_URI;
+      if (!clientId || !clientSecret || !redirectUri) {
+        return res.status(501).json({ error: "GitHub OAuth not configured." });
+      }
+      const code = typeof req.query.code === "string" ? req.query.code : "";
+      const state = typeof req.query.state === "string" ? req.query.state : "";
+      if (!code || !state) return res.status(400).send("Missing code or state");
+      const stateEntry = githubOauthState.get(state);
+      if (!stateEntry || stateEntry.expiresAt < Date.now()) {
+        githubOauthState.delete(state);
+        return res.status(400).send("Invalid or expired state");
+      }
+      githubOauthState.delete(state);
+
+      const tokenResp = await fetch("https://github.com/login/oauth/access_token", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
+        body: new URLSearchParams({
+          client_id: clientId,
+          client_secret: clientSecret,
+          code,
+          redirect_uri: redirectUri,
+        }).toString(),
+      });
+      if (!tokenResp.ok) return res.status(502).send("GitHub token exchange failed");
+      const tokenJson = (await tokenResp.json()) as { access_token?: string };
+      if (!tokenJson.access_token) return res.status(502).send("No GitHub access_token");
+
+      const userResp = await fetch("https://api.github.com/user", {
+        headers: { Authorization: `Bearer ${tokenJson.access_token}`, "User-Agent": "grudge-studio-auth" },
+      });
+      if (!userResp.ok) return res.status(502).send("GitHub user fetch failed");
+      const ghUser = (await userResp.json()) as { id: number; login: string; name?: string | null; avatar_url?: string | null; email?: string | null };
+
+      let email: string | null = ghUser.email || null;
+      if (!email) {
+        // GitHub hides primary email by default — pull the verified one if scope allows.
+        try {
+          const emailsResp = await fetch("https://api.github.com/user/emails", {
+            headers: { Authorization: `Bearer ${tokenJson.access_token}`, "User-Agent": "grudge-studio-auth" },
+          });
+          if (emailsResp.ok) {
+            const emails = (await emailsResp.json()) as Array<{ email: string; primary: boolean; verified: boolean }>;
+            const primary = emails.find((e) => e.primary && e.verified) || emails.find((e) => e.verified);
+            if (primary) email = primary.email;
+          }
+        } catch { /* ignore */ }
+      }
+
+      const ghIdString = String(ghUser.id);
+      let user = await storage.getUserByGithubId(ghIdString);
+      let isNew = false;
+      if (!user) {
+        const base = ghUser.login || ghUser.name || `gh_${ghIdString.slice(-6)}`;
+        const username = await uniqueUsername(base);
+        user = await storage.createUser({
+          username,
+          password: hashPassword(crypto.randomBytes(16).toString("hex")),
+          grudgeId: generateGrudgeId(),
+          puterId: null,
+          email,
+          displayName: ghUser.name || ghUser.login || username,
+          avatarUrl: ghUser.avatar_url || null,
+          gbuxBalance: "0",
+          role: "player",
+          solanaAddress: null,
+          discordId: null,
+          githubId: ghIdString,
+          phone: null,
+          needsProfile: false,
+        });
+        isNew = true;
+      } else {
+        await storage.updateUser(user.id, { lastLoginAt: new Date() });
+      }
+
+      const token = createPlayerToken(user.id);
+      setPlayerCookie(res, token);
+      const target = stateEntry.redirect && stateEntry.redirect.startsWith("/") ? stateEntry.redirect : "/";
+      const sep = target.includes("?") ? "&" : "?";
+      return res.redirect(`${target}${sep}auth=github&new=${isNew ? 1 : 0}`);
+    } catch (error) {
+      console.error("GitHub callback error:", error);
+      return res.status(500).send("GitHub auth failed");
+    }
+  });
+
   // Discord OAuth -------------------------------------------------
   app.get("/api/auth/discord/start", (req, res) => {
     const clientId = process.env.DISCORD_CLIENT_ID;
@@ -729,6 +843,59 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Twilio verify error:", error);
       return res.status(500).json({ error: "Failed to verify code" });
+    }
+  });
+
+  // Cross-domain popup handoff ------------------------------------
+  // Any allowlisted frontend (grudgewarlords.com, launcher.grudge-studio.com, ...)
+  // can open /auth/popup on grudge-studio.com, let the user sign in with the
+  // unified modal, then receive a signed JWT back via postMessage and hand it
+  // to their own backend (or api.grudge-studio.com) to establish a session.
+
+  app.get("/api/auth/allowed-origins", (_req, res) => {
+    res.json({ origins: allowedAuthOrigins() });
+  });
+
+  app.post("/api/auth/popup-token", requirePlayer, (req, res) => {
+    try {
+      const player = getPlayer(req)!;
+      const audience = typeof req.body?.audience === "string" ? req.body.audience : undefined;
+      if (audience && !isOriginAllowed(audience)) {
+        return res.status(403).json({ error: "Audience origin is not allowlisted" });
+      }
+      const token = createLaunchToken(player, audience);
+      res.json({ token, expiresIn: Math.floor(LAUNCH_TOKEN_TTL_MS / 1000), audience: audience || null });
+    } catch (error) {
+      console.error("popup-token error:", error);
+      res.status(500).json({ error: "Failed to mint launch token" });
+    }
+  });
+
+  app.post("/api/auth/session/exchange", async (req, res) => {
+    try {
+      const { token, audience } = req.body || {};
+      if (!token || typeof token !== "string") return res.status(400).json({ error: "token is required" });
+      const claims = verifyLaunchToken(token);
+      if (!claims) return res.status(401).json({ error: "Invalid or expired launch token" });
+
+      // Audience check: if the token was minted for a specific audience, enforce it.
+      // Also require the inbound Origin to be allowlisted so any allowlisted frontend
+      // on this same backend can establish a fresh cookie from the handoff JWT.
+      const origin = (req.headers.origin as string | undefined) || audience;
+      if (!isOriginAllowed(origin)) return res.status(403).json({ error: "Origin is not allowlisted" });
+      if (claims.aud && origin && claims.aud !== origin) {
+        return res.status(403).json({ error: "Launch token audience does not match request origin" });
+      }
+
+      const user = await storage.getUser(claims.sub);
+      if (!user) return res.status(404).json({ error: "User not found" });
+
+      const sessionToken = createPlayerToken(user.id);
+      setPlayerCookie(res, sessionToken);
+      return res.json(publicPlayer(user, false));
+    } catch (error) {
+      console.error("session/exchange error:", error);
+      return res.status(500).json({ error: "Exchange failed" });
     }
   });
 

@@ -10,6 +10,90 @@ import type { Request, Response, NextFunction } from "express";
 import { storage } from "./storage";
 import type { User } from "@shared/schema";
 
+export const LAUNCH_TOKEN_TTL_MS = 5 * 60 * 1000; // 5 minutes — good for a popup handoff
+
+function launchTokenSecret(): string {
+  // JWT_SECRET is the portable cross-service signing key. Fall back to the
+  // player-session secret so we never silently sign with empty string.
+  return (
+    process.env.JWT_SECRET ||
+    process.env.LAUNCH_TOKEN_SECRET ||
+    getSessionSecret()
+  );
+}
+
+function b64url(input: Buffer | string): string {
+  const buf = typeof input === "string" ? Buffer.from(input) : input;
+  return buf.toString("base64").replace(/=+$/, "").replace(/\+/g, "-").replace(/\//g, "_");
+}
+
+function b64urlDecode(input: string): Buffer {
+  const padded = input.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((input.length + 3) % 4);
+  return Buffer.from(padded, "base64");
+}
+
+export interface LaunchTokenClaims {
+  sub: number;            // user id
+  username: string;
+  grudgeId: string;
+  aud?: string;           // optional audience (origin that's allowed to consume)
+  iat: number;
+  exp: number;
+}
+
+/** Mint a short-lived HS256 JWT for cross-domain handoff. */
+export function createLaunchToken(user: Pick<User, "id" | "username" | "grudgeId">, audience?: string): string {
+  const secret = launchTokenSecret();
+  const header = { alg: "HS256", typ: "JWT" };
+  const now = Math.floor(Date.now() / 1000);
+  const payload: LaunchTokenClaims = {
+    sub: user.id,
+    username: user.username,
+    grudgeId: user.grudgeId,
+    aud: audience,
+    iat: now,
+    exp: now + Math.floor(LAUNCH_TOKEN_TTL_MS / 1000),
+  };
+  const head = b64url(JSON.stringify(header));
+  const body = b64url(JSON.stringify(payload));
+  const sig = b64url(createHmac("sha256", secret).update(`${head}.${body}`).digest());
+  return `${head}.${body}.${sig}`;
+}
+
+export function verifyLaunchToken(token: string): LaunchTokenClaims | null {
+  try {
+    const secret = launchTokenSecret();
+    const parts = token.split(".");
+    if (parts.length !== 3) return null;
+    const [head, body, sig] = parts;
+    const expected = b64url(createHmac("sha256", secret).update(`${head}.${body}`).digest());
+    const a = Buffer.from(sig);
+    const b = Buffer.from(expected);
+    if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
+    const claims = JSON.parse(b64urlDecode(body).toString("utf8")) as LaunchTokenClaims;
+    if (typeof claims.exp !== "number" || claims.exp * 1000 < Date.now()) return null;
+    return claims;
+  } catch {
+    return null;
+  }
+}
+
+/** Origins allowed to host the modal / consume launch tokens. Defaults to CORS_ORIGINS. */
+export function allowedAuthOrigins(): string[] {
+  const source = process.env.AUTH_ALLOWED_ORIGINS || process.env.CORS_ORIGINS || "";
+  return source
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+export function isOriginAllowed(origin: string | undefined | null): boolean {
+  if (!origin) return false;
+  const list = allowedAuthOrigins();
+  if (list.length === 0) return false;
+  return list.includes(origin);
+}
+
 // ── Constants ────────────────────────────────────────────────────
 export const PLAYER_COOKIE = "gs_player_session";
 const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 7; // 7 days

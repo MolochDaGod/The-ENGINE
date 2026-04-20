@@ -170,6 +170,113 @@ export function discordSignIn(redirectTo: string = "/") {
   window.location.href = url;
 }
 
+export function githubSignIn(redirectTo: string = "/") {
+  const url = `/api/auth/github/start?redirect=${encodeURIComponent(redirectTo)}`;
+  window.location.href = url;
+}
+
+// ── Cross-domain popup handoff ─────────────────────────────────
+
+export interface PopupTokenResponse {
+  token: string;
+  expiresIn: number;
+  audience: string | null;
+}
+
+/** Ask the server to mint a 5-minute JWT for a specific audience origin. */
+export async function requestPopupToken(audience?: string): Promise<{ ok: true; data: PopupTokenResponse } | { ok: false; error: string }> {
+  try {
+    const res = await fetch("/api/auth/popup-token", {
+      method: "POST",
+      credentials: "include",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ audience }),
+    });
+    const json = await res.json();
+    if (!res.ok) return { ok: false, error: json.error || "Failed to mint launch token" };
+    return { ok: true, data: json };
+  } catch {
+    return { ok: false, error: "Network error" };
+  }
+}
+
+/**
+ * Call from an allowlisted external frontend (e.g. grudgewarlords.com) to
+ * sign the user in through the Grudge Studio modal in a popup and receive
+ * a short-lived JWT + PlayerProfile back via postMessage. Use the JWT with
+ * /api/auth/session/exchange on your own backend to establish a session.
+ */
+export function openAuthPopup(options: {
+  authHost?: string;              // e.g. https://grudge-studio.com
+  audience?: string;              // origin of the caller (defaults to window.location.origin)
+  width?: number;
+  height?: number;
+} = {}): Promise<{ token: string; player: PlayerProfile }> {
+  const authHost = (options.authHost || "https://grudge-studio.com").replace(/\/$/, "");
+  const audience = options.audience || window.location.origin;
+  const width = options.width || 420;
+  const height = options.height || 640;
+  const left = (window.screenX || 0) + ((window.outerWidth - width) / 2);
+  const top = (window.screenY || 0) + ((window.outerHeight - height) / 2);
+
+  return new Promise((resolve, reject) => {
+    const popup = window.open(
+      `${authHost}/auth/popup?audience=${encodeURIComponent(audience)}`,
+      "grudge-auth",
+      `width=${width},height=${height},left=${left},top=${top},popup=yes`,
+    );
+    if (!popup) return reject(new Error("Popup blocked"));
+
+    const onMessage = (event: MessageEvent) => {
+      if (event.origin !== authHost) return;
+      const data = event.data;
+      if (!data || typeof data !== "object") return;
+      if (data.type === "grudge:auth:success" && data.token && data.player) {
+        cleanup();
+        resolve({ token: data.token, player: data.player });
+      } else if (data.type === "grudge:auth:error") {
+        cleanup();
+        reject(new Error(data.error || "Authentication failed"));
+      } else if (data.type === "grudge:auth:cancel") {
+        cleanup();
+        reject(new Error("Authentication cancelled"));
+      }
+    };
+
+    const cleanup = () => {
+      window.removeEventListener("message", onMessage);
+      if (popup && !popup.closed) popup.close();
+      clearInterval(poll);
+    };
+
+    const poll = setInterval(() => {
+      if (popup.closed) {
+        cleanup();
+        reject(new Error("Popup closed before authentication finished"));
+      }
+    }, 500);
+
+    window.addEventListener("message", onMessage);
+  });
+}
+
+/** Exchange a launch JWT for a real session cookie on the current origin. */
+export async function exchangeLaunchToken(token: string): Promise<{ ok: true; player: PlayerProfile } | { ok: false; error: string }> {
+  try {
+    const res = await fetch("/api/auth/session/exchange", {
+      method: "POST",
+      credentials: "include",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ token, audience: window.location.origin }),
+    });
+    const json = await res.json();
+    if (!res.ok) return { ok: false, error: json.error || "Exchange failed" };
+    return { ok: true, player: json };
+  } catch {
+    return { ok: false, error: "Network error" };
+  }
+}
+
 export async function twilioStart(phone: string): Promise<{ ok: true; status: string; dev?: boolean } | { ok: false; error: string }> {
   try {
     const res = await fetch("/api/auth/twilio/start", {
