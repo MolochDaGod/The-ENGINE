@@ -973,6 +973,106 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ origins: allowedAuthOrigins() });
   });
 
+  // ═════════════════════════════════════════════════════════════════
+  // STUDIO GAME DATA (canonical source for Puter worker + grudge-launcher KV sync)
+  // ═════════════════════════════════════════════════════════════════
+  // These endpoints are the single source of truth that the grudge-server-worker
+  // on Puter proxies and caches into Puter KV at `grudge:objectstore:${resource}`.
+  // The deployed grudge-launcher consumes that KV, so keeping these fresh keeps
+  // the launcher fresh.
+
+  const OBJECTSTORE_BASE = process.env.OBJECTSTORE_PUBLIC_URL || "https://objectstore.grudge-studio.com";
+  const GAME_DATA_DATASETS = [
+    "items", "weapons", "armor", "recipes", "relics", "capes", "shields",
+    "mounts", "workstations", "classes", "races", "professions",
+  ] as const;
+
+  // Lightweight in-memory cache with TTL — the worker on Puter also caches.
+  const gameDataCache = new Map<string, { data: any; fetchedAt: number }>();
+  const GAME_DATA_TTL_MS = 5 * 60 * 1000;
+
+  async function fetchDataset(resource: string): Promise<any> {
+    const cached = gameDataCache.get(resource);
+    if (cached && Date.now() - cached.fetchedAt < GAME_DATA_TTL_MS) return cached.data;
+    const url = `${OBJECTSTORE_BASE}/v1/assets?category=${encodeURIComponent(resource)}&limit=1000`;
+    const resp = await fetch(url, { headers: { Accept: "application/json" } });
+    if (!resp.ok) throw new Error(`ObjectStore ${resource} returned HTTP ${resp.status}`);
+    const data = await resp.json();
+    gameDataCache.set(resource, { data, fetchedAt: Date.now() });
+    return data;
+  }
+
+  app.get("/api/studio/game-data/catalog", (_req, res) => {
+    res.setHeader("Cache-Control", "public, max-age=300");
+    res.json({
+      datasets: GAME_DATA_DATASETS.map((name) => ({
+        name,
+        url: `/api/studio/game-data/${name}`,
+        objectstore: `${OBJECTSTORE_BASE}/v1/assets?category=${name}`,
+      })),
+      version: "1",
+      updatedAt: new Date().toISOString(),
+    });
+  });
+
+  app.get("/api/studio/game-data/search", async (req, res) => {
+    try {
+      const q = typeof req.query.q === "string" ? req.query.q.trim() : "";
+      if (!q) return res.status(400).json({ error: "q query param is required" });
+      const url = `${OBJECTSTORE_BASE}/v1/assets?q=${encodeURIComponent(q)}&limit=200`;
+      const resp = await fetch(url, { headers: { Accept: "application/json" } });
+      if (!resp.ok) return res.status(502).json({ error: `ObjectStore search returned ${resp.status}` });
+      const data = await resp.json();
+      res.json({ q, ...data });
+    } catch (error) {
+      res.status(502).json({ error: error instanceof Error ? error.message : "search failed" });
+    }
+  });
+
+  app.get("/api/studio/game-data/:resource", async (req, res) => {
+    try {
+      const resource = req.params.resource;
+      if (!GAME_DATA_DATASETS.includes(resource as any)) {
+        return res.status(404).json({ error: `Unknown dataset: ${resource}`, available: GAME_DATA_DATASETS });
+      }
+      const data = await fetchDataset(resource);
+      res.setHeader("Cache-Control", "public, max-age=120");
+      res.json({ dataset: resource, source: "objectstore", data });
+    } catch (error) {
+      // Fall back to stale cache on upstream failure
+      const cached = gameDataCache.get(req.params.resource);
+      if (cached) {
+        res.setHeader("Cache-Control", "no-store");
+        return res.json({ dataset: req.params.resource, source: "stale-cache", data: cached.data, cachedAt: cached.fetchedAt });
+      }
+      res.status(502).json({ error: error instanceof Error ? error.message : "Upstream fetch failed" });
+    }
+  });
+
+  // Admin KV prewarm: hit the Puter worker for every dataset so it refills
+  // Puter KV from this backend. Gated by the admin passcode cookie.
+  app.post("/api/admin/puter/sync-objectstore", async (req, res) => {
+    const sessionSecret = process.env.ADMIN_SESSION_SECRET || process.env.SESSION_SECRET;
+    if (!sessionSecret) return res.status(500).json({ error: "Admin auth not configured" });
+    const cookies = parsePlayerCookies(req.headers.cookie);
+    const token = cookies[ADMIN_SESSION_COOKIE];
+    if (!token || !verifyAdminSessionToken(token, sessionSecret)) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+    const workerBase = process.env.PUTER_WORKER_URL || "https://grudge-studio-api.puter.work";
+    const results: Array<{ dataset: string; ok: boolean; status?: number; error?: string }> = [];
+    for (const ds of GAME_DATA_DATASETS) {
+      try {
+        const r = await fetch(`${workerBase}/api/studio/game-data/${ds}`, { method: "GET" });
+        results.push({ dataset: ds, ok: r.ok, status: r.status });
+      } catch (err: any) {
+        results.push({ dataset: ds, ok: false, error: err?.message || String(err) });
+      }
+    }
+    const ok = results.every((r) => r.ok);
+    res.status(ok ? 200 : 207).json({ ok, workerBase, results, syncedAt: new Date().toISOString() });
+  });
+
   // Public landing feed ----------------------------------------------
   // Drives the Squarespace-hosted grudgeplatform.io landing so the page
   // can be updated server-side without republishing the Squarespace HTML.
