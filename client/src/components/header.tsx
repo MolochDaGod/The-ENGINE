@@ -2,8 +2,9 @@ import { useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ChevronRight, ExternalLink, Home, Layers3, Library, LogIn, Menu, Sparkles, Swords, Wrench, X } from "lucide-react";
+import { ChevronRight, ExternalLink, Flame, Home, Layers3, Library, LogIn, LogOut, Menu, Sparkles, Swords, Trophy, UserCircle, Wrench, X } from "lucide-react";
 import grudgeLogo from "@assets/uXpJmRe_1773828784729.png";
+import { useAuth } from "@/components/auth-provider";
 import {
   featuredProducts,
   legacyProducts,
@@ -51,6 +52,7 @@ function ProductMenuRow({ product, onNavigate }: { product: PortalProduct; onNav
 export default function Header() {
   const [location] = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
+  const { player, logout } = useAuth();
 
   useEffect(() => {
     setMenuOpen(false);
@@ -59,6 +61,8 @@ export default function Header() {
   const navLinks = [
     { name: "Products", href: "/#products", icon: Layers3 },
     { name: "Play", href: "/#play", icon: Swords },
+    { name: "Compete", href: "/leaderboards", icon: Trophy },
+    { name: "PvP", href: "/pvp", icon: Flame },
     { name: "Studio", href: "/#studio", icon: Wrench },
     { name: "Retro", href: "/games", icon: Library },
   ] as const;
@@ -89,25 +93,51 @@ export default function Header() {
 
             <nav className="hidden md:flex items-center gap-6">
               {navLinks.map((link) => {
-                const active = link.href === "/games" ? location.startsWith("/games") : isHome;
+                const active =
+                  link.href === "/games"
+                    ? location.startsWith("/games")
+                    : link.href === "/leaderboards"
+                      ? location.startsWith("/leaderboards")
+                      : link.href === "/pvp"
+                        ? location.startsWith("/pvp")
+                        : link.href.startsWith("/#")
+                          ? isHome
+                          : location === link.href;
+                const className = `transition-colors font-body text-sm ${active ? "text-[hsl(43,85%,55%)]" : "text-[hsl(45,30%,90%)] hover:text-[hsl(43,85%,55%)]"}`;
+                if (link.href.startsWith("/#")) {
+                  return (
+                    <a key={link.name} href={link.href} className={className}>
+                      {link.name}
+                    </a>
+                  );
+                }
                 return (
-                  <a
-                    key={link.name}
-                    href={link.href}
-                    className={`transition-colors font-body text-sm ${active ? "text-[hsl(43,85%,55%)]" : "text-[hsl(45,30%,90%)] hover:text-[hsl(43,85%,55%)]"}`}
-                  >
+                  <Link key={link.name} href={link.href} className={className}>
                     {link.name}
-                  </a>
+                  </Link>
                 );
               })}
             </nav>
 
             <div className="flex items-center gap-2">
-              <a href="https://id.grudge-studio.com" target="_blank" rel="noopener noreferrer">
-                <Button variant="ghost" size="sm" className="text-[hsl(45,30%,90%)] hover:text-[hsl(43,85%,55%)] hover:bg-[hsl(225,25%,15%)] hidden sm:flex">
-                  <LogIn className="w-4 h-4 mr-1" /> Sign In
-                </Button>
-              </a>
+              {player ? (
+                <>
+                  <Link href="/account" className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded border border-[hsl(43,60%,30%)]/40 hover:border-[hsl(43,60%,30%)] text-sm">
+                    <UserCircle className="w-4 h-4 text-[hsl(43,85%,55%)]" />
+                    <span className="font-body">{player.displayName || player.username}</span>
+                    <span className="text-[10px] text-[hsl(43,85%,55%)] font-heading">{Number(player.gbuxBalance || 0).toFixed(0)}¤</span>
+                  </Link>
+                  <Button variant="ghost" size="sm" className="text-[hsl(45,30%,90%)] hover:text-[hsl(43,85%,55%)] hover:bg-[hsl(225,25%,15%)] hidden sm:flex" onClick={() => logout()}>
+                    <LogOut className="w-4 h-4 mr-1" /> Sign Out
+                  </Button>
+                </>
+              ) : (
+                <Link href="/login">
+                  <Button variant="ghost" size="sm" className="text-[hsl(45,30%,90%)] hover:text-[hsl(43,85%,55%)] hover:bg-[hsl(225,25%,15%)] hidden sm:flex">
+                    <LogIn className="w-4 h-4 mr-1" /> Sign In
+                  </Button>
+                </Link>
+              )}
               <a href="https://grudgewarlords.com" target="_blank" rel="noopener noreferrer">
                 <Button size="sm" className="gilded-button">
                   <Sparkles className="w-4 h-4 mr-1" /> Open Warlords
@@ -143,16 +173,39 @@ export default function Header() {
                   <Home className="w-4 h-4 mr-2" /> Portal Home
                 </Button>
               </Link>
+              <Link href="/leaderboards">
+                <Button variant="ghost" className="w-full justify-start text-left text-[hsl(45,30%,90%)] hover:bg-[hsl(225,25%,20%)] hover:text-[hsl(43,85%,55%)]" onClick={() => setMenuOpen(false)}>
+                  <Trophy className="w-4 h-4 mr-2" /> Leaderboards
+                </Button>
+              </Link>
+              <Link href="/pvp">
+                <Button variant="ghost" className="w-full justify-start text-left text-[hsl(45,30%,90%)] hover:bg-[hsl(225,25%,20%)] hover:text-[hsl(43,85%,55%)]" onClick={() => setMenuOpen(false)}>
+                  <Flame className="w-4 h-4 mr-2" /> PvP Hub
+                </Button>
+              </Link>
               <Link href="/games">
                 <Button variant="ghost" className="w-full justify-start text-left text-[hsl(45,30%,90%)] hover:bg-[hsl(225,25%,20%)] hover:text-[hsl(43,85%,55%)]" onClick={() => setMenuOpen(false)}>
                   <Library className="w-4 h-4 mr-2" /> Retro Library
                 </Button>
               </Link>
-              <a href="https://id.grudge-studio.com" target="_blank" rel="noopener noreferrer" onClick={() => setMenuOpen(false)}>
-                <Button variant="ghost" className="w-full justify-start text-left text-[hsl(45,30%,90%)] hover:bg-[hsl(225,25%,20%)] hover:text-[hsl(43,85%,55%)]">
-                  <LogIn className="w-4 h-4 mr-2" /> Sign In
-                </Button>
-              </a>
+              {player ? (
+                <>
+                  <Link href="/account">
+                    <Button variant="ghost" className="w-full justify-start text-left text-[hsl(45,30%,90%)] hover:bg-[hsl(225,25%,20%)] hover:text-[hsl(43,85%,55%)]" onClick={() => setMenuOpen(false)}>
+                      <UserCircle className="w-4 h-4 mr-2" /> My Account
+                    </Button>
+                  </Link>
+                  <Button variant="ghost" className="w-full justify-start text-left text-[hsl(45,30%,90%)] hover:bg-[hsl(225,25%,20%)] hover:text-[hsl(43,85%,55%)]" onClick={() => { setMenuOpen(false); logout(); }}>
+                    <LogOut className="w-4 h-4 mr-2" /> Sign Out
+                  </Button>
+                </>
+              ) : (
+                <Link href="/login">
+                  <Button variant="ghost" className="w-full justify-start text-left text-[hsl(45,30%,90%)] hover:bg-[hsl(225,25%,20%)] hover:text-[hsl(43,85%,55%)]" onClick={() => setMenuOpen(false)}>
+                    <LogIn className="w-4 h-4 mr-2" /> Sign In
+                  </Button>
+                </Link>
+              )}
             </div>
 
             <div className="p-4 border-b border-[hsl(43,60%,30%)]/30 space-y-3">

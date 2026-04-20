@@ -5,7 +5,7 @@ import { setupArenaRooms } from "./arena-rooms";
 import { storage } from "./storage";
 import { insertScrapingJobSchema, insertOrderSchema, insertGameSchema, insertArticleSchema, gameLibrary, scores, users } from "@shared/schema";
 import { z } from "zod";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { db } from "./db";
 import * as cheerio from "cheerio";
 import * as fs from "fs";
@@ -300,6 +300,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/auth/lookup", async (req, res) => {
+    try {
+      const username = typeof req.query.username === "string" ? req.query.username.trim() : "";
+      if (!username) return res.status(400).json({ error: "username query is required" });
+      const user = await storage.getUserByUsername(username);
+      if (!user) return res.status(404).json({ error: "Not found" });
+      return res.json({
+        id: user.id,
+        username: user.username,
+        displayName: user.displayName,
+        avatarUrl: user.avatarUrl,
+        grudgeId: user.grudgeId,
+      });
+    } catch {
+      return res.status(500).json({ error: "Lookup failed" });
+    }
+  });
+
   app.get("/api/auth/me", (req, res) => {
     const player = getPlayer(req);
     if (!player) return res.status(401).json({ error: "Not authenticated" });
@@ -440,9 +458,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/leaderboards/global", async (req, res) => {
+    try {
+      const limit = Math.min(parseInt(req.query.limit as string) || 25, 100);
+      const rows = await storage.getGlobalTopPlayers(limit);
+      return res.json(rows);
+    } catch (error) {
+      console.error("/api/leaderboards/global error:", error);
+      return res.status(500).json({ error: "Failed to fetch top players" });
+    }
+  });
+
   app.get("/api/leaderboards/:gameId", async (req, res) => {
     try {
       const gameId = parseInt(req.params.gameId);
+      if (!Number.isFinite(gameId)) return res.status(400).json({ error: "Invalid gameId" });
       const limit = Math.min(parseInt(req.query.limit as string) || 50, 100);
       const topScores = await storage.getTopScores(gameId, limit);
       return res.json(topScores);
@@ -704,9 +734,67 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // ═══════════════════════════════════════════════════════════════
+  // ═════════════════════════════════════════════════════════════════
+  // PORTAL AGGREGATES (account, top games, top players)
+  // ═════════════════════════════════════════════════════════════════
+
+  app.get("/api/me/stats", requirePlayer, async (req, res) => {
+    try {
+      const player = getPlayer(req)!;
+      const stats = await storage.getPlayerStats(player.id);
+      return res.json({
+        ...stats,
+        gbuxBalance: player.gbuxBalance,
+        grudgeId: player.grudgeId,
+        displayName: player.displayName,
+        username: player.username,
+        avatarUrl: player.avatarUrl,
+        role: player.role,
+      });
+    } catch (error) {
+      console.error("/api/me/stats error:", error);
+      return res.status(500).json({ error: "Failed to fetch stats" });
+    }
+  });
+
+  app.get("/api/me/scores", requirePlayer, async (req, res) => {
+    try {
+      const player = getPlayer(req)!;
+      const limit = Math.min(parseInt(req.query.limit as string) || 20, 100);
+      const rows = await storage.getRecentPlayerScores(player.id, limit);
+      return res.json(rows);
+    } catch (error) {
+      console.error("/api/me/scores error:", error);
+      return res.status(500).json({ error: "Failed to fetch scores" });
+    }
+  });
+
+  app.get("/api/me/games", requirePlayer, async (req, res) => {
+    try {
+      const player = getPlayer(req)!;
+      const rows = await storage.getPlayerGames(player.id);
+      return res.json(rows);
+    } catch (error) {
+      console.error("/api/me/games error:", error);
+      return res.status(500).json({ error: "Failed to fetch games" });
+    }
+  });
+
+  app.get("/api/games/top", async (req, res) => {
+    try {
+      const limit = Math.min(parseInt(req.query.limit as string) || 12, 50);
+      const windowDays = Math.min(parseInt(req.query.windowDays as string) || 7, 365);
+      const rows = await storage.getTopGames(limit, windowDays);
+      return res.json(rows);
+    } catch (error) {
+      console.error("/api/games/top error:", error);
+      return res.status(500).json({ error: "Failed to fetch top games" });
+    }
+  });
+
+  // ═════════════════════════════════════════════════════════════════
   // ADMIN AUTH (existing)
-  // ═══════════════════════════════════════════════════════════════
+  // ═════════════════════════════════════════════════════════════════
 
   app.post("/api/admin/login", (req, res) => {
     const submittedPasscode = String(req.body?.passcode || "");

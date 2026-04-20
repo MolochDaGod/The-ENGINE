@@ -1,7 +1,8 @@
 import { Link } from "wouter";
+import { useQuery } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ArrowUpRight, Bot, Gamepad2, Layers3, LayoutDashboard, Library, Rocket, Sparkles } from "lucide-react";
+import { ArrowUpRight, Bot, Crown, Flame, Gamepad2, Layers3, LayoutDashboard, Library, Loader2, Rocket, Sparkles, Trophy } from "lucide-react";
 import grudgeLogo from "@assets/uXpJmRe_1773828784729.png";
 import homeBg from "@assets/2kljxaj_1773841543581.png";
 import {
@@ -12,6 +13,28 @@ import {
   studioProducts,
   type PortalProduct,
 } from "@/data/portalProducts";
+import type { Game } from "@shared/schema";
+
+interface TopGame extends Game {
+  playerCount: number;
+  scoreCount: number;
+}
+
+interface TopPlayer {
+  userId: number;
+  username: string;
+  displayName: string | null;
+  avatarUrl: string | null;
+  totalScore: number;
+  personalBests: number;
+  globalRecords: number;
+}
+
+async function fetchJSON<T>(url: string): Promise<T> {
+  const res = await fetch(url, { credentials: "include" });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
 
 const statusClasses: Record<string, string> = {
   live: "bg-[hsl(120,60%,50%)]/15 text-[hsl(120,60%,60%)] border-[hsl(120,60%,50%)]/30",
@@ -84,6 +107,112 @@ const studioPrinciples = [
     icon: LayoutDashboard,
   },
 ];
+
+function CompeteSection() {
+  const topGamesQuery = useQuery<TopGame[]>({
+    queryKey: ["/api/games/top"],
+    queryFn: () => fetchJSON<TopGame[]>("/api/games/top?limit=8&windowDays=30"),
+  });
+  const topPlayersQuery = useQuery<TopPlayer[]>({
+    queryKey: ["/api/leaderboards/global"],
+    queryFn: () => fetchJSON<TopPlayer[]>("/api/leaderboards/global?limit=5"),
+  });
+
+  return (
+    <section id="compete" className="relative py-16 border-t border-[hsl(43,60%,30%)]/20" style={{ background: "hsl(225,30%,7%)" }}>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8">
+          <div>
+            <Badge className="mb-3 bg-[hsl(0,60%,55%)]/10 text-[hsl(0,70%,70%)] border border-[hsl(0,60%,55%)]/30">Compete</Badge>
+            <h2 className="text-3xl font-heading text-[hsl(45,30%,92%)]" style={{ WebkitTextFillColor: "unset" }}>Top games, top players, live from The ENGINE</h2>
+            <p className="text-[hsl(45,15%,60%)] mt-2 font-body max-w-3xl">
+              Leaderboards and PvP challenges are integrated into the portal. Jump into any game to set a personal best, or challenge another player for GBUX.
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <Link href="/leaderboards">
+              <Button className="gilded-button">
+                <Trophy className="w-4 h-4 mr-2" /> Leaderboards
+              </Button>
+            </Link>
+            <Link href="/pvp">
+              <Button variant="outline" className="border-[hsl(43,60%,30%)] text-[hsl(45,30%,90%)]">
+                <Flame className="w-4 h-4 mr-2" /> PvP Hub
+              </Button>
+            </Link>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-[1.6fr_1fr] gap-6">
+          <div className="fantasy-panel p-5">
+            <div className="flex items-center justify-between mb-4">
+              <div className="font-heading text-sm uppercase tracking-wider text-[hsl(43,85%,55%)]">Top Games (30d)</div>
+              <span className="text-xs text-[hsl(45,15%,60%)] font-body">by unique players</span>
+            </div>
+            {topGamesQuery.isLoading ? (
+              <div className="py-10 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-[hsl(43,85%,55%)]" /></div>
+            ) : !topGamesQuery.data?.length ? (
+              <p className="text-sm text-[hsl(45,15%,60%)] font-body">Once players start scoring, this board fills in automatically.</p>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {topGamesQuery.data.slice(0, 8).map((game, idx) => (
+                  <Link key={game.id} href={`/play/${game.id}`}>
+                    <div className="fantasy-panel overflow-hidden hover:rune-glow transition cursor-pointer">
+                      <div className="aspect-[3/4] bg-[hsl(225,25%,12%)] relative">
+                        {game.thumbnailUrl && (
+                          <img
+                            src={game.thumbnailUrl}
+                            alt={game.title}
+                            className="absolute inset-0 w-full h-full object-cover"
+                            onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+                          />
+                        )}
+                        <div className="absolute top-1 left-1 w-6 h-6 rounded-full bg-[hsl(43,85%,55%)] text-[hsl(225,30%,8%)] font-heading text-xs flex items-center justify-center">
+                          {idx + 1}
+                        </div>
+                      </div>
+                      <div className="p-2">
+                        <div className="text-xs font-heading truncate">{game.title}</div>
+                        <div className="text-[10px] text-[hsl(45,15%,60%)] font-body">{game.playerCount} players</div>
+                      </div>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="fantasy-panel p-5">
+            <div className="flex items-center justify-between mb-4">
+              <div className="font-heading text-sm uppercase tracking-wider text-[hsl(43,85%,55%)]">Top Players</div>
+              <Crown className="w-4 h-4 text-[hsl(43,85%,55%)]" />
+            </div>
+            {topPlayersQuery.isLoading ? (
+              <Loader2 className="w-5 h-5 animate-spin text-[hsl(43,85%,55%)]" />
+            ) : !topPlayersQuery.data?.length ? (
+              <p className="text-sm text-[hsl(45,15%,60%)] font-body">No scores logged yet. Be the first on the board.</p>
+            ) : (
+              <ol className="space-y-2">
+                {topPlayersQuery.data.map((p, idx) => (
+                  <li key={p.userId} className="flex items-center gap-3 p-2 rounded border border-[hsl(43,60%,30%)]/20">
+                    <div className="w-7 h-7 rounded-full bg-[hsl(225,25%,14%)] text-[hsl(43,85%,55%)] font-heading text-xs flex items-center justify-center">
+                      {idx + 1}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm font-medium truncate">{p.displayName || p.username}</div>
+                      <div className="text-xs text-[hsl(45,15%,60%)] font-body">{p.personalBests} PBs · {p.globalRecords} WRs</div>
+                    </div>
+                    <div className="font-heading text-sm gold-text">{p.totalScore.toLocaleString()}</div>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
 
 export default function Home() {
   return (
@@ -170,6 +299,8 @@ export default function Home() {
           </div>
         </div>
       </section>
+
+      <CompeteSection />
 
       <section id="play" className="relative py-16 border-t border-[hsl(43,60%,30%)]/20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">

@@ -1,5 +1,6 @@
 export type PortalProductStatus = "live" | "planned" | "beta" | "admin";
 export type PortalProductSection = "featured" | "play" | "studio" | "legacy";
+export type PortalProductTag = "pvp" | "pvpve" | "coop" | "solo" | "retro" | "arena" | "mmo" | "rts";
 
 export interface PortalProduct {
   id: string;
@@ -11,6 +12,7 @@ export interface PortalProduct {
   external?: boolean;
   authRequired?: boolean;
   note?: string;
+  tags?: PortalProductTag[];
 }
 
 export const PORTAL_PRODUCTS: PortalProduct[] = [
@@ -23,6 +25,7 @@ export const PORTAL_PRODUCTS: PortalProduct[] = [
     section: "featured",
     external: true,
     authRequired: true,
+    tags: ["mmo", "pvp", "pvpve", "coop"],
   },
   {
     id: "launcher",
@@ -62,6 +65,7 @@ export const PORTAL_PRODUCTS: PortalProduct[] = [
     description: "Realtime strategy gameplay inside the Grudge universe.",
     status: "beta",
     section: "play",
+    tags: ["rts", "pvp", "coop"],
   },
   {
     id: "tower-defense",
@@ -70,6 +74,43 @@ export const PORTAL_PRODUCTS: PortalProduct[] = [
     description: "Hold lanes, build defenses, and iterate on tactical encounters.",
     status: "beta",
     section: "play",
+    tags: ["solo", "coop"],
+  },
+  {
+    id: "mage-arena",
+    name: "Mage Arena",
+    href: "/mage-arena",
+    description: "Fast PvP skirmishes in the mage arena playtest surface.",
+    status: "beta",
+    section: "play",
+    tags: ["pvp", "arena"],
+  },
+  {
+    id: "avernus-arena",
+    name: "Avernus Arena",
+    href: "/avernus-arena",
+    description: "Dark-fantasy arena combat with PvP and PvPvE rotations.",
+    status: "beta",
+    section: "play",
+    tags: ["pvp", "pvpve", "arena"],
+  },
+  {
+    id: "multiplayer-racing",
+    name: "Overdrive Racing",
+    href: "/overdrive-racing",
+    description: "Multiplayer arcade racing across Grudge tracks.",
+    status: "beta",
+    section: "play",
+    tags: ["pvp", "arena"],
+  },
+  {
+    id: "annihilate-demo",
+    name: "Annihilate Demo",
+    href: "/annihilate-demo",
+    description: "Co-op wave survival demo inside the Grudge universe.",
+    status: "beta",
+    section: "play",
+    tags: ["coop", "pvpve"],
   },
   {
     id: "asset-store",
@@ -105,6 +146,7 @@ export const PORTAL_PRODUCTS: PortalProduct[] = [
     description: "Classic emulator library and retro catalog. Still available, but no longer the primary identity of the portal.",
     status: "live",
     section: "legacy",
+    tags: ["retro", "solo"],
   },
 ];
 
@@ -113,9 +155,18 @@ export const playProducts = PORTAL_PRODUCTS.filter((product) => product.section 
 export const studioProducts = PORTAL_PRODUCTS.filter((product) => product.section === "studio");
 export const legacyProducts = PORTAL_PRODUCTS.filter((product) => product.section === "legacy");
 
+export function productsByTag(tag: PortalProductTag): PortalProduct[] {
+  return PORTAL_PRODUCTS.filter((product) => product.tags?.includes(tag));
+}
+
+export const pvpProducts = PORTAL_PRODUCTS.filter((product) =>
+  product.tags?.some((tag) => tag === "pvp" || tag === "pvpve" || tag === "coop" || tag === "arena"),
+);
+
 export const portalStats = {
   totalProducts: PORTAL_PRODUCTS.length,
   live: PORTAL_PRODUCTS.filter((product) => product.status === "live").length,
   planned: PORTAL_PRODUCTS.filter((product) => product.status === "planned").length,
   authRequired: PORTAL_PRODUCTS.filter((product) => product.authRequired).length,
+  multiplayer: PORTAL_PRODUCTS.filter((product) => product.tags?.some((tag) => tag === "pvp" || tag === "pvpve" || tag === "coop")).length,
 };

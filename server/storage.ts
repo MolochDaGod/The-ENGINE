@@ -67,6 +67,20 @@ export interface IStorage {
   getPlayerBestScore(userId: number, gameId: number): Promise<Score | undefined>;
   getGlobalBestScore(gameId: number): Promise<Score | undefined>;
 
+  // Portal aggregates
+  getPlayerStats(userId: number): Promise<{
+    gamesPlayed: number;
+    totalScores: number;
+    personalBests: number;
+    globalRecords: number;
+    challengesWon: number;
+    challengesLost: number;
+  }>;
+  getRecentPlayerScores(userId: number, limit?: number): Promise<Array<Score & { gameTitle: string; platform: string; thumbnailUrl: string | null }>>;
+  getPlayerGames(userId: number): Promise<Array<{ game: Game; bestScore: number; personalBestAt: Date | null }>>;
+  getTopGames(limit?: number, windowDays?: number): Promise<Array<Game & { playerCount: number; scoreCount: number }>>;
+  getGlobalTopPlayers(limit?: number): Promise<Array<{ userId: number; username: string; displayName: string | null; avatarUrl: string | null; totalScore: number; personalBests: number; globalRecords: number }>>;
+
   // Challenges
   createChallenge(challenge: InsertChallenge): Promise<Challenge>;
   getChallenge(id: number): Promise<Challenge | undefined>;
@@ -472,6 +486,147 @@ export class DatabaseStorage implements IStorage {
       .where(eq(transactions.userId, userId))
       .orderBy(desc(transactions.createdAt))
       .limit(limit);
+  }
+
+  // ── Portal aggregates ────────────────────────────────────────
+
+  async getPlayerStats(userId: number) {
+    const [[gamesPlayedRow], [totalScoresRow], [personalBestsRow], [globalRecordsRow], [challengesWonRow], [challengesLostRow]] = await Promise.all([
+      db.select({ count: sql<number>`cast(count(distinct ${scores.gameId}) as int)` })
+        .from(scores)
+        .where(eq(scores.userId, userId)),
+      db.select({ count: sql<number>`cast(count(*) as int)` })
+        .from(scores)
+        .where(eq(scores.userId, userId)),
+      db.select({ count: sql<number>`cast(count(*) as int)` })
+        .from(scores)
+        .where(and(eq(scores.userId, userId), eq(scores.isPersonalBest, true))),
+      db.select({ count: sql<number>`cast(count(*) as int)` })
+        .from(scores)
+        .where(and(eq(scores.userId, userId), eq(scores.isGlobalRecord, true))),
+      db.select({ count: sql<number>`cast(count(*) as int)` })
+        .from(challenges)
+        .where(and(eq(challenges.winnerId, userId), eq(challenges.status, "completed"))),
+      db.select({ count: sql<number>`cast(count(*) as int)` })
+        .from(challenges)
+        .where(and(
+          eq(challenges.status, "completed"),
+          or(eq(challenges.challengerId, userId), eq(challenges.opponentId, userId)),
+          sql`${challenges.winnerId} IS NOT NULL AND ${challenges.winnerId} <> ${userId}`
+        )),
+    ]);
+
+    return {
+      gamesPlayed: gamesPlayedRow?.count ?? 0,
+      totalScores: totalScoresRow?.count ?? 0,
+      personalBests: personalBestsRow?.count ?? 0,
+      globalRecords: globalRecordsRow?.count ?? 0,
+      challengesWon: challengesWonRow?.count ?? 0,
+      challengesLost: challengesLostRow?.count ?? 0,
+    };
+  }
+
+  async getRecentPlayerScores(userId: number, limit: number = 20) {
+    const rows = await db
+      .select({
+        id: scores.id,
+        userId: scores.userId,
+        gameId: scores.gameId,
+        score: scores.score,
+        isPersonalBest: scores.isPersonalBest,
+        isGlobalRecord: scores.isGlobalRecord,
+        createdAt: scores.createdAt,
+        gameTitle: gameLibrary.title,
+        platform: gameLibrary.platform,
+        thumbnailUrl: gameLibrary.thumbnailUrl,
+      })
+      .from(scores)
+      .innerJoin(gameLibrary, eq(scores.gameId, gameLibrary.id))
+      .where(eq(scores.userId, userId))
+      .orderBy(desc(scores.createdAt))
+      .limit(limit);
+    return rows as any;
+  }
+
+  async getPlayerGames(userId: number) {
+    const rows = await db
+      .select({
+        game: gameLibrary,
+        bestScore: sql<number>`cast(max(${scores.score}) as int)`,
+        personalBestAt: sql<Date | null>`max(${scores.createdAt})`,
+      })
+      .from(scores)
+      .innerJoin(gameLibrary, eq(scores.gameId, gameLibrary.id))
+      .where(eq(scores.userId, userId))
+      .groupBy(gameLibrary.id)
+      .orderBy(desc(sql<number>`max(${scores.score})`));
+    return rows.map((row) => ({
+      game: row.game as Game,
+      bestScore: Number(row.bestScore ?? 0),
+      personalBestAt: row.personalBestAt ?? null,
+    }));
+  }
+
+  async getTopGames(limit: number = 12, windowDays: number = 7) {
+    const rows = await db
+      .select({
+        game: gameLibrary,
+        playerCount: sql<number>`cast(count(distinct ${scores.userId}) as int)`,
+        scoreCount: sql<number>`cast(count(${scores.id}) as int)`,
+      })
+      .from(gameLibrary)
+      .leftJoin(
+        scores,
+        and(
+          eq(scores.gameId, gameLibrary.id),
+          sql`${scores.createdAt} >= now() - (${windowDays} || ' days')::interval`,
+        ),
+      )
+      .groupBy(gameLibrary.id)
+      .orderBy(
+        desc(sql<number>`count(distinct ${scores.userId})`),
+        desc(sql<number>`count(${scores.id})`),
+        desc(gameLibrary.isFeatured),
+        gameLibrary.title,
+      )
+      .limit(limit);
+    return rows.map((row) => ({
+      ...(row.game as Game),
+      playerCount: Number(row.playerCount ?? 0),
+      scoreCount: Number(row.scoreCount ?? 0),
+    }));
+  }
+
+  async getGlobalTopPlayers(limit: number = 25) {
+    const rows = await db
+      .select({
+        userId: users.id,
+        username: users.username,
+        displayName: users.displayName,
+        avatarUrl: users.avatarUrl,
+        totalScore: sql<number>`cast(coalesce(sum(case when ${scores.isPersonalBest} then ${scores.score} else 0 end), 0) as bigint)`,
+        personalBests: sql<number>`cast(sum(case when ${scores.isPersonalBest} then 1 else 0 end) as int)`,
+        globalRecords: sql<number>`cast(sum(case when ${scores.isGlobalRecord} then 1 else 0 end) as int)`,
+      })
+      .from(users)
+      .leftJoin(scores, eq(scores.userId, users.id))
+      .groupBy(users.id)
+      .orderBy(
+        desc(sql<number>`coalesce(sum(case when ${scores.isPersonalBest} then ${scores.score} else 0 end), 0)`),
+        desc(sql<number>`sum(case when ${scores.isGlobalRecord} then 1 else 0 end)`),
+      )
+      .limit(limit);
+    return rows
+      .map((row) => ({
+        userId: row.userId,
+        username: row.username,
+        displayName: row.displayName,
+        avatarUrl: row.avatarUrl,
+        totalScore: Number(row.totalScore ?? 0),
+        personalBests: Number(row.personalBests ?? 0),
+        globalRecords: Number(row.globalRecords ?? 0),
+      }))
+      .filter((row) => row.totalScore > 0);
   }
 }
 
