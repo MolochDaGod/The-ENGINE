@@ -1,6 +1,8 @@
 import { Link } from "wouter";
+import { useAuthModal } from "@/components/auth-modal";
 
 export default function Footer() {
+  const { open: openAuthModal } = useAuthModal();
   return (
     <footer className="border-t border-[hsl(43,60%,30%)]/30 py-16" style={{ background: 'linear-gradient(180deg, hsl(225,30%,6%), hsl(225,30%,4%))' }}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -41,7 +43,8 @@ export default function Footer() {
             <h4 className="font-heading text-[hsl(43,85%,55%)] text-sm uppercase tracking-wider mb-4">Connect</h4>
             <ul className="space-y-2">
               <li><a href="https://grudgewarlords.com" target="_blank" rel="noopener noreferrer" className="text-[hsl(45,15%,55%)] hover:text-[hsl(43,85%,55%)] text-sm transition-colors font-body">Grudge Warlords</a></li>
-              <li><a href="https://id.grudge-studio.com" target="_blank" rel="noopener noreferrer" className="text-[hsl(45,15%,55%)] hover:text-[hsl(43,85%,55%)] text-sm transition-colors font-body">Sign In</a></li>
+              <li><button onClick={() => openAuthModal({ initialTab: "signin" })} className="text-[hsl(45,15%,55%)] hover:text-[hsl(43,85%,55%)] text-sm transition-colors font-body text-left">Sign In</button></li>
+              <li><Link href="/account" className="text-[hsl(45,15%,55%)] hover:text-[hsl(43,85%,55%)] text-sm transition-colors font-body">My Account</Link></li>
             </ul>
           </div>
         </div>

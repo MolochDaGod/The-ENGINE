@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useLocation } from "wouter";
+import { Link } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ArrowUpRight, Flame, Loader2, Swords, Trophy, Users } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
+import { useAuthModal } from "@/components/auth-modal";
 import { pvpProducts, type PortalProduct } from "@/data/portalProducts";
 import type { Game } from "@shared/schema";
 
@@ -85,9 +86,9 @@ function ArenaCard({ product }: { product: PortalProduct }) {
 
 export default function PvpPage() {
   const { player, loading } = useAuth();
-  const [, setLocation] = useLocation();
   const qc = useQueryClient();
   const [error, setError] = useState("");
+  const { open: openAuthModal } = useAuthModal();
 
   const [opponentUsername, setOpponentUsername] = useState("");
   const [opponentId, setOpponentId] = useState<number | null>(null);
@@ -96,9 +97,9 @@ export default function PvpPage() {
 
   useEffect(() => {
     if (!loading && !player) {
-      setLocation("/login?redirect=/pvp");
+      openAuthModal({ redirectTo: "/pvp", initialTab: "signin", reason: "Sign in to challenge players and wager GBUX." });
     }
-  }, [loading, player, setLocation]);
+  }, [loading, player, openAuthModal]);
 
   const activeQuery = useQuery<ChallengeRow[]>({
     queryKey: ["/api/challenges/active"],

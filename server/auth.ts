@@ -86,38 +86,34 @@ export function parseCookies(header: string | undefined): Record<string, string>
   }, {});
 }
 
-export function setPlayerCookie(res: Response, token: string): void {
+function baseCookieParts(value: string, includeExpiry: boolean) {
   const isSecure = process.env.NODE_ENV === "production";
+  const cookieDomain = process.env.PLAYER_COOKIE_DOMAIN || (isSecure ? ".grudge-studio.com" : "");
   const parts = [
-    `${PLAYER_COOKIE}=${encodeURIComponent(token)}`,
+    `${PLAYER_COOKIE}=${value}`,
     "HttpOnly",
     "Path=/",
     "SameSite=Lax",
-    `Max-Age=${Math.floor(SESSION_TTL_MS / 1000)}`,
   ];
+  if (includeExpiry) parts.push(`Max-Age=${Math.floor(SESSION_TTL_MS / 1000)}`);
+  else parts.push("Max-Age=0");
+  if (cookieDomain) parts.push(`Domain=${cookieDomain}`);
   if (isSecure) parts.push("Secure");
-  res.setHeader("Set-Cookie", [
-    parts.join("; "),
-    // Preserve any existing admin cookie
-    ...(Array.isArray(res.getHeader("Set-Cookie"))
-      ? (res.getHeader("Set-Cookie") as string[])
-      : res.getHeader("Set-Cookie")
-        ? [res.getHeader("Set-Cookie") as string]
-        : []),
-  ]);
+  return parts;
+}
+
+function mergeSetCookieHeader(res: Response, next: string) {
+  const existing = res.getHeader("Set-Cookie");
+  const list = Array.isArray(existing) ? existing : existing ? [String(existing)] : [];
+  res.setHeader("Set-Cookie", [next, ...list]);
+}
+
+export function setPlayerCookie(res: Response, token: string): void {
+  mergeSetCookieHeader(res, baseCookieParts(encodeURIComponent(token), true).join("; "));
 }
 
 export function clearPlayerCookie(res: Response): void {
-  const isSecure = process.env.NODE_ENV === "production";
-  const parts = [
-    `${PLAYER_COOKIE}=`,
-    "HttpOnly",
-    "Path=/",
-    "SameSite=Lax",
-    "Max-Age=0",
-  ];
-  if (isSecure) parts.push("Secure");
-  res.setHeader("Set-Cookie", parts.join("; "));
+  mergeSetCookieHeader(res, baseCookieParts("", false).join("; "));
 }
 
 // ── Middleware ────────────────────────────────────────────────────

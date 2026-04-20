@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { ChevronRight, ExternalLink, Flame, Home, Layers3, Library, LogIn, LogOut, Menu, Sparkles, Swords, Trophy, UserCircle, Wrench, X } from "lucide-react";
 import grudgeLogo from "@assets/uXpJmRe_1773828784729.png";
 import { useAuth } from "@/components/auth-provider";
+import { useAuthModal } from "@/components/auth-modal";
 import {
   featuredProducts,
   legacyProducts,
@@ -53,6 +54,7 @@ export default function Header() {
   const [location] = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
   const { player, logout } = useAuth();
+  const { open: openAuthModal } = useAuthModal();
 
   useEffect(() => {
     setMenuOpen(false);
@@ -132,11 +134,14 @@ export default function Header() {
                   </Button>
                 </>
               ) : (
-                <Link href="/login">
-                  <Button variant="ghost" size="sm" className="text-[hsl(45,30%,90%)] hover:text-[hsl(43,85%,55%)] hover:bg-[hsl(225,25%,15%)] hidden sm:flex">
-                    <LogIn className="w-4 h-4 mr-1" /> Sign In
-                  </Button>
-                </Link>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-[hsl(45,30%,90%)] hover:text-[hsl(43,85%,55%)] hover:bg-[hsl(225,25%,15%)] hidden sm:flex"
+                  onClick={() => openAuthModal({ initialTab: "signin" })}
+                >
+                  <LogIn className="w-4 h-4 mr-1" /> Sign In
+                </Button>
               )}
               <a href="https://grudgewarlords.com" target="_blank" rel="noopener noreferrer">
                 <Button size="sm" className="gilded-button">
@@ -200,11 +205,13 @@ export default function Header() {
                   </Button>
                 </>
               ) : (
-                <Link href="/login">
-                  <Button variant="ghost" className="w-full justify-start text-left text-[hsl(45,30%,90%)] hover:bg-[hsl(225,25%,20%)] hover:text-[hsl(43,85%,55%)]" onClick={() => setMenuOpen(false)}>
-                    <LogIn className="w-4 h-4 mr-2" /> Sign In
-                  </Button>
-                </Link>
+                <Button
+                  variant="ghost"
+                  className="w-full justify-start text-left text-[hsl(45,30%,90%)] hover:bg-[hsl(225,25%,20%)] hover:text-[hsl(43,85%,55%)]"
+                  onClick={() => { setMenuOpen(false); openAuthModal({ initialTab: "signin" }); }}
+                >
+                  <LogIn className="w-4 h-4 mr-2" /> Sign In
+                </Button>
               )}
             </div>
 

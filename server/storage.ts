@@ -59,6 +59,9 @@ export interface IStorage {
   getUserByEmail(email: string): Promise<User | undefined>;
   getUserByPuterId(puterId: string): Promise<User | undefined>;
   getUserByGrudgeId(grudgeId: string): Promise<User | undefined>;
+  getUserBySolanaAddress(address: string): Promise<User | undefined>;
+  getUserByDiscordId(discordId: string): Promise<User | undefined>;
+  getUserByPhone(phone: string): Promise<User | undefined>;
   updateUser(id: number, updates: Partial<User>): Promise<User | undefined>;
 
   // Scores / Leaderboards
@@ -392,6 +395,21 @@ export class DatabaseStorage implements IStorage {
 
   async getUserByGrudgeId(grudgeId: string): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.grudgeId, grudgeId));
+    return user || undefined;
+  }
+
+  async getUserBySolanaAddress(address: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.solanaAddress, address));
+    return user || undefined;
+  }
+
+  async getUserByDiscordId(discordId: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.discordId, discordId));
+    return user || undefined;
+  }
+
+  async getUserByPhone(phone: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.phone, phone));
     return user || undefined;
   }
 

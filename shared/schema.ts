@@ -12,7 +12,12 @@ export const users = pgTable("users", {
   displayName: text("display_name"),
   avatarUrl: text("avatar_url"),
   gbuxBalance: numeric("gbux_balance", { precision: 18, scale: 4 }).default("0").notNull(),
-  role: text("role").default("player").notNull(), // player | member | admin | master
+  role: text("role").default("player").notNull(), // player | guest | member | admin | master
+  // External identities (all optional, all unique)
+  solanaAddress: text("solana_address").unique(),
+  discordId: text("discord_id").unique(),
+  phone: text("phone").unique(),
+  needsProfile: boolean("needs_profile").default(false).notNull(),
   createdAt: timestamp("created_at").defaultNow(),
   lastLoginAt: timestamp("last_login_at"),
 });

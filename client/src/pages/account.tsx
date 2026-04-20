@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { Link, useLocation } from "wouter";
+import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
+import { useAuthModal } from "@/components/auth-modal";
 
 interface PlayerStats {
   gamesPlayed: number;
@@ -86,13 +87,13 @@ async function fetchJSON<T>(url: string): Promise<T> {
 
 export default function AccountPage() {
   const { player, loading, logout } = useAuth();
-  const [, setLocation] = useLocation();
+  const { open: openAuthModal } = useAuthModal();
 
   useEffect(() => {
     if (!loading && !player) {
-      setLocation("/login?redirect=/account");
+      openAuthModal({ redirectTo: "/account", initialTab: "signin", reason: "Sign in to see your stats, scores, and PvP history." });
     }
-  }, [loading, player, setLocation]);
+  }, [loading, player, openAuthModal]);
 
   const enabled = !!player;
 
@@ -134,8 +135,13 @@ export default function AccountPage() {
 
   if (loading || !player) {
     return (
-      <div className="min-h-[60vh] flex items-center justify-center">
+      <div className="min-h-[60vh] flex flex-col items-center justify-center gap-4">
         <Loader2 className="w-8 h-8 animate-spin text-[hsl(43,85%,55%)]" />
+        {!loading && !player && (
+          <Button className="gilded-button" onClick={() => openAuthModal({ redirectTo: "/account", initialTab: "signin" })}>
+            Sign in to continue
+          </Button>
+        )}
       </div>
     );
   }

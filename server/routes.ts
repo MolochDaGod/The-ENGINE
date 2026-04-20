@@ -11,6 +11,8 @@ import * as cheerio from "cheerio";
 import * as fs from "fs";
 import * as path from "path";
 import crypto from "crypto";
+import nacl from "tweetnacl";
+import bs58 from "bs58";
 import {
   loadPlayer, requirePlayer, getPlayer,
   hashPassword, verifyPassword, generateGrudgeId,
@@ -338,6 +340,392 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/auth/logout", (_req, res) => {
     clearPlayerCookie(res);
     return res.json({ success: true });
+  });
+
+  // ═══════════════════════════════════════════════════════════════
+  // UNIFIED QUICK-LINK AUTH: guest, phantom wallet, discord OAuth, twilio phone
+  // ═══════════════════════════════════════════════════════════════
+
+  // Shared helpers ------------------------------------------------
+  const phantomNonces = new Map<string, { message: string; expiresAt: number }>();
+  const PHANTOM_NONCE_TTL_MS = 5 * 60 * 1000;
+
+  const phoneCodes = new Map<string, { code: string; expiresAt: number }>();
+  const PHONE_CODE_TTL_MS = 10 * 60 * 1000;
+
+  const discordOauthState = new Map<string, { redirect: string; expiresAt: number }>();
+  const DISCORD_STATE_TTL_MS = 10 * 60 * 1000;
+
+  function pruneMap<T extends { expiresAt: number }>(m: Map<string, T>) {
+    const now = Date.now();
+    const expired: string[] = [];
+    m.forEach((v, k) => {
+      if (v.expiresAt < now) expired.push(k);
+    });
+    expired.forEach((k) => m.delete(k));
+  }
+
+  function sanitizeUsername(candidate: string): string {
+    return candidate.replace(/[^a-zA-Z0-9_\-]/g, "_").slice(0, 30) || "player";
+  }
+
+  async function uniqueUsername(base: string): Promise<string> {
+    const safe = sanitizeUsername(base);
+    let attempt = safe;
+    let suffix = 0;
+    while (await storage.getUserByUsername(attempt)) {
+      suffix += 1;
+      const tail = suffix.toString();
+      attempt = `${safe.slice(0, 30 - tail.length - 1)}_${tail}`;
+    }
+    return attempt;
+  }
+
+  function publicPlayer(user: any, isNew = false) {
+    return {
+      id: user.id,
+      username: user.username,
+      grudgeId: user.grudgeId,
+      displayName: user.displayName,
+      avatarUrl: user.avatarUrl,
+      gbuxBalance: user.gbuxBalance,
+      role: user.role,
+      needsProfile: !!user.needsProfile,
+      isNew,
+    };
+  }
+
+  // Guest sign-in -------------------------------------------------
+  app.post("/api/auth/guest", async (_req, res) => {
+    try {
+      const suffix = crypto.randomBytes(3).toString("hex");
+      const username = await uniqueUsername(`guest_${suffix}`);
+      const grudgeId = generateGrudgeId();
+      const user = await storage.createUser({
+        username,
+        password: hashPassword(crypto.randomBytes(16).toString("hex")),
+        grudgeId,
+        puterId: null,
+        email: null,
+        displayName: username,
+        avatarUrl: null,
+        gbuxBalance: "0",
+        role: "guest",
+        solanaAddress: null,
+        discordId: null,
+        phone: null,
+        needsProfile: true,
+      });
+      const token = createPlayerToken(user.id);
+      setPlayerCookie(res, token);
+      return res.json(publicPlayer(user, true));
+    } catch (error) {
+      console.error("Guest sign-in error:", error);
+      return res.status(500).json({ error: "Guest sign-in failed" });
+    }
+  });
+
+  // Complete-profile: claim/change username after quick-link auth -
+  app.post("/api/auth/complete-profile", requirePlayer, async (req, res) => {
+    try {
+      const player = getPlayer(req)!;
+      const { username, displayName, email } = req.body || {};
+      const updates: Record<string, any> = { needsProfile: false };
+
+      if (typeof username === "string" && username.trim()) {
+        const safe = sanitizeUsername(username.trim());
+        if (safe.length < 3) return res.status(400).json({ error: "Username must be 3-30 characters" });
+        const existing = await storage.getUserByUsername(safe);
+        if (existing && existing.id !== player.id) return res.status(409).json({ error: "Username already taken" });
+        updates.username = safe;
+      }
+      if (typeof displayName === "string" && displayName.trim()) updates.displayName = displayName.trim().slice(0, 60);
+      if (typeof email === "string" && email.trim()) {
+        const existing = await storage.getUserByEmail(email.trim());
+        if (existing && existing.id !== player.id) return res.status(409).json({ error: "Email already in use" });
+        updates.email = email.trim();
+      }
+
+      const updated = await storage.updateUser(player.id, updates);
+      return res.json(publicPlayer(updated || player, false));
+    } catch (error) {
+      console.error("Complete-profile error:", error);
+      return res.status(500).json({ error: "Failed to update profile" });
+    }
+  });
+
+  // Phantom wallet (Solana) ---------------------------------------
+  app.post("/api/auth/phantom/nonce", async (req, res) => {
+    try {
+      const { address } = req.body || {};
+      if (!address || typeof address !== "string") return res.status(400).json({ error: "address is required" });
+      pruneMap(phantomNonces);
+      const nonce = crypto.randomBytes(16).toString("hex");
+      const message = `Sign in to Grudge Studio\n\nAddress: ${address}\nNonce: ${nonce}\nIssued: ${new Date().toISOString()}`;
+      phantomNonces.set(`${address}:${nonce}`, { message, expiresAt: Date.now() + PHANTOM_NONCE_TTL_MS });
+      return res.json({ nonce, message });
+    } catch (error) {
+      return res.status(500).json({ error: "Failed to issue nonce" });
+    }
+  });
+
+  app.post("/api/auth/phantom/verify", async (req, res) => {
+    try {
+      const { address, nonce, signature } = req.body || {};
+      if (!address || !nonce || !signature) return res.status(400).json({ error: "address, nonce, signature are required" });
+      const key = `${address}:${nonce}`;
+      const entry = phantomNonces.get(key);
+      if (!entry || entry.expiresAt < Date.now()) {
+        phantomNonces.delete(key);
+        return res.status(400).json({ error: "Nonce expired or not found" });
+      }
+      phantomNonces.delete(key);
+
+      let pubKey: Uint8Array;
+      let sigBytes: Uint8Array;
+      try {
+        pubKey = bs58.decode(address);
+        sigBytes = bs58.decode(signature);
+      } catch {
+        return res.status(400).json({ error: "Invalid base58 in address or signature" });
+      }
+      if (pubKey.length !== 32 || sigBytes.length !== 64) return res.status(400).json({ error: "Invalid key or signature length" });
+
+      const messageBytes = new TextEncoder().encode(entry.message);
+      const ok = nacl.sign.detached.verify(messageBytes, sigBytes, pubKey);
+      if (!ok) return res.status(401).json({ error: "Signature verification failed" });
+
+      let user = await storage.getUserBySolanaAddress(address);
+      let isNew = false;
+      if (!user) {
+        const baseName = `sol_${address.slice(0, 6)}`;
+        const username = await uniqueUsername(baseName);
+        user = await storage.createUser({
+          username,
+          password: hashPassword(crypto.randomBytes(16).toString("hex")),
+          grudgeId: generateGrudgeId(),
+          puterId: null,
+          email: null,
+          displayName: username,
+          avatarUrl: null,
+          gbuxBalance: "0",
+          role: "player",
+          solanaAddress: address,
+          discordId: null,
+          phone: null,
+          needsProfile: true,
+        });
+        isNew = true;
+      } else {
+        await storage.updateUser(user.id, { lastLoginAt: new Date() });
+      }
+
+      const token = createPlayerToken(user.id);
+      setPlayerCookie(res, token);
+      return res.json(publicPlayer(user, isNew));
+    } catch (error) {
+      console.error("Phantom verify error:", error);
+      return res.status(500).json({ error: "Wallet auth failed" });
+    }
+  });
+
+  // Discord OAuth -------------------------------------------------
+  app.get("/api/auth/discord/start", (req, res) => {
+    const clientId = process.env.DISCORD_CLIENT_ID;
+    const redirectUri = process.env.DISCORD_REDIRECT_URI;
+    if (!clientId || !redirectUri) {
+      return res.status(501).json({ error: "Discord OAuth not configured. Set DISCORD_CLIENT_ID and DISCORD_REDIRECT_URI." });
+    }
+    pruneMap(discordOauthState);
+    const state = crypto.randomBytes(16).toString("hex");
+    const redirect = typeof req.query.redirect === "string" ? req.query.redirect : "/";
+    discordOauthState.set(state, { redirect, expiresAt: Date.now() + DISCORD_STATE_TTL_MS });
+    const url = new URL("https://discord.com/oauth2/authorize");
+    url.searchParams.set("client_id", clientId);
+    url.searchParams.set("redirect_uri", redirectUri);
+    url.searchParams.set("response_type", "code");
+    url.searchParams.set("scope", "identify email");
+    url.searchParams.set("state", state);
+    return res.redirect(url.toString());
+  });
+
+  app.get("/api/auth/discord/callback", async (req, res) => {
+    try {
+      const clientId = process.env.DISCORD_CLIENT_ID;
+      const clientSecret = process.env.DISCORD_CLIENT_SECRET;
+      const redirectUri = process.env.DISCORD_REDIRECT_URI;
+      if (!clientId || !clientSecret || !redirectUri) {
+        return res.status(501).json({ error: "Discord OAuth not configured." });
+      }
+      const code = typeof req.query.code === "string" ? req.query.code : "";
+      const state = typeof req.query.state === "string" ? req.query.state : "";
+      if (!code || !state) return res.status(400).send("Missing code or state");
+      const stateEntry = discordOauthState.get(state);
+      if (!stateEntry || stateEntry.expiresAt < Date.now()) {
+        discordOauthState.delete(state);
+        return res.status(400).send("Invalid or expired state");
+      }
+      discordOauthState.delete(state);
+
+      // Exchange code for token
+      const tokenResp = await fetch("https://discord.com/api/oauth2/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          client_id: clientId,
+          client_secret: clientSecret,
+          grant_type: "authorization_code",
+          code,
+          redirect_uri: redirectUri,
+        }).toString(),
+      });
+      if (!tokenResp.ok) return res.status(502).send("Discord token exchange failed");
+      const tokenJson = (await tokenResp.json()) as { access_token?: string };
+      if (!tokenJson.access_token) return res.status(502).send("No access_token");
+
+      const userResp = await fetch("https://discord.com/api/users/@me", {
+        headers: { Authorization: `Bearer ${tokenJson.access_token}` },
+      });
+      if (!userResp.ok) return res.status(502).send("Discord user fetch failed");
+      const dUser = (await userResp.json()) as { id: string; username: string; global_name?: string; avatar?: string | null; email?: string | null };
+
+      let user = await storage.getUserByDiscordId(dUser.id);
+      let isNew = false;
+      if (!user) {
+        const base = dUser.username || dUser.global_name || `discord_${dUser.id.slice(-6)}`;
+        const username = await uniqueUsername(base);
+        const avatarUrl = dUser.avatar ? `https://cdn.discordapp.com/avatars/${dUser.id}/${dUser.avatar}.png` : null;
+        user = await storage.createUser({
+          username,
+          password: hashPassword(crypto.randomBytes(16).toString("hex")),
+          grudgeId: generateGrudgeId(),
+          puterId: null,
+          email: dUser.email || null,
+          displayName: dUser.global_name || dUser.username || username,
+          avatarUrl,
+          gbuxBalance: "0",
+          role: "player",
+          solanaAddress: null,
+          discordId: dUser.id,
+          phone: null,
+          needsProfile: false,
+        });
+        isNew = true;
+      } else {
+        await storage.updateUser(user.id, { lastLoginAt: new Date() });
+      }
+
+      const token = createPlayerToken(user.id);
+      setPlayerCookie(res, token);
+      const target = stateEntry.redirect && stateEntry.redirect.startsWith("/") ? stateEntry.redirect : "/";
+      const sep = target.includes("?") ? "&" : "?";
+      return res.redirect(`${target}${sep}auth=discord&new=${isNew ? 1 : 0}`);
+    } catch (error) {
+      console.error("Discord callback error:", error);
+      return res.status(500).send("Discord auth failed");
+    }
+  });
+
+  // Twilio Verify (phone OTP) -------------------------------------
+  function twilioConfigured() {
+    return !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_VERIFY_SERVICE_SID);
+  }
+  function twilioAuthHeader() {
+    const sid = process.env.TWILIO_ACCOUNT_SID!;
+    const token = process.env.TWILIO_AUTH_TOKEN!;
+    return "Basic " + Buffer.from(`${sid}:${token}`).toString("base64");
+  }
+
+  app.post("/api/auth/twilio/start", async (req, res) => {
+    try {
+      const { phone } = req.body || {};
+      if (!phone || typeof phone !== "string") return res.status(400).json({ error: "phone is required" });
+      const normalized = phone.trim();
+      if (!/^\+\d{8,15}$/.test(normalized)) return res.status(400).json({ error: "Use E.164 format, e.g. +15551234567" });
+
+      if (!twilioConfigured()) {
+        // Dev fallback: generate a deterministic one-time code the user can read from server logs.
+        const code = (crypto.randomInt(100000, 999999)).toString();
+        phoneCodes.set(normalized, { code, expiresAt: Date.now() + PHONE_CODE_TTL_MS });
+        console.log(`[twilio:dev] OTP for ${normalized}: ${code}`);
+        return res.json({ status: "dev", message: "Twilio not configured; check server logs for dev OTP." });
+      }
+
+      const sid = process.env.TWILIO_VERIFY_SERVICE_SID!;
+      const resp = await fetch(`https://verify.twilio.com/v2/Services/${sid}/Verifications`, {
+        method: "POST",
+        headers: { Authorization: twilioAuthHeader(), "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ To: normalized, Channel: "sms" }).toString(),
+      });
+      if (!resp.ok) {
+        const text = await resp.text();
+        return res.status(502).json({ error: `Twilio start failed: ${text}` });
+      }
+      return res.json({ status: "sent" });
+    } catch (error) {
+      console.error("Twilio start error:", error);
+      return res.status(500).json({ error: "Failed to send code" });
+    }
+  });
+
+  app.post("/api/auth/twilio/verify", async (req, res) => {
+    try {
+      const { phone, code } = req.body || {};
+      if (!phone || !code) return res.status(400).json({ error: "phone and code are required" });
+      const normalized = String(phone).trim();
+
+      pruneMap(phoneCodes);
+      let verified = false;
+      if (twilioConfigured()) {
+        const sid = process.env.TWILIO_VERIFY_SERVICE_SID!;
+        const resp = await fetch(`https://verify.twilio.com/v2/Services/${sid}/VerificationCheck`, {
+          method: "POST",
+          headers: { Authorization: twilioAuthHeader(), "Content-Type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({ To: normalized, Code: String(code) }).toString(),
+        });
+        if (resp.ok) {
+          const json = (await resp.json()) as { status?: string };
+          verified = json.status === "approved";
+        }
+      } else {
+        const entry = phoneCodes.get(normalized);
+        verified = !!entry && entry.code === String(code) && entry.expiresAt >= Date.now();
+        if (verified) phoneCodes.delete(normalized);
+      }
+      if (!verified) return res.status(401).json({ error: "Invalid or expired code" });
+
+      let user = await storage.getUserByPhone(normalized);
+      let isNew = false;
+      if (!user) {
+        const base = `phone_${normalized.slice(-6)}`;
+        const username = await uniqueUsername(base);
+        user = await storage.createUser({
+          username,
+          password: hashPassword(crypto.randomBytes(16).toString("hex")),
+          grudgeId: generateGrudgeId(),
+          puterId: null,
+          email: null,
+          displayName: username,
+          avatarUrl: null,
+          gbuxBalance: "0",
+          role: "player",
+          solanaAddress: null,
+          discordId: null,
+          phone: normalized,
+          needsProfile: true,
+        });
+        isNew = true;
+      } else {
+        await storage.updateUser(user.id, { lastLoginAt: new Date() });
+      }
+
+      const token = createPlayerToken(user.id);
+      setPlayerCookie(res, token);
+      return res.json(publicPlayer(user, isNew));
+    } catch (error) {
+      console.error("Twilio verify error:", error);
+      return res.status(500).json({ error: "Failed to verify code" });
+    }
   });
 
   /** Puter SSO: auto-create or link a Grudge account from a Puter ID */
