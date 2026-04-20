@@ -15,7 +15,14 @@ export const PLAYER_COOKIE = "gs_player_session";
 const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 7; // 7 days
 
 function getSessionSecret(): string {
-  return process.env.PLAYER_SESSION_SECRET || process.env.ADMIN_SESSION_SECRET || "";
+  // Prefer the dedicated player secret; fall back to the shared SESSION_SECRET
+  // (what the live .env uses) and finally to ADMIN_SESSION_SECRET for legacy setups.
+  return (
+    process.env.PLAYER_SESSION_SECRET ||
+    process.env.SESSION_SECRET ||
+    process.env.ADMIN_SESSION_SECRET ||
+    ""
+  );
 }
 
 // ── Grudge ID ────────────────────────────────────────────────────

@@ -627,8 +627,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Twilio Verify (phone OTP) -------------------------------------
+  // Accept both TWILIO_VERIFY_SID (our .env) and TWILIO_VERIFY_SERVICE_SID (Twilio docs alias).
+  function twilioVerifyServiceSid(): string | undefined {
+    return process.env.TWILIO_VERIFY_SID || process.env.TWILIO_VERIFY_SERVICE_SID;
+  }
   function twilioConfigured() {
-    return !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_VERIFY_SERVICE_SID);
+    return !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && twilioVerifyServiceSid());
   }
   function twilioAuthHeader() {
     const sid = process.env.TWILIO_ACCOUNT_SID!;
@@ -651,7 +655,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.json({ status: "dev", message: "Twilio not configured; check server logs for dev OTP." });
       }
 
-      const sid = process.env.TWILIO_VERIFY_SERVICE_SID!;
+      const sid = twilioVerifyServiceSid()!;
       const resp = await fetch(`https://verify.twilio.com/v2/Services/${sid}/Verifications`, {
         method: "POST",
         headers: { Authorization: twilioAuthHeader(), "Content-Type": "application/x-www-form-urlencoded" },
@@ -677,7 +681,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       pruneMap(phoneCodes);
       let verified = false;
       if (twilioConfigured()) {
-        const sid = process.env.TWILIO_VERIFY_SERVICE_SID!;
+        const sid = twilioVerifyServiceSid()!;
         const resp = await fetch(`https://verify.twilio.com/v2/Services/${sid}/VerificationCheck`, {
           method: "POST",
           headers: { Authorization: twilioAuthHeader(), "Content-Type": "application/x-www-form-urlencoded" },
