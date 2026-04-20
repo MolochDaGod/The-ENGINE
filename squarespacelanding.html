@@ -267,21 +267,51 @@
   setInterval(refresh, REFRESH_MS);
   document.addEventListener("visibilitychange", function () { if (!document.hidden) refresh(); });
 
-  // ── Sign-in: pop the Grudge ID modal ─────────────────────────────
+  function markSignedIn(player) {
+    var who = (player && (player.displayName || player.username)) || "Player";
+    var me = document.getElementById("grudge-me");
+    var meName = document.getElementById("grudge-me-name");
+    var cta = document.querySelector(".btn-primary");
+    if (me && meName) { meName.textContent = who.toUpperCase(); me.classList.add("is-live"); }
+    if (cta) { cta.textContent = "⛨ Continue"; cta.dataset.signedIn = "1"; }
+  }
+
+  // ── Silent session check on load ─────────────────────
+  // If the user signed in recently on any *.grudge-studio.com property, the
+  // cookie is attached cross-origin with credentials, so we skip the modal.
+  function waitForGrudgeAuth(maxMs) {
+    return new Promise(function (resolve) {
+      var start = Date.now();
+      (function tick() {
+        if (window.GrudgeAuth && window.GrudgeAuth.whoami) return resolve(window.GrudgeAuth);
+        if (Date.now() - start > (maxMs || 3000)) return resolve(null);
+        setTimeout(tick, 50);
+      })();
+    });
+  }
+  waitForGrudgeAuth().then(function (GA) {
+    if (!GA) return;
+    GA.whoami().then(function (player) {
+      if (player) markSignedIn(player);
+    });
+  });
+
+  // ── Sign-in: pop the Grudge ID modal ─────────────────
   window.openGrudgeAuth = function () {
     if (!window.GrudgeAuth || !window.GrudgeAuth.open) {
       alert("Grudge Auth still loading. Try again in a second.");
       return;
     }
+    // If already signed in, just open the account page instead of re-auth.
+    var cta = document.querySelector(".btn-primary");
+    if (cta && cta.dataset.signedIn === "1") {
+      window.open("https://grudge-studio.com/account", "_blank");
+      return;
+    }
     window.GrudgeAuth.open({ audience: window.location.origin })
       .then(function (res) {
-        var player = res.player || {};
-        var who = player.displayName || player.username || "Player";
-        var me = document.getElementById("grudge-me");
-        var meName = document.getElementById("grudge-me-name");
-        if (me && meName) { meName.textContent = who.toUpperCase(); me.classList.add("is-live"); }
-        // Persist the launch token so Squarespace-less pages can reuse it.
-        try { localStorage.setItem("grudge:token", res.token); } catch (_) {}
+        markSignedIn(res.player || {});
+        try { if (res.token) localStorage.setItem("grudge:token", res.token); } catch (_) {}
       })
       .catch(function (err) {
         if (err && err.message && !/cancel|close/i.test(err.message)) {

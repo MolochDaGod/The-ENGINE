@@ -72,5 +72,30 @@
     });
   }
 
-  global.GrudgeAuth = { open: open, version: "1" };
+  /**
+   * Silent session check. Returns the current PlayerProfile or null without
+   * opening any UI. Uses the grudge-studio.com session cookie when available
+   * (works on *.grudge-studio.com via the shared Domain cookie, and on any
+   * allowlisted origin via CORS with credentials).
+   */
+  function whoami(options) {
+    options = options || {};
+    var apiHost = (options.apiHost || "https://grudge-studio.com").replace(/\/$/, "");
+    return fetch(apiHost + "/api/auth/me", { credentials: "include" })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .catch(function () { return null; });
+  }
+
+  /**
+   * Convenience: check for a recent session, and only open the modal if
+   * none is found. Resolves with { player, isNew: false } in both paths.
+   */
+  function ensure(options) {
+    return whoami(options).then(function (player) {
+      if (player) return { player: player, token: null, audience: null };
+      return open(options);
+    });
+  }
+
+  global.GrudgeAuth = { open: open, whoami: whoami, ensure: ensure, version: "2" };
 })(window);
