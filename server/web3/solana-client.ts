@@ -124,7 +124,7 @@ export async function getRecentTransactions(
 ): Promise<Array<{
   signature: string;
   slot: number;
-  blockTime: number | null;
+  blockTime: number | null | undefined;
   err: any;
 }>> {
   const conn = getConnection();
