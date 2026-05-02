@@ -159,6 +159,36 @@ export const transactions = pgTable("transactions", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// ── Web3 / Solana ────────────────────────────────────────────────
+
+export const web3Transactions = pgTable("web3_transactions", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => users.id),
+  txSignature: text("tx_signature").unique(),
+  txType: text("tx_type").notNull(), // mint | swap | stake | burn | transfer | escrow | offboard | reward
+  amount: numeric("amount", { precision: 18, scale: 4 }),
+  tokenMint: text("token_mint"), // SPL mint address (GBUX, SOL, etc.)
+  fromAddress: text("from_address"),
+  toAddress: text("to_address"),
+  status: text("status").notNull().default("pending"), // pending | confirmed | failed | queued
+  blockSlot: integer("block_slot"),
+  errorMessage: text("error_message"),
+  metadata: jsonb("metadata"), // arbitrary extra data (gameId, score, etc.)
+  createdAt: timestamp("created_at").defaultNow(),
+  confirmedAt: timestamp("confirmed_at"),
+});
+
+export const walletConnections = pgTable("wallet_connections", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => users.id).notNull(),
+  walletAddress: text("wallet_address").notNull(),
+  provider: text("provider").notNull(), // phantom_connect | extension | google | apple | server
+  chain: text("chain").notNull().default("solana"), // solana | ethereum
+  isActive: boolean("is_active").default(true).notNull(),
+  connectedAt: timestamp("connected_at").defaultNow(),
+  disconnectedAt: timestamp("disconnected_at"),
+});
+
 export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true, lastLoginAt: true });
 export const insertChatMessageSchema = createInsertSchema(chatMessages).omit({ id: true, createdAt: true });
 export const insertScoreSchema = createInsertSchema(scores).omit({ id: true, createdAt: true, isPersonalBest: true, isGlobalRecord: true });
@@ -198,3 +228,11 @@ export type InsertChallenge = z.infer<typeof insertChallengeSchema>;
 export type Challenge = typeof challenges.$inferSelect;
 export type InsertTransaction = z.infer<typeof insertTransactionSchema>;
 export type Transaction = typeof transactions.$inferSelect;
+
+export const insertWeb3TransactionSchema = createInsertSchema(web3Transactions).omit({ id: true, createdAt: true, confirmedAt: true });
+export const insertWalletConnectionSchema = createInsertSchema(walletConnections).omit({ id: true, connectedAt: true, disconnectedAt: true });
+
+export type InsertWeb3Transaction = z.infer<typeof insertWeb3TransactionSchema>;
+export type Web3Transaction = typeof web3Transactions.$inferSelect;
+export type InsertWalletConnection = z.infer<typeof insertWalletConnectionSchema>;
+export type WalletConnection = typeof walletConnections.$inferSelect;

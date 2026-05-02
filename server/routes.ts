@@ -22,6 +22,9 @@ import {
   allowedAuthOrigins, isOriginAllowed,
 } from "./auth";
 import { sendDiscordWebhook, DiscordEmbedType, trackNowPlaying } from "./discord-webhooks";
+import { onScoreSubmitted, startRewardWorker, getRewardQueueStatus } from "./web3/reward-worker";
+import { getPlatformBalances, listOnChainTransactions, listDBTransactions, disconnectWallet, getActiveConnections, recordWalletConnection } from "./web3/admin-wallet";
+import { getWalletStatus } from "./web3/solana-client";
 
 const ADMIN_SESSION_COOKIE = "gs_admin_session";
 const ADMIN_SESSION_TTL_MS = 1000 * 60 * 60 * 12; // 12 hours
@@ -1276,6 +1279,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
+      // Autonomous GBUX rewards — runs async, doesn't block response
+      onScoreSubmitted({
+        userId: player.id,
+        gameId: game.id,
+        score: parseInt(score),
+        scoreId: newScore.id,
+        isPersonalBest,
+        isGlobalRecord,
+        username: player.displayName || player.username,
+        gameTitle: game.title,
+      }).catch((err) => console.error("[reward-worker] Score reward failed:", err));
+
       return res.json({ ...newScore, isPersonalBest, isGlobalRecord });
     } catch (error) {
       console.error("Score submit error:", error);
@@ -1694,6 +1709,107 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.setHeader("Set-Cookie", cookieParts.join("; "));
     return res.json({ success: true });
   });
+  // ═══════════════════════════════════════════════════════════════
+  // WEB3 / SOLANA ADMIN ROUTES
+  // ═══════════════════════════════════════════════════════════════
+
+  // Start the autonomous reward worker
+  startRewardWorker();
+
+  // Admin: Platform wallet status + balances
+  app.get("/api/web3/wallet/status", async (req, res) => {
+    const sessionSecret = process.env.ADMIN_SESSION_SECRET || process.env.SESSION_SECRET;
+    if (!sessionSecret) return res.status(500).json({ error: "Admin auth not configured" });
+    const cookies = parseCookies(req.headers.cookie);
+    const token = cookies[ADMIN_SESSION_COOKIE];
+    if (!token || !verifyAdminSessionToken(token, sessionSecret)) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+    try {
+      const balances = await getPlatformBalances();
+      const rewardQueue = getRewardQueueStatus();
+      res.json({ ...balances, rewardQueue });
+    } catch (error) {
+      res.status(500).json({ error: error instanceof Error ? error.message : "Failed to fetch wallet status" });
+    }
+  });
+
+  // Admin: On-chain transactions for a platform wallet
+  app.get("/api/web3/wallet/transactions/:walletType", async (req, res) => {
+    const sessionSecret = process.env.ADMIN_SESSION_SECRET || process.env.SESSION_SECRET;
+    if (!sessionSecret) return res.status(500).json({ error: "Admin auth not configured" });
+    const cookies = parseCookies(req.headers.cookie);
+    const token = cookies[ADMIN_SESSION_COOKIE];
+    if (!token || !verifyAdminSessionToken(token, sessionSecret)) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+    try {
+      const walletType = req.params.walletType as "treasury" | "adminAI";
+      if (walletType !== "treasury" && walletType !== "adminAI") {
+        return res.status(400).json({ error: "walletType must be treasury or adminAI" });
+      }
+      const limit = Math.min(parseInt(req.query.limit as string) || 20, 100);
+      const txns = await listOnChainTransactions(walletType, limit);
+      res.json({ walletType, txns });
+    } catch (error) {
+      res.status(500).json({ error: error instanceof Error ? error.message : "Failed" });
+    }
+  });
+
+  // Admin: DB web3 transactions (all or per-user)
+  app.get("/api/web3/transactions", async (req, res) => {
+    const sessionSecret = process.env.ADMIN_SESSION_SECRET || process.env.SESSION_SECRET;
+    if (!sessionSecret) return res.status(500).json({ error: "Admin auth not configured" });
+    const cookies = parseCookies(req.headers.cookie);
+    const token = cookies[ADMIN_SESSION_COOKIE];
+    if (!token || !verifyAdminSessionToken(token, sessionSecret)) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+    try {
+      const userId = req.query.userId ? parseInt(req.query.userId as string) : undefined;
+      const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);
+      const txns = await listDBTransactions(userId, limit);
+      res.json(txns);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch web3 transactions" });
+    }
+  });
+
+  // Player: Disconnect wallet (offboard)
+  app.post("/api/web3/disconnect", requirePlayer, async (req, res) => {
+    try {
+      const player = getPlayer(req)!;
+      await disconnectWallet(player.id);
+      return res.json({ success: true, message: "Wallet disconnected. You can link a new wallet anytime." });
+    } catch (error) {
+      console.error("Wallet disconnect error:", error);
+      return res.status(500).json({ error: "Failed to disconnect wallet" });
+    }
+  });
+
+  // Player: Get active wallet connections
+  app.get("/api/web3/connections", requirePlayer, async (req, res) => {
+    try {
+      const player = getPlayer(req)!;
+      const connections = await getActiveConnections(player.id);
+      return res.json(connections);
+    } catch (error) {
+      return res.status(500).json({ error: "Failed to fetch wallet connections" });
+    }
+  });
+
+  // Admin: Reward queue status
+  app.get("/api/web3/rewards/status", async (req, res) => {
+    const sessionSecret = process.env.ADMIN_SESSION_SECRET || process.env.SESSION_SECRET;
+    if (!sessionSecret) return res.status(500).json({ error: "Admin auth not configured" });
+    const cookies = parseCookies(req.headers.cookie);
+    const token = cookies[ADMIN_SESSION_COOKIE];
+    if (!token || !verifyAdminSessionToken(token, sessionSecret)) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+    res.json(getRewardQueueStatus());
+  });
+
   // Engine launching API - returns navigation URL for in-browser engine
   app.post("/api/launch-engine", async (req, res) => {
     try {

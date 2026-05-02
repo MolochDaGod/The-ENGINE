@@ -6,6 +6,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/components/auth-provider";
 import { AuthModalProvider } from "@/components/auth-modal";
+import { GrudgePanelProvider, GrudgePanelTab } from "@/components/grudge-panel";
 import Header from "@/components/header";
 import Home from "@/pages/home";
 import Login from "@/pages/login";
@@ -13,6 +14,7 @@ import AccountPage from "@/pages/account";
 import LeaderboardsPage from "@/pages/leaderboards";
 import PvpPage from "@/pages/pvp";
 import AuthPopup from "@/pages/auth-popup";
+import AuthCallback from "@/pages/auth-callback";
 import CatalogPage from "@/pages/catalog";
 import CloudPage from "@/pages/cloud";
 import Scraping from "@/pages/scraping";
@@ -66,6 +68,7 @@ function Router() {
       <Route path="/leaderboards" component={LeaderboardsPage} />
       <Route path="/pvp" component={PvpPage} />
       <Route path="/auth/popup" component={AuthPopup} />
+      <Route path="/auth/callback" component={AuthCallback} />
       <Route path="/catalog" component={CatalogPage} />
       <Route path="/cloud" component={CloudPage} />
       <Route path="/games" component={GameLibrary} />
@@ -107,12 +110,15 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <AuthModalProvider>
-          <TooltipProvider>
-            <Toaster />
-            <Header />
-            <Router />
-            <AdminEntryButton />
-          </TooltipProvider>
+          <GrudgePanelProvider>
+            <TooltipProvider>
+              <Toaster />
+              <Header />
+              <Router />
+              <GrudgePanelTab />
+              <AdminEntryButton />
+            </TooltipProvider>
+          </GrudgePanelProvider>
         </AuthModalProvider>
       </AuthProvider>
     </QueryClientProvider>

@@ -128,10 +128,65 @@ export async function completeProfile(data: {
   }
 }
 
-export async function phantomSignIn(): Promise<{ ok: true; player: PlayerProfile } | { ok: false; error: string }> {
+/**
+ * Phantom wallet sign-in — uses the Phantom Browser SDK (Connect).
+ * Supports: Google/Apple social login (embedded wallet), Phantom Login,
+ * browser extension (injected), and mobile deep link.
+ *
+ * Flow:
+ *   1. SDK connect() → get Solana address
+ *   2. Server issues nonce for that address
+ *   3. SDK signs the nonce message
+ *   4. Server verifies signature → creates/finds user → sets cookie
+ */
+export async function phantomSignIn(
+  provider: "google" | "apple" | "phantom" | "injected" | "deeplink" = "injected",
+): Promise<{ ok: true; player: PlayerProfile } | { ok: false; error: string }> {
+  try {
+    // Dynamic import to avoid bundling the SDK when not needed
+    const { connectPhantom, signMessage: phantomSignMessage } = await import("./phantom-sdk");
+
+    // Step 1: Connect via chosen provider
+    const { address } = await connectPhantom(provider);
+    if (!address) return { ok: false, error: "Could not read wallet address." };
+
+    // Step 2: Request nonce from server
+    const nonceRes = await fetch("/api/auth/phantom/nonce", {
+      method: "POST",
+      credentials: "include",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ address }),
+    });
+    const nonceJson = await nonceRes.json();
+    if (!nonceRes.ok) return { ok: false, error: nonceJson.error || "Nonce request failed" };
+
+    // Step 3: Sign the nonce message via Phantom SDK
+    const signatureB58 = await phantomSignMessage(nonceJson.message);
+
+    // Step 4: Verify on server → get session cookie
+    const verifyRes = await fetch("/api/auth/phantom/verify", {
+      method: "POST",
+      credentials: "include",
+      headers: JSON_HEADERS,
+      body: JSON.stringify({ address, nonce: nonceJson.nonce, signature: signatureB58 }),
+    });
+    const verifyJson = await verifyRes.json();
+    if (!verifyRes.ok) return { ok: false, error: verifyJson.error || "Wallet verification failed" };
+    return { ok: true, player: verifyJson };
+  } catch (err: any) {
+    // Fallback: try legacy window.solana if SDK connect fails
+    if (provider === "injected") {
+      return phantomSignInLegacy();
+    }
+    return { ok: false, error: err?.message || "Wallet sign-in failed" };
+  }
+}
+
+/** Legacy fallback: raw window.solana for extension-only. */
+async function phantomSignInLegacy(): Promise<{ ok: true; player: PlayerProfile } | { ok: false; error: string }> {
   try {
     const solana = (window as any).solana;
-    if (!solana?.isPhantom) return { ok: false, error: "Phantom wallet not detected. Install it from phantom.app." };
+    if (!solana?.isPhantom) return { ok: false, error: "Phantom wallet not detected. Install it from phantom.app or use Google/Apple sign-in." };
     const resp = await solana.connect({ onlyIfTrusted: false });
     const address = resp?.publicKey?.toString?.() || resp?.publicKey?.toBase58?.() || solana.publicKey?.toString();
     if (!address) return { ok: false, error: "Could not read wallet address." };
@@ -147,8 +202,7 @@ export async function phantomSignIn(): Promise<{ ok: true; player: PlayerProfile
 
     const encoded = new TextEncoder().encode(nonceJson.message);
     const signed = await solana.signMessage(encoded, "utf8");
-    const sigBytes: Uint8Array = signed?.signature || signed; // Phantom returns { signature, publicKey }
-    // base58 encode without shipping bs58 to client: use minimal inline encoder
+    const sigBytes: Uint8Array = signed?.signature || signed;
     const signatureB58 = base58Encode(sigBytes);
 
     const verifyRes = await fetch("/api/auth/phantom/verify", {

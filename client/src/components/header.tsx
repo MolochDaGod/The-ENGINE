@@ -2,10 +2,11 @@ import { useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ChevronRight, Cloud, ExternalLink, Flame, Home, Layers3, Library, LogIn, LogOut, Menu, Sparkles, Swords, Trophy, UserCircle, Wrench, X } from "lucide-react";
+import { ChevronRight, Cloud, ExternalLink, Flame, Home, Layers3, Library, LogIn, LogOut, Menu, Shield, Sparkles, Swords, Trophy, UserCircle, Wrench, X } from "lucide-react";
 import grudgeLogo from "@assets/uXpJmRe_1773828784729.png";
 import { useAuth } from "@/components/auth-provider";
 import { useAuthModal } from "@/components/auth-modal";
+import { useGrudgePanel } from "@/components/grudge-panel";
 import {
   featuredProducts,
   legacyProducts,
@@ -55,6 +56,7 @@ export default function Header() {
   const [menuOpen, setMenuOpen] = useState(false);
   const { player, logout } = useAuth();
   const { open: openAuthModal } = useAuthModal();
+  const { toggle: togglePanel } = useGrudgePanel();
 
   useEffect(() => {
     setMenuOpen(false);
@@ -124,11 +126,14 @@ export default function Header() {
             <div className="flex items-center gap-2">
               {player ? (
                 <>
-                  <Link href="/account" className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded border border-[hsl(43,60%,30%)]/40 hover:border-[hsl(43,60%,30%)] text-sm">
-                    <UserCircle className="w-4 h-4 text-[hsl(43,85%,55%)]" />
+                  <button
+                    onClick={togglePanel}
+                    className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded border border-[hsl(43,60%,30%)]/40 hover:border-[hsl(43,60%,30%)] hover:rune-glow text-sm transition-all"
+                  >
+                    <Shield className="w-4 h-4 text-[hsl(43,85%,55%)]" />
                     <span className="font-body">{player.displayName || player.username}</span>
                     <span className="text-[10px] text-[hsl(43,85%,55%)] font-heading">{Number(player.gbuxBalance || 0).toFixed(0)}¤</span>
-                  </Link>
+                  </button>
                   <Link href="/cloud" className="hidden md:inline-flex">
                     <Button variant="ghost" size="sm" className="text-[hsl(45,30%,90%)] hover:text-[hsl(43,85%,55%)] hover:bg-[hsl(225,25%,15%)]">
                       <Cloud className="w-4 h-4 mr-1" /> My Cloud
