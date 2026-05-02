@@ -32,11 +32,35 @@ export {
 export { CharacterFSM, createFSM }       from './character/CharacterFSM';
 export type { FSMEvent }                  from './character/CharacterFSM';
 
-export { BaseCharacter, GLTFLoader }     from './character/BaseCharacter';
-export type { CharacterOptions }          from './character/BaseCharacter';
+export { BaseRaceCharacter, BaseCharacter, GLTFLoader } from './character/BaseCharacter';
+export type { CharacterOptions, CharacterRace, RaceConfig } from './character/BaseCharacter';
+export { RACE_CONFIGS, DEFAULT_RACE }    from './character/BaseCharacter';
 
 export { Attacker }                      from './character/Attacker';
 export { RoleControls }                  from './character/RoleControls';
 
-// ─── AI ───────────────────────────────────────────────────────────────────────
+// ── Character States (Sketchbook-style class-based FSM) ─────────────────────
+export type { ICharacterState }          from './character/states/ICharacterState';
+export { CharacterStateBase }            from './character/states/CharacterStateBase';
+
+// Locomotion
+export { Idle, Walk, Sprint, EndWalk }   from './character/states/_stateLibrary';
+export { Falling, JumpIdle, JumpRunning } from './character/states/_stateLibrary';
+export { DropIdle, DropRunning, DropRolling } from './character/states/_stateLibrary';
+
+// Combat
+export { CombatIdle, MeleeAttack, RangedAttack } from './character/states/_stateLibrary';
+export { Blocking, Parrying, Dodging }   from './character/states/_stateLibrary';
+export { Stunned, KnockedDown, Dead }    from './character/states/_stateLibrary';
+
+// Effects
+export { Debuffed, Slowed, Feared, Rooted, Silenced } from './character/states/_stateLibrary';
+
+// Harvesting
+export { HarvestingBase, Mining, Herbalism, Woodcutting, Fishing, Skinning } from './character/states/_stateLibrary';
+
+// Interaction
+export { Mounting, Dismounting, Emoting } from './character/states/_stateLibrary';
+
+// ── AI ─────────────────────────────────────────────────────────────────────────────
 export { BaseAi }                        from './ai/BaseAi';

@@ -1,7 +1,7 @@
 /**
- * Grudge Engine — BaseCharacter
+ * Grudge Engine — BaseRaceCharacter
  *
- * Abstract base class for all 3D characters.
+ * Abstract base class for all 3D characters with a 6-race system.
  * Ports the core patterns from gonnavis/annihilate/src/Maria.js:
  *
  *   - CANNON capsule body (2 spheres + cylinder, fixedRotation=true)
@@ -11,6 +11,7 @@
  *   - getAltitude() — downward raycast through GROUP_SCENE
  *   - update(dt) — mesh sync + air/land detection + mixer.update
  *   - hit() / knockDown() — send FSM events
+ *   - Race selection with stat bonuses and passive traits
  *
  * Subclasses implement:
  *   buildFSM()  — return a CharacterFSM (call createFSM())
@@ -21,6 +22,7 @@ import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { CharacterFSM, createFSM } from './CharacterFSM';
+import type { ICharacterState } from './states/ICharacterState';
 import { GrudgeEngine, Updatable } from '../core/GrudgeEngine';
 import {
   GROUP_SCENE,
@@ -33,21 +35,84 @@ import {
 
 export { GLTFLoader, createFSM };
 
+// ─── Race System ──────────────────────────────────────────────────────────────
+
+export type CharacterRace = 'human' | 'elf' | 'dwarf' | 'orc' | 'barbarian' | 'undead';
+
+export interface RaceConfig {
+  id:          CharacterRace;
+  name:        string;
+  description: string;
+  passive:     string;
+  bonuses:     Partial<Record<string, number>>;
+  /** Body scale multiplier (affects capsule height/radius) */
+  bodyScale:   number;
+  /** Base movement speed multiplier */
+  speedMult:   number;
+}
+
+export const RACE_CONFIGS: Record<CharacterRace, RaceConfig> = {
+  human: {
+    id: 'human', name: 'Human', description: 'Adaptable and balanced.',
+    passive: '+10% EXP gain',
+    bonuses: { tactics: 2, wisdom: 1 },
+    bodyScale: 1, speedMult: 1,
+  },
+  elf: {
+    id: 'elf', name: 'Elf', description: 'Agile and attuned to magic.',
+    passive: '+Mana regen',
+    bonuses: { intellect: 2, agility: 1 },
+    bodyScale: 0.95, speedMult: 1.05,
+  },
+  dwarf: {
+    id: 'dwarf', name: 'Dwarf', description: 'Stout and resilient.',
+    passive: '+Mining efficiency',
+    bonuses: { endurance: 2, vitality: 1 },
+    bodyScale: 0.85, speedMult: 0.92,
+  },
+  orc: {
+    id: 'orc', name: 'Orc', description: 'Brutal warriors born for battle.',
+    passive: '+Melee damage',
+    bonuses: { strength: 2, vitality: 1 },
+    bodyScale: 1.1, speedMult: 0.97,
+  },
+  barbarian: {
+    id: 'barbarian', name: 'Barbarian', description: 'Wild and relentless.',
+    passive: '+HP regen',
+    bonuses: { agility: 2, dexterity: 1 },
+    bodyScale: 1.05, speedMult: 1.03,
+  },
+  undead: {
+    id: 'undead', name: 'Undead', description: 'Risen with dark resilience.',
+    passive: '+Shadow resist',
+    bonuses: { intellect: 1, endurance: 1, tactics: 1 },
+    bodyScale: 1, speedMult: 0.98,
+  },
+};
+
+export const DEFAULT_RACE: CharacterRace = 'human';
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export interface CharacterOptions {
   position?: THREE.Vector3;
   collisionGroup?: number;
   collisionMask?: number;
+  /** Race selection — defaults to 'human' */
+  race?: CharacterRace;
 }
 
-// ─── BaseCharacter ────────────────────────────────────────────────────────────
+// ─── BaseRaceCharacter ────────────────────────────────────────────────────────
 
-export abstract class BaseCharacter implements Updatable {
+export abstract class BaseRaceCharacter implements Updatable {
   // ── Identity
   isCharacter = true;
   isRole      = false;
   isEnemy     = false;
+
+  // ── Race
+  race:       CharacterRace;
+  raceConfig: RaceConfig;
 
   // ── Health
   health    = 100;
@@ -77,6 +142,13 @@ export abstract class BaseCharacter implements Updatable {
   // ── FSM
   service!: CharacterFSM;
 
+  // ── Class-based state (Sketchbook pattern) ──────────────────────────────
+  currentState: ICharacterState | null = null;
+
+  // ── Input query helpers (set by RoleControls or AI) ─────────────────────
+  inputJustPressed?: (action: string) => boolean;
+  inputIsPressed?:   (action: string) => boolean;
+
   // ── Internal
   protected _engine: GrudgeEngine;
   protected _loaded = false;
@@ -91,9 +163,50 @@ export abstract class BaseCharacter implements Updatable {
 
   constructor(options: CharacterOptions = {}) {
     this._engine = GrudgeEngine.getInstance();
+
+    // ── Race init ──────────────────────────────────────────────────────────
+    this.race       = options.race ?? DEFAULT_RACE;
+    this.raceConfig = RACE_CONFIGS[this.race];
+    this._applyRacials();
+
     this.service = this.buildFSM();
     this._initPhysics(options);
     this._engine.addToUpdate(this);
+  }
+
+  // ── Race helpers ──────────────────────────────────────────────────────────
+
+  /** Apply racial body scaling and speed */
+  private _applyRacials(): void {
+    const rc = this.raceConfig;
+    this.bodyHeight  *= rc.bodyScale;
+    this.bodyRadius  *= rc.bodyScale;
+    this.bodyHeightHalf = this.bodyHeight / 2;
+    this.speed       *= rc.speedMult;
+  }
+
+  /** Change race at runtime (e.g. character creation screen) */
+  setRace(race: CharacterRace): void {
+    // Revert previous racials
+    const oldRc = this.raceConfig;
+    this.bodyHeight  /= oldRc.bodyScale;
+    this.bodyRadius  /= oldRc.bodyScale;
+    this.speed       /= oldRc.speedMult;
+
+    // Apply new
+    this.race       = race;
+    this.raceConfig = RACE_CONFIGS[race];
+    this._applyRacials();
+  }
+
+  /** Get the attribute bonuses from this character's race */
+  getRaceBonuses(): Partial<Record<string, number>> {
+    return { ...this.raceConfig.bonuses };
+  }
+
+  /** Get the passive trait description */
+  getRacePassive(): string {
+    return this.raceConfig.passive;
   }
 
   // ── Abstract interface ─────────────────────────────────────────────────────
@@ -188,7 +301,7 @@ export abstract class BaseCharacter implements Updatable {
   fadeToAction(name: string, duration = 0.1): void {
     const nextAction = this.oaction[name];
     if (!nextAction) {
-      console.warn(`[BaseCharacter] unknown animation: "${name}"`);
+      console.warn(`[BaseRaceCharacter] unknown animation: "${name}"`);
       return;
     }
     if (duration > 0) {
@@ -211,6 +324,25 @@ export abstract class BaseCharacter implements Updatable {
     if (this.mesh) {
       this.mesh.rotation.set(0, -this.facing.angle() + Math.PI / 2, 0);
     }
+  }
+
+  // ── Class-based state machine ───────────────────────────────────────────
+
+  /**
+   * Transition to a new class-based state.
+   * Calls onExit() on old state, swaps, calls onEnter() on new state.
+   */
+  setState(state: ICharacterState): void {
+    if (this.currentState) {
+      this.currentState.onExit();
+    }
+    this.currentState = state;
+    this.currentState.onEnter();
+  }
+
+  /** Check if current state has a given tag */
+  stateHasTag(tag: string): boolean {
+    return this.currentState?.tags?.includes(tag) ?? false;
   }
 
   // ── Altitude raycast (exact port from Maria.js getAltitude) ───────────────
@@ -250,6 +382,11 @@ export abstract class BaseCharacter implements Updatable {
       if (this.isAir || altitude < 0.0037) this.service.send('land');
       this.setAir(false);
       this.body.mass = this.mass;
+    }
+
+    // Update class-based state (runs alongside FSM)
+    if (this.currentState) {
+      this.currentState.update(dt);
     }
 
     // Sync mesh to physics body
@@ -296,3 +433,7 @@ export abstract class BaseCharacter implements Updatable {
     this.mixer?.stopAllAction();
   }
 }
+
+// ─── Backward-compatible alias ──────────────────────────────────────────────
+/** @deprecated Use BaseRaceCharacter instead */
+export { BaseRaceCharacter as BaseCharacter };
