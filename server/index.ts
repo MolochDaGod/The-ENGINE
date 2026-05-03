@@ -8,6 +8,14 @@ const allowedOrigins = (process.env.CORS_ORIGINS || "https://grudge-studio.com,h
   .map((origin) => origin.trim())
   .filter(Boolean);
 
+// ── Path alias: /auth/* → /api/auth/* ──────────────────────────
+// id.grudge-studio.com serves auth routes without the /api/ prefix
+// e.g. id.grudge-studio.com/auth/github/callback
+app.use((req, _res, next) => {
+  if (req.url.startsWith("/auth/")) req.url = "/api" + req.url;
+  next();
+});
+
 app.use((req, res, next) => {
   const origin = req.headers.origin;
   if (origin && allowedOrigins.includes(origin)) {

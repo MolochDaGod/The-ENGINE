@@ -396,6 +396,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
     return attempt;
   }
 
+  /**
+   * Build the final redirect URL after a successful OAuth login.
+   *
+   * Same-domain (path starting with "/"):
+   *   → redirect to that path with ?auth=<provider>&new=<0|1>
+   *
+   * Cross-domain (full https:// URL on an allowlisted origin):
+   *   → mint a 5-min launch token, append as ?grudge_token=<jwt>&auth=<provider>&new=<0|1>
+   *     The target site exchanges it via POST /api/auth/session/exchange to get a cookie.
+   *
+   * Unknown / non-allowlisted external URLs fall back to "/".
+   */
+  function buildPostAuthRedirect(
+    rawRedirect: string | undefined,
+    user: any,
+    provider: string,
+    isNew: boolean
+  ): string {
+    const tag = `auth=${encodeURIComponent(provider)}&new=${isNew ? 1 : 0}`;
+
+    if (rawRedirect && (rawRedirect.startsWith("http://") || rawRedirect.startsWith("https://"))) {
+      try {
+        const origin = new URL(rawRedirect).origin;
+        if (isOriginAllowed(origin)) {
+          const launchToken = createLaunchToken(user, origin);
+          const sep = rawRedirect.includes("?") ? "&" : "?";
+          return `${rawRedirect}${sep}grudge_token=${encodeURIComponent(launchToken)}&${tag}`;
+        }
+      } catch { /* invalid URL — fall through */ }
+      // External URL that isn't allowlisted — land on home instead of leaking
+      return `/?${tag}&error=redirect_not_allowed`;
+    }
+
+    const target = rawRedirect && rawRedirect.startsWith("/") ? rawRedirect : "/";
+    const sep = target.includes("?") ? "&" : "?";
+    return `${target}${sep}${tag}`;
+  }
+
   function publicPlayer(user: any, isNew = false) {
     return {
       id: user.id,
@@ -640,9 +678,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const token = createPlayerToken(user.id);
       setPlayerCookie(res, token);
-      const target = stateEntry.redirect && stateEntry.redirect.startsWith("/") ? stateEntry.redirect : "/";
-      const sep = target.includes("?") ? "&" : "?";
-      return res.redirect(`${target}${sep}auth=google&new=${isNew ? 1 : 0}`);
+      return res.redirect(buildPostAuthRedirect(stateEntry.redirect, user, "google", isNew));
     } catch (error) {
       console.error("Google callback error:", error);
       return res.status(500).send("Google auth failed");
@@ -753,9 +789,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const token = createPlayerToken(user.id);
       setPlayerCookie(res, token);
-      const target = stateEntry.redirect && stateEntry.redirect.startsWith("/") ? stateEntry.redirect : "/";
-      const sep = target.includes("?") ? "&" : "?";
-      return res.redirect(`${target}${sep}auth=github&new=${isNew ? 1 : 0}`);
+      return res.redirect(buildPostAuthRedirect(stateEntry.redirect, user, "github", isNew));
     } catch (error) {
       console.error("GitHub callback error:", error);
       return res.status(500).send("GitHub auth failed");
@@ -852,9 +886,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const token = createPlayerToken(user.id);
       setPlayerCookie(res, token);
-      const target = stateEntry.redirect && stateEntry.redirect.startsWith("/") ? stateEntry.redirect : "/";
-      const sep = target.includes("?") ? "&" : "?";
-      return res.redirect(`${target}${sep}auth=discord&new=${isNew ? 1 : 0}`);
+      return res.redirect(buildPostAuthRedirect(stateEntry.redirect, user, "discord", isNew));
     } catch (error) {
       console.error("Discord callback error:", error);
       return res.status(500).send("Discord auth failed");
