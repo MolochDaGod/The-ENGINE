@@ -32,11 +32,11 @@ COPY attached_assets ./attached_assets
 COPY drizzle.config.ts ./
 
 ENV NODE_ENV=production
-ENV PORT=5000
-EXPOSE 5000
+ENV PORT=8080
+EXPOSE 8080
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s \
-  CMD wget -qO- http://localhost:5000/api/health || exit 1
+  CMD wget -qO- http://localhost:8080/api/health || exit 1
 
 # Optionally run DB schema push, then start server
 CMD ["sh", "-c", "if [ \"$RUN_DB_PUSH_ON_START\" = \"true\" ]; then npx drizzle-kit push --config=drizzle.config.ts; fi && node dist/index.js"]
