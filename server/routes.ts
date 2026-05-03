@@ -2999,6 +2999,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ grudgeId });
   });
 
+  // ═══════════════════════════════════════════════════════════════
+  // HEALTH CHECK (used by Railway, Docker, monitoring)
+  // ═══════════════════════════════════════════════════════════════
+
+  app.get("/api/health", (_req, res) => {
+    res.json({ status: "ok", ts: Date.now(), env: process.env.NODE_ENV || "unknown" });
+  });
+
+  // Fleet health (admin)
+  app.get("/api/admin/fleet/health", async (req, res) => {
+    const sessionSecret = process.env.ADMIN_SESSION_SECRET || process.env.SESSION_SECRET;
+    if (!sessionSecret) return res.status(500).json({ error: "Admin auth not configured" });
+    const cookies = parseCookies(req.headers.cookie);
+    const token = cookies[ADMIN_SESSION_COOKIE];
+    if (!token || !verifyAdminSessionToken(token, sessionSecret)) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+    const force = req.query.force === "1";
+    const fleet = await getFleetHealth(force);
+    res.json(fleet);
+  });
+
+  app.get("/api/admin/fleet/services", (_req, res) => {
+    res.json(getServiceRegistry());
+  });
+
+  app.get("/api/admin/fleet/check/:serviceId", async (req, res) => {
+    const result = await checkSingleService(req.params.serviceId);
+    if (!result) return res.status(404).json({ error: "Service not found" });
+    res.json(result);
+  });
+
   const httpServer = createServer(app);
 
   const wss = new WebSocketServer({ server: httpServer, path: "/ws/chat" });
