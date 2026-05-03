@@ -16,6 +16,11 @@ app.use((req, _res, next) => {
   next();
 });
 
+// ── Favicon ────────────────────────────────────────────────────
+// Browsers always request /favicon.ico regardless of <link> tags.
+// Redirect to favicon.png so they stop getting an HTML response.
+app.get("/favicon.ico", (_req, res) => res.redirect(301, "/favicon.png"));
+
 app.use((req, res, next) => {
   const origin = req.headers.origin;
   if (origin && allowedOrigins.includes(origin)) {
