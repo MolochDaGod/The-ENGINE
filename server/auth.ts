@@ -180,11 +180,15 @@ export function parseCookies(header: string | undefined): Record<string, string>
 function baseCookieParts(value: string, includeExpiry: boolean) {
   const isSecure = process.env.NODE_ENV === "production";
   const cookieDomain = process.env.PLAYER_COOKIE_DOMAIN || (isSecure ? ".grudge-studio.com" : "");
+  // SameSite=None + Secure allows the cookie to be sent in cross-site requests
+  // (e.g. grudgewarlords.com calling id.grudge-studio.com with credentials:include)
+  // In dev we fall back to Lax since Secure is not available on localhost.
+  const sameSite = isSecure ? "None" : "Lax";
   const parts = [
     `${PLAYER_COOKIE}=${value}`,
     "HttpOnly",
     "Path=/",
-    "SameSite=Lax",
+    `SameSite=${sameSite}`,
   ];
   if (includeExpiry) parts.push(`Max-Age=${Math.floor(SESSION_TTL_MS / 1000)}`);
   else parts.push("Max-Age=0");
