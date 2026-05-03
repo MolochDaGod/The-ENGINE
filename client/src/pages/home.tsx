@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ArrowUpRight, Bot, Crown, Flame, Gamepad2, Layers3, LayoutDashboard, Library, Loader2, Rocket, Sparkles, Trophy } from "lucide-react";
+import { useAuthModal } from "@/components/auth-modal";
 import grudgeLogo from "@assets/uXpJmRe_1773828784729.png";
 import homeBg from "@assets/2kljxaj_1773841543581.png";
 import {
@@ -215,6 +216,7 @@ function CompeteSection() {
 }
 
 export default function Home() {
+  const { open: openAuth } = useAuthModal();
   return (
     <div className="min-h-screen relative">
       <div
@@ -242,11 +244,9 @@ export default function Home() {
             </p>
 
             <div className="flex flex-wrap gap-3 mt-8">
-              <a href="https://id.grudge-studio.com" target="_blank" rel="noopener noreferrer">
-                <Button className="gilded-button">
-                  <Sparkles className="w-4 h-4 mr-2" /> Sign In with Grudge ID
-                </Button>
-              </a>
+              <Button className="gilded-button" onClick={() => openAuth({ initialTab: 'signin', reason: 'Sign in to access all Grudge Studio products.' })}>
+                <Sparkles className="w-4 h-4 mr-2" /> Sign In with Grudge ID
+              </Button>
               <a href="https://grudgewarlords.com" target="_blank" rel="noopener noreferrer">
                 <Button variant="outline" className="border-[hsl(43,60%,30%)] text-[hsl(45,30%,90%)] hover:bg-[hsl(225,25%,16%)]">
                   <Gamepad2 className="w-4 h-4 mr-2" /> Launch Warlords

@@ -30,13 +30,12 @@ export const PORTAL_PRODUCTS: PortalProduct[] = [
   {
     id: "launcher",
     name: "Grudge Launcher",
-    href: "https://launcher.grudge-studio.com",
+    href: "/login?redirect=/",
     description: "Single entry launcher for Grudge products, entitlements, updates, and client handoff.",
     status: "planned",
     section: "featured",
-    external: true,
     authRequired: true,
-    note: "Mission-phase target",
+    note: "Mission-phase target — launcher route pending",
   },
   {
     id: "dashboard",
@@ -154,7 +153,7 @@ export const PORTAL_PRODUCTS: PortalProduct[] = [
   {
     id: "objectstore",
     name: "ObjectStore",
-    href: "https://objectstore.grudge-studio.com",
+    href: "https://objects.grudge-studio.com",
     description: "Structured storage, metadata, search, and asset delivery for the whole studio.",
     status: "live",
     section: "studio",
