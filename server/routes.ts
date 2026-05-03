@@ -233,6 +233,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (username.length < 3 || username.length > 30) {
         return res.status(400).json({ error: "username must be 3-30 characters" });
       }
+      if (!/^[a-zA-Z0-9_\-]+$/.test(username)) {
+        return res.status(400).json({ error: "username may only contain letters, numbers, underscores, and dashes" });
+      }
       if (password.length < 6) {
         return res.status(400).json({ error: "password must be at least 6 characters" });
       }
@@ -258,20 +261,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         avatarUrl: null,
         gbuxBalance: "0",
         role: "player",
+        solanaAddress: null,
+        discordId: null,
+        githubId: null,
+        googleId: null,
+        phone: null,
+        needsProfile: false,
       });
 
       const token = createPlayerToken(user.id);
       setPlayerCookie(res, token);
 
-      return res.json({
-        id: user.id,
-        username: user.username,
-        grudgeId: user.grudgeId,
-        displayName: user.displayName,
-        avatarUrl: user.avatarUrl,
-        gbuxBalance: user.gbuxBalance,
-        role: user.role,
-      });
+      return res.json(publicPlayer(user, true));
     } catch (error) {
       console.error("Register error:", error);
       return res.status(500).json({ error: "Registration failed" });
@@ -302,15 +303,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const token = createPlayerToken(user.id);
       setPlayerCookie(res, token);
 
-      return res.json({
-        id: user.id,
-        username: user.username,
-        grudgeId: user.grudgeId,
-        displayName: user.displayName,
-        avatarUrl: user.avatarUrl,
-        gbuxBalance: user.gbuxBalance,
-        role: user.role,
-      });
+      return res.json(publicPlayer(user, false));
     } catch (error) {
       console.error("Login error:", error);
       return res.status(500).json({ error: "Login failed" });
@@ -348,6 +341,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       avatarUrl: player.avatarUrl,
       gbuxBalance: player.gbuxBalance,
       role: player.role,
+      needsProfile: !!player.needsProfile,
       createdAt: player.createdAt,
     });
   });
