@@ -153,11 +153,12 @@ export const PORTAL_PRODUCTS: PortalProduct[] = [
   {
     id: "objectstore",
     name: "ObjectStore",
-    href: "https://objects.grudge-studio.com",
+    href: "https://browse.grudge-studio.com",
     description: "Structured storage, metadata, search, and asset delivery for the whole studio.",
     status: "live",
     section: "studio",
     external: true,
+    note: "API: objectstore.grudge-studio.com",
   },
   {
     id: "retro-library",
