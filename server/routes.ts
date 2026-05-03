@@ -1240,7 +1240,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         githubId: null,
         googleId: null,
         phone: null,
-        needsProfile: false,
+        needsProfile: true,
       });
       isNew = true;
 
