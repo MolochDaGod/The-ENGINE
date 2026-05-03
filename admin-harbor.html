@@ -1,0 +1,2099 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Grudge Studio · Admin Harbor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;900&family=JetBrains+Mono:wght@400;500;700&family=Cormorant+Garamond:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════════════════
+   ROOT TOKENS
+═══════════════════════════════════════════════════ */
+:root {
+  --void: #050810;
+  --abyss: #081421;
+  --deep: #0d1f33;
+  --shallow: #16314d;
+  --foam: #2a4d70;
+  --ink: #e8e1d0;
+  --ink-dim: #8a8377;
+  --ink-faint: #4a4538;
+  --blood: #c41230;
+  --blood-deep: #8b0a1a;
+  --gold: #c9a961;
+  --gold-bright: #e8c878;
+  --bone: #d4c8a8;
+  --rust: #6b3410;
+  --teal: #4a8a82;
+  --green-live: #4ade80;
+  --orange-warn: #f59e0b;
+  --red-down: #ef4444;
+  --border: #2a2438;
+  --console-bg: #0a0e18;
+  --captain-bg: #0c1220;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; background: var(--void); color: var(--ink); font-family: 'JetBrains Mono', monospace; overflow: hidden; }
+
+/* ═══════════════════════════════════════════════════
+   ANIMATED WATER BACKGROUND
+═══════════════════════════════════════════════════ */
+@keyframes waterShift {
+  0%   { background-position: 0% 0%, 100% 100%, 50% 50%; }
+  50%  { background-position: 100% 50%, 0% 50%, 80% 20%; }
+  100% { background-position: 0% 0%, 100% 100%, 50% 50%; }
+}
+@keyframes waveRipple {
+  0%   { transform: translate(-50%, -50%) scale(1); opacity: 0.04; }
+  50%  { transform: translate(-50%, -50%) scale(1.6); opacity: 0; }
+  100% { transform: translate(-50%, -50%) scale(1); opacity: 0.04; }
+}
+
+/* ═══════════════════════════════════════════════════
+   VESSEL ANIMATIONS
+═══════════════════════════════════════════════════ */
+@keyframes float {
+  0%, 100% { transform: translate(-50%, -50%) translateY(0); }
+  50%      { transform: translate(-50%, -50%) translateY(-3px); }
+}
+@keyframes floatSlow {
+  0%, 100% { transform: translate(-50%, -50%) translateY(0) rotate(0deg); }
+  25%      { transform: translate(-50%, -50%) translateY(-2px) rotate(0.5deg); }
+  75%      { transform: translate(-50%, -50%) translateY(-1px) rotate(-0.5deg); }
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.5; transform: scale(0.85); }
+}
+@keyframes pulseGlow {
+  0%, 100% { box-shadow: 0 0 6px currentColor; }
+  50%      { box-shadow: 0 0 14px currentColor, 0 0 28px currentColor; }
+}
+@keyframes dataFlow {
+  0%   { offset-distance: 0%; opacity: 0; }
+  10%  { opacity: 1; }
+  90%  { opacity: 1; }
+  100% { offset-distance: 100%; opacity: 0; }
+}
+@keyframes scanLine {
+  0%   { top: 0; }
+  100% { top: 100%; }
+}
+@keyframes fadeSlideUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0; }
+}
+@keyframes spinCompass {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* ═══════════════════════════════════════════════════
+   TOP BAR
+═══════════════════════════════════════════════════ */
+.topbar {
+  position: fixed; top: 0; left: 0; right: 0;
+  height: 56px; z-index: 100;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 20px;
+  background: linear-gradient(180deg, rgba(5,8,16,0.97), rgba(5,8,16,0.8));
+  backdrop-filter: blur(16px);
+  border-bottom: 1px solid rgba(201,169,97,0.25);
+}
+.brand { display: flex; align-items: center; gap: 10px; }
+.compass {
+  width: 34px; height: 34px;
+  border: 1.5px solid var(--gold);
+  border-radius: 50%;
+  display: grid; place-items: center;
+  background: radial-gradient(circle, var(--abyss), var(--void));
+  position: relative;
+}
+.compass-inner {
+  width: 18px; height: 18px;
+  border: 1px dashed rgba(201,169,97,0.4);
+  border-radius: 50%;
+  display: grid; place-items: center;
+  animation: spinCompass 20s linear infinite;
+}
+.compass-inner span { font-size: 10px; animation: spinCompass 20s linear infinite reverse; }
+.brand-text h1 {
+  font-family: 'Cinzel', serif;
+  font-size: 13px; letter-spacing: 0.3em;
+  color: var(--bone);
+}
+.brand-text small {
+  font-size: 8px; letter-spacing: 0.35em; color: var(--gold);
+  text-transform: uppercase;
+}
+.topbar-center {
+  display: flex; align-items: center; gap: 16px;
+}
+.fleet-stat {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 10px; letter-spacing: 0.1em;
+}
+.fleet-stat .dot { width: 7px; height: 7px; border-radius: 50%; }
+.fleet-stat .dot.live { background: var(--green-live); box-shadow: 0 0 6px var(--green-live); }
+.fleet-stat .dot.warn { background: var(--orange-warn); }
+.fleet-stat .dot.down { background: var(--red-down); }
+.fleet-stat .dot.unknown { background: var(--ink-dim); }
+.fleet-stat .count { color: var(--bone); font-weight: 700; }
+.fleet-stat .lbl { color: var(--ink-dim); }
+.topbar-controls { display: flex; align-items: center; gap: 8px; }
+.ctrl-btn {
+  padding: 6px 12px;
+  background: rgba(13,31,51,0.6);
+  border: 1px solid var(--border);
+  color: var(--ink-dim);
+  font-family: inherit; font-size: 9px; letter-spacing: 0.18em;
+  text-transform: uppercase; cursor: pointer;
+  transition: all 0.2s;
+}
+.ctrl-btn:hover { border-color: var(--gold); color: var(--bone); background: rgba(201,169,97,0.08); }
+.ctrl-btn.active { border-color: var(--gold); color: var(--gold); background: rgba(201,169,97,0.12); }
+.ctrl-btn.danger { border-color: var(--blood); color: var(--bone); }
+.ctrl-btn.danger:hover { background: rgba(196,18,48,0.2); color: #fff; }
+.ctrl-btn.success { border-color: var(--green-live); color: var(--green-live); }
+.ctrl-btn.success:hover { background: rgba(74,222,128,0.1); }
+.ctrl-group { display: flex; gap: 3px; padding: 3px; background: rgba(8,20,33,0.6); border: 1px solid var(--border); }
+.ctrl-group .ctrl-btn { padding: 4px 8px; font-size: 8px; border: 1px solid transparent; }
+
+/* ═══════════════════════════════════════════════════
+   STAGE — OCEAN
+═══════════════════════════════════════════════════ */
+.stage {
+  position: absolute;
+  top: 56px; left: 0; right: 340px; bottom: 240px;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse at 30% 20%, rgba(74,138,130,0.06) 0%, transparent 50%),
+    radial-gradient(ellipse at 70% 80%, rgba(196,18,48,0.03) 0%, transparent 50%),
+    radial-gradient(ellipse at 50% 50%, rgba(201,169,97,0.02) 0%, transparent 70%),
+    linear-gradient(180deg, var(--void) 0%, #060d18 30%, #081420 60%, var(--deep) 100%);
+  animation: waterShift 60s ease-in-out infinite;
+  cursor: grab;
+}
+.stage.dragging { cursor: grabbing; }
+.stage.right-collapsed { right: 0; }
+.stage.console-collapsed { bottom: 0; }
+
+/* Nautical grid */
+.stage::before {
+  content: ''; position: absolute; inset: 0;
+  background-image:
+    linear-gradient(rgba(201,169,97,0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(201,169,97,0.035) 1px, transparent 1px);
+  background-size: 80px 80px;
+  pointer-events: none;
+}
+/* Noise overlay */
+.stage::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
+  opacity: 0.025; mix-blend-mode: overlay;
+}
+
+.canvas {
+  position: absolute; top: 0; left: 0;
+  width: 3200px; height: 2400px;
+  transform-origin: 0 0;
+  transition: transform 0.08s ease-out;
+}
+.canvas.no-transition { transition: none; }
+
+/* SVG layers */
+.connections-svg {
+  position: absolute; top: 0; left: 0;
+  width: 3200px; height: 2400px;
+  pointer-events: none; z-index: 1;
+}
+.conn-line { fill: none; stroke-width: 1.5; opacity: 0.3; transition: opacity 0.2s, stroke-width 0.2s; }
+.conn-line.active { stroke: var(--green-live); }
+.conn-line.degraded { stroke: var(--orange-warn); stroke-dasharray: 6 4; }
+.conn-line.broken { stroke: var(--red-down); stroke-dasharray: 3 3; opacity: 0.6; }
+.conn-line.unverified { stroke: var(--gold); stroke-dasharray: 2 6; opacity: 0.35; }
+.conn-line.highlight { opacity: 1; stroke-width: 2.5; }
+
+/* Data flow dots on connections */
+.data-dot {
+  r: 3; fill: var(--green-live); opacity: 0;
+  offset-rotate: 0deg;
+  animation: dataFlow 3s linear infinite;
+}
+.data-dot.warn { fill: var(--orange-warn); }
+.data-dot.broken { fill: var(--red-down); animation: none; opacity: 0; }
+
+/* Region backdrops */
+.region { position: absolute; pointer-events: none; z-index: 0; }
+.region-bounds {
+  position: absolute;
+  border: 1px dashed rgba(201,169,97,0.12);
+  background: radial-gradient(ellipse at center, rgba(201,169,97,0.02) 0%, transparent 70%);
+  transition: border-color 0.3s, background 0.3s;
+}
+.region-bounds:hover { border-color: rgba(201,169,97,0.25); }
+.region-label {
+  position: absolute;
+  font-family: 'Cinzel', serif; font-size: 12px;
+  letter-spacing: 0.4em; color: rgba(201,169,97,0.45);
+  text-transform: uppercase; white-space: nowrap;
+}
+.region-label small {
+  display: block; font-family: 'Cormorant Garamond', serif;
+  font-style: italic; font-size: 11px; letter-spacing: 0.08em;
+  color: rgba(138,131,119,0.5); margin-top: 3px;
+}
+
+/* ═══════════════════════════════════════════════════
+   VESSELS
+═══════════════════════════════════════════════════ */
+.vessel {
+  position: absolute; cursor: pointer;
+  transform: translate(-50%, -50%);
+  z-index: 2; transition: filter 0.2s; user-select: none;
+}
+.vessel.floating { animation: floatSlow 7s ease-in-out infinite; }
+.vessel:hover { z-index: 5; filter: drop-shadow(0 0 14px var(--gold)); }
+.vessel.selected { z-index: 6; filter: drop-shadow(0 0 20px var(--gold-bright)); }
+.vessel.muted { opacity: 0.15; pointer-events: none; }
+.vessel svg { display: block; overflow: visible; }
+.vessel-label {
+  position: absolute; top: 100%; left: 50%;
+  transform: translate(-50%, 6px);
+  font-family: 'Cinzel', serif; font-size: 9px;
+  letter-spacing: 0.15em; color: var(--bone);
+  text-transform: uppercase; white-space: nowrap;
+  text-shadow: 0 0 6px var(--void), 0 1px 3px var(--void);
+  pointer-events: none;
+}
+.vessel-status-dot {
+  position: absolute; top: -5px; right: -5px;
+  width: 10px; height: 10px; border-radius: 50%;
+  border: 1.5px solid var(--void); pointer-events: none;
+}
+.vessel-status-dot.live { background: var(--green-live); box-shadow: 0 0 6px var(--green-live); animation: pulse 2.5s infinite; }
+.vessel-status-dot.warn { background: var(--orange-warn); box-shadow: 0 0 6px var(--orange-warn); animation: pulse 1.5s infinite; }
+.vessel-status-dot.down { background: var(--red-down); box-shadow: 0 0 8px var(--red-down); animation: pulse 1s infinite; }
+.vessel-status-dot.unknown { background: var(--ink-dim); }
+
+/* ═══════════════════════════════════════════════════
+   INSPECTOR (right panel)
+═══════════════════════════════════════════════════ */
+.inspector {
+  position: fixed; top: 56px; right: 0; bottom: 240px;
+  width: 340px;
+  background: linear-gradient(180deg, var(--abyss) 0%, var(--void) 100%);
+  border-left: 1px solid rgba(201,169,97,0.2);
+  z-index: 50; overflow-y: auto; transition: transform 0.3s;
+}
+.inspector.collapsed { transform: translateX(100%); }
+.inspector-toggle {
+  position: fixed; right: 340px; top: 70px; z-index: 51;
+  width: 22px; height: 50px;
+  background: var(--abyss); border: 1px solid var(--border); border-right: none;
+  color: var(--gold); cursor: pointer; font-family: inherit;
+  transition: right 0.3s; display: grid; place-items: center; font-size: 12px;
+}
+.inspector.collapsed + .inspector-toggle,
+.inspector-toggle.collapsed-state { right: 0; }
+
+.ins-header {
+  padding: 20px 16px 14px;
+  border-bottom: 1px solid var(--border);
+  background: linear-gradient(180deg, rgba(13,31,51,0.5), transparent);
+}
+.ins-eyebrow { font-size: 8px; letter-spacing: 0.5em; color: var(--gold); text-transform: uppercase; margin-bottom: 4px; }
+.ins-title { font-family: 'Cinzel', serif; font-size: 16px; letter-spacing: 0.1em; color: var(--bone); text-transform: uppercase; }
+.ins-sub { font-family: 'Cormorant Garamond', serif; font-style: italic; font-size: 12px; color: var(--ink-dim); margin-top: 3px; }
+.ins-section { padding: 14px 16px; border-bottom: 1px solid var(--border); }
+.ins-section h4 {
+  font-family: 'Cinzel', serif; font-size: 9px;
+  letter-spacing: 0.35em; color: var(--gold);
+  text-transform: uppercase; margin-bottom: 10px;
+}
+.ins-row {
+  display: flex; justify-content: space-between;
+  padding: 5px 0; font-size: 10px;
+  border-bottom: 1px solid rgba(42,36,56,0.3);
+}
+.ins-row:last-child { border-bottom: none; }
+.ins-row .key { color: var(--ink-dim); letter-spacing: 0.08em; }
+.ins-row .val { color: var(--bone); font-weight: 500; }
+.ins-row .val.mono { font-family: 'JetBrains Mono', monospace; color: var(--gold); font-size: 9px; }
+
+/* Admin action buttons inside inspector */
+.admin-actions { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
+.admin-btn {
+  padding: 5px 10px; font-family: 'JetBrains Mono', monospace;
+  font-size: 8px; letter-spacing: 0.15em; text-transform: uppercase;
+  border: 1px solid var(--border); background: rgba(13,31,51,0.6);
+  color: var(--ink-dim); cursor: pointer; transition: all 0.15s;
+}
+.admin-btn:hover { border-color: var(--gold); color: var(--bone); background: rgba(201,169,97,0.08); }
+.admin-btn.restart { border-color: var(--orange-warn); color: var(--orange-warn); }
+.admin-btn.restart:hover { background: rgba(245,158,11,0.15); }
+.admin-btn.deploy { border-color: var(--green-live); color: var(--green-live); }
+.admin-btn.deploy:hover { background: rgba(74,222,128,0.1); }
+.admin-btn.danger { border-color: var(--red-down); color: var(--red-down); }
+.admin-btn.danger:hover { background: rgba(239,68,68,0.1); }
+.admin-btn.info { border-color: var(--teal); color: var(--teal); }
+.admin-btn.info:hover { background: rgba(74,138,130,0.1); }
+.admin-btn:active { transform: scale(0.95); }
+
+.conn-list { display: flex; flex-direction: column; gap: 4px; }
+.conn-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 8px; background: rgba(13,31,51,0.4);
+  border: 1px solid var(--border); border-left: 3px solid;
+  font-size: 10px; cursor: pointer; transition: all 0.15s;
+}
+.conn-item:hover { background: rgba(13,31,51,0.7); transform: translateX(2px); }
+.conn-item.active { border-left-color: var(--green-live); }
+.conn-item.degraded { border-left-color: var(--orange-warn); }
+.conn-item.broken { border-left-color: var(--red-down); }
+.conn-item.unverified { border-left-color: var(--gold); }
+.conn-item .arrow { color: var(--ink-faint); font-size: 11px; }
+.conn-item .name { color: var(--bone); flex: 1; font-family: 'Cinzel', serif; letter-spacing: 0.08em; font-size: 9px; text-transform: uppercase; }
+.conn-item .status { font-size: 7px; color: var(--ink-dim); letter-spacing: 0.15em; text-transform: uppercase; }
+
+.stat-tag {
+  display: inline-block; padding: 2px 7px;
+  font-size: 8px; letter-spacing: 0.18em; text-transform: uppercase; border: 1px solid;
+}
+.stat-tag.live { color: var(--green-live); border-color: rgba(74,222,128,0.4); background: rgba(74,222,128,0.08); }
+.stat-tag.warn { color: var(--orange-warn); border-color: rgba(245,158,11,0.4); background: rgba(245,158,11,0.08); }
+.stat-tag.down { color: var(--red-down); border-color: rgba(239,68,68,0.4); background: rgba(239,68,68,0.08); }
+.stat-tag.unknown { color: var(--ink-dim); border-color: var(--border); }
+
+.empty-ins { padding: 40px 20px; text-align: center; }
+.empty-ins-icon { font-size: 30px; color: var(--ink-faint); margin-bottom: 12px; }
+.empty-ins h3 { font-family: 'Cinzel', serif; font-size: 13px; letter-spacing: 0.2em; color: var(--bone); margin-bottom: 6px; }
+.empty-ins p { font-family: 'Cormorant Garamond', serif; font-style: italic; font-size: 13px; color: var(--ink-dim); line-height: 1.4; }
+
+.health-bar { display: flex; height: 6px; background: var(--abyss); border: 1px solid var(--border); overflow: hidden; margin-top: 6px; }
+.health-bar-seg { transition: flex 0.4s; }
+.health-bar-seg.live { background: var(--green-live); }
+.health-bar-seg.warn { background: var(--orange-warn); }
+.health-bar-seg.down { background: var(--red-down); }
+.health-bar-seg.unknown { background: var(--ink-dim); }
+
+/* ═══════════════════════════════════════════════════
+   COMMAND CONSOLE (bottom dock)
+═══════════════════════════════════════════════════ */
+.console-dock {
+  position: fixed; left: 0; right: 340px; bottom: 0;
+  height: 240px; z-index: 60;
+  display: flex; flex-direction: column;
+  background: var(--console-bg);
+  border-top: 1px solid rgba(201,169,97,0.25);
+  transition: transform 0.3s, right 0.3s;
+}
+.console-dock.collapsed { transform: translateY(100%); }
+.console-dock.right-collapsed { right: 0; }
+
+.console-tabs {
+  display: flex; align-items: center;
+  height: 30px; min-height: 30px;
+  background: rgba(5,8,16,0.9);
+  border-bottom: 1px solid var(--border);
+  padding: 0 12px; gap: 2px;
+}
+.console-tab {
+  padding: 4px 12px; font-family: inherit; font-size: 8px;
+  letter-spacing: 0.2em; text-transform: uppercase;
+  background: transparent; border: none; color: var(--ink-dim);
+  cursor: pointer; border-bottom: 2px solid transparent;
+  transition: all 0.15s;
+}
+.console-tab:hover { color: var(--bone); }
+.console-tab.active { color: var(--gold); border-bottom-color: var(--gold); }
+.console-toggle-btn {
+  margin-left: auto; background: transparent; border: none;
+  color: var(--gold); cursor: pointer; font-family: inherit;
+  font-size: 10px; padding: 4px 8px;
+}
+.console-body {
+  flex: 1; overflow-y: auto; padding: 8px 14px;
+  font-size: 11px; line-height: 1.6;
+}
+.console-body .log-line { animation: fadeSlideUp 0.2s ease-out; }
+.log-time { color: var(--ink-faint); margin-right: 8px; font-size: 9px; }
+.log-ok { color: var(--green-live); }
+.log-warn { color: var(--orange-warn); }
+.log-err { color: var(--red-down); }
+.log-info { color: var(--teal); }
+.log-ai { color: #a78bfa; }
+.log-cmd { color: var(--gold); }
+
+.console-input-row {
+  display: flex; align-items: center;
+  height: 30px; min-height: 30px;
+  border-top: 1px solid var(--border);
+  padding: 0 12px;
+  background: rgba(5,8,16,0.7);
+}
+.console-prompt { color: var(--gold); font-size: 11px; margin-right: 8px; }
+.console-input {
+  flex: 1; background: transparent; border: none; outline: none;
+  color: var(--bone); font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+}
+.console-input::placeholder { color: var(--ink-faint); }
+
+/* ═══════════════════════════════════════════════════
+   AI CAPTAIN PANEL (overlaid in inspector)
+═══════════════════════════════════════════════════ */
+.captain-panel {
+  background: linear-gradient(180deg, rgba(12,18,32,0.95), rgba(5,8,16,0.95));
+  border: 1px solid rgba(167,139,250,0.2);
+  border-left: 3px solid #a78bfa;
+  margin: 8px;
+  overflow: hidden;
+}
+.captain-header {
+  padding: 10px 12px;
+  display: flex; align-items: center; gap: 8px;
+  background: rgba(167,139,250,0.06);
+  border-bottom: 1px solid rgba(167,139,250,0.15);
+}
+.captain-avatar {
+  width: 28px; height: 28px; border-radius: 50%;
+  background: linear-gradient(135deg, #7c3aed, #a78bfa);
+  display: grid; place-items: center;
+  font-size: 13px; color: #fff;
+  box-shadow: 0 0 10px rgba(167,139,250,0.4);
+}
+.captain-name {
+  font-family: 'Cinzel', serif; font-size: 10px;
+  letter-spacing: 0.2em; color: #c4b5fd;
+  text-transform: uppercase;
+}
+.captain-status {
+  font-size: 8px; color: var(--green-live);
+  letter-spacing: 0.15em;
+}
+.captain-body {
+  padding: 10px 12px; max-height: 200px; overflow-y: auto;
+}
+.captain-msg {
+  font-size: 11px; line-height: 1.5; color: var(--bone);
+  margin-bottom: 8px;
+  animation: fadeSlideUp 0.3s ease-out;
+}
+.captain-msg .highlight { color: #a78bfa; font-weight: 500; }
+.captain-msg .critical { color: var(--red-down); font-weight: 700; }
+.captain-msg .ok { color: var(--green-live); }
+
+/* ═══════════════════════════════════════════════════
+   LEGEND
+═══════════════════════════════════════════════════ */
+.legend {
+  position: fixed; bottom: 256px; left: 12px;
+  background: rgba(8,20,33,0.9); backdrop-filter: blur(10px);
+  border: 1px solid rgba(201,169,97,0.2);
+  padding: 12px 14px; z-index: 40; max-width: 240px;
+  transition: bottom 0.3s;
+}
+.legend.console-collapsed { bottom: 16px; }
+.legend h4 { font-family: 'Cinzel', serif; font-size: 8px; letter-spacing: 0.35em; color: var(--gold); margin-bottom: 8px; text-transform: uppercase; }
+.legend-row { display: flex; align-items: center; gap: 6px; font-size: 9px; color: var(--ink-dim); margin-bottom: 4px; letter-spacing: 0.04em; }
+.legend-line { width: 20px; height: 2px; flex-shrink: 0; }
+.legend-line.active { background: var(--green-live); }
+.legend-line.degraded { background: var(--orange-warn); border-top: 1px dashed var(--orange-warn); height: 0; }
+.legend-line.broken { background: repeating-linear-gradient(90deg, var(--red-down) 0 3px, transparent 3px 6px); }
+.legend-line.unverified { background: repeating-linear-gradient(90deg, var(--gold) 0 2px, transparent 2px 8px); }
+.legend-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.legend-dot.live { background: var(--green-live); box-shadow: 0 0 4px var(--green-live); }
+.legend-dot.warn { background: var(--orange-warn); }
+.legend-dot.down { background: var(--red-down); }
+.legend-dot.unknown { background: var(--ink-dim); }
+
+/* ═══════════════════════════════════════════════════
+   ZOOM CONTROLS
+═══════════════════════════════════════════════════ */
+.zoom-pad {
+  position: fixed; bottom: 256px; right: 356px;
+  display: flex;
+  background: rgba(8,20,33,0.9); backdrop-filter: blur(10px);
+  border: 1px solid rgba(201,169,97,0.2);
+  z-index: 40; transition: bottom 0.3s, right 0.3s;
+}
+.zoom-pad.collapsed { right: 16px; }
+.zoom-pad.console-collapsed { bottom: 16px; }
+.zoom-pad button {
+  width: 32px; height: 32px; background: transparent; border: none;
+  color: var(--bone); font-family: inherit; font-size: 13px;
+  cursor: pointer; border-right: 1px solid var(--border);
+}
+.zoom-pad button:last-child { border-right: none; }
+.zoom-pad button:hover { background: rgba(201,169,97,0.1); color: var(--gold); }
+.zoom-pad .zoom-display {
+  display: grid; place-items: center; padding: 0 10px;
+  font-size: 10px; color: var(--gold); border-right: 1px solid var(--border); min-width: 48px;
+}
+
+/* ═══════════════════════════════════════════════════
+   MINIMAP
+═══════════════════════════════════════════════════ */
+.minimap {
+  position: fixed; bottom: 256px; left: 12px; margin-top: 8px;
+  width: 180px; height: 120px;
+  background: rgba(5,8,16,0.9);
+  border: 1px solid rgba(201,169,97,0.2);
+  z-index: 40; overflow: hidden;
+  transition: bottom 0.3s;
+  display: none; /* shown via JS when zoomed */
+}
+.minimap.console-collapsed { bottom: 16px; }
+.minimap canvas { width: 100%; height: 100%; }
+.minimap-viewport {
+  position: absolute; border: 1px solid var(--gold);
+  background: rgba(201,169,97,0.06); pointer-events: none;
+}
+
+/* ═══════════════════════════════════════════════════
+   SCROLLBAR
+═══════════════════════════════════════════════════ */
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: var(--void); }
+::-webkit-scrollbar-thumb { background: var(--border); }
+::-webkit-scrollbar-thumb:hover { background: var(--gold); }
+
+/* ═══════════════════════════════════════════════════
+   UTILITY
+═══════════════════════════════════════════════════ */
+.hidden { display: none !important; }
+.cursor-blink::after { content: '▊'; animation: blink 1s step-end infinite; color: var(--gold); }
+</style>
+</head>
+<body>
+
+<!-- ═══════════ TOP BAR ═══════════ -->
+<header class="topbar">
+  <div class="brand">
+    <div class="compass"><div class="compass-inner"><span>⚓</span></div></div>
+    <div class="brand-text">
+      <h1>ADMIN HARBOR</h1>
+      <small>Fleet Command · Live Topology</small>
+    </div>
+  </div>
+  <div class="topbar-center" id="topbarStats"></div>
+  <div class="topbar-controls">
+    <div class="ctrl-group" id="filterGroup">
+      <button class="ctrl-btn active" data-filter="all">All</button>
+      <button class="ctrl-btn" data-filter="live">Live</button>
+      <button class="ctrl-btn" data-filter="warn">Warn</button>
+      <button class="ctrl-btn" data-filter="down">Down</button>
+      <button class="ctrl-btn" data-filter="unknown">Ghost</button>
+    </div>
+    <button class="ctrl-btn" id="centerBtn">⌖ Center</button>
+    <button class="ctrl-btn danger" id="issuesBtn">⚠ Issues</button>
+    <button class="ctrl-btn success" id="captainBtn">⚙ Captain</button>
+  </div>
+</header>
+
+<!-- ═══════════ STAGE ═══════════ -->
+<div class="stage" id="stage">
+  <div class="canvas" id="canvas">
+    <svg class="connections-svg" id="connSvg" viewBox="0 0 3200 2400" preserveAspectRatio="none"></svg>
+    <div id="regions"></div>
+    <div id="vessels"></div>
+  </div>
+</div>
+
+<!-- ═══════════ INSPECTOR ═══════════ -->
+<aside class="inspector" id="inspector">
+  <div id="inspectorBody"></div>
+</aside>
+<button class="inspector-toggle" id="insToggle">›</button>
+
+<!-- ═══════════ COMMAND CONSOLE ═══════════ -->
+<div class="console-dock" id="consoleDock">
+  <div class="console-tabs">
+    <button class="console-tab active" data-tab="logs">Logs</button>
+    <button class="console-tab" data-tab="captain">AI Captain</button>
+    <button class="console-tab" data-tab="network">Network</button>
+    <button class="console-tab" data-tab="docs">Docs</button>
+    <button class="console-toggle-btn" id="consoleToggle">▼ Console</button>
+  </div>
+  <div class="console-body" id="consoleBody"></div>
+  <div class="console-input-row">
+    <span class="console-prompt">admiral ›</span>
+    <input class="console-input" id="consoleInput" placeholder="Type command... (help, status, restart <id>, deploy <id>, logs <id>, pvp start, scan)" autocomplete="off" />
+  </div>
+</div>
+
+<!-- ═══════════ LEGEND ═══════════ -->
+<div class="legend" id="legend">
+  <h4>⚜ Chart Legend</h4>
+  <div class="legend-row"><div class="legend-dot live"></div> Live & verified</div>
+  <div class="legend-row"><div class="legend-dot warn"></div> Degraded / partial</div>
+  <div class="legend-row"><div class="legend-dot down"></div> Down / broken</div>
+  <div class="legend-row"><div class="legend-dot unknown"></div> Ghost ship</div>
+  <div style="height:6px"></div>
+  <div class="legend-row"><div class="legend-line active"></div> Confirmed link</div>
+  <div class="legend-row"><div class="legend-line degraded"></div> Degraded link</div>
+  <div class="legend-row"><div class="legend-line broken"></div> Broken / down</div>
+  <div class="legend-row"><div class="legend-line unverified"></div> Inferred / loose</div>
+</div>
+
+<!-- ═══════════ ZOOM PAD ═══════════ -->
+<div class="zoom-pad" id="zoomPad">
+  <button id="zoomOut">−</button>
+  <div class="zoom-display" id="zoomDisplay">100%</div>
+  <button id="zoomIn">+</button>
+  <button id="zoomReset">⌖</button>
+</div>
+
+<script>
+/* ════════════════════════════════════════════════════════════════
+   FLEET DATA — Full Grudge Studio infrastructure topology
+   Every vessel has admin metadata for the command console
+════════════════════════════════════════════════════════════════ */
+
+const FLEET = [
+  // ══════ CLOUDFLARE EDGE ══════
+  { id:'cf-grudge-studio-site', name:'grudge-studio-site', kind:'flagship', size:5, region:'cloudflare', x:400, y:280,
+    status:'live', value:'Flagship — grudge-studio.com landing, admin, docs, status API',
+    type:'CF Worker', stack:'Workers · Multi-page',
+    endpoint:'https://grudge-studio.com', healthCheck:'https://grudge-studio.com/api/health',
+    deployCmd:'wrangler deploy --name grudge-studio-site', logCmd:'wrangler tail grudge-studio-site',
+    restartCmd:'wrangler deploy --name grudge-studio-site --force',
+    notes:'Doing all heavy lifting alone. Should split into edge functions.',
+    docs:'Main routing worker. Handles /, /admin, /docs, /api/status. Auth via CF Access headers.' },
+
+  { id:'cf-auth-gateway', name:'grudge-auth-gateway', kind:'fortress', size:4, region:'cloudflare', x:720, y:220,
+    status:'live', value:'JWT validation gateway. Single entry for all backend auth.',
+    type:'CF Worker', stack:'Workers · KV · JWT',
+    endpoint:'https://auth.grudge-studio.com', healthCheck:'https://auth.grudge-studio.com/health',
+    deployCmd:'wrangler deploy --name grudge-auth-gateway', logCmd:'wrangler tail grudge-auth-gateway',
+    docs:'Validates JWT on every API call. Reads GRUDGE_SESSIONS KV for session tokens. Issues short-lived edge tokens.' },
+
+  { id:'cf-identity-api', name:'grudge-identity-api', kind:'frigate', size:3, region:'cloudflare', x:940, y:290,
+    status:'live', value:'Identity service — Grudge ID issuance and lookups.',
+    type:'CF Worker', stack:'Workers · D1',
+    endpoint:'https://id.grudge-studio.com/api', healthCheck:'https://id.grudge-studio.com/api/health',
+    deployCmd:'wrangler deploy --name grudge-identity-api', logCmd:'wrangler tail grudge-identity-api',
+    docs:'Issues Grudge IDs. Links Puter guest IDs → Grudge IDs. Stores in D1 grudge-game-state.' },
+
+  { id:'cf-ai-hub', name:'grudge-ai-hub', kind:'frigate', size:3, region:'cloudflare', x:1160, y:240,
+    status:'live', value:'AI routing hub — model dispatch and rate limiting.',
+    type:'CF Worker', stack:'Workers · KV · D1',
+    endpoint:'https://ai.grudge-studio.com/api', healthCheck:'https://ai.grudge-studio.com/api/health',
+    deployCmd:'wrangler deploy --name grudge-ai-hub', logCmd:'wrangler tail grudge-ai-hub',
+    docs:'Routes AI calls to Anthropic/OpenAI/Puter AI. Logs to D1 grudge-ai-hub-db. Rate limits via RATE_LIMIT KV.' },
+
+  { id:'cf-objectstore', name:'grudge-objectstore-api', kind:'frigate', size:3, region:'cloudflare', x:560, y:420,
+    status:'live', value:'R2-backed object storage API for game assets.',
+    type:'CF Worker', stack:'Workers · R2',
+    endpoint:'https://objects.grudge-studio.com', healthCheck:'https://objects.grudge-studio.com/health',
+    deployCmd:'wrangler deploy --name grudge-objectstore-api', logCmd:'wrangler tail grudge-objectstore-api',
+    docs:'CRUD for game assets. Reads/writes R2 objectstore-assets bucket. Metadata in D1 grudge-objectstore.' },
+
+  { id:'cf-asset-cdn', name:'grudge-asset-cdn', kind:'sloop', size:2, region:'cloudflare', x:340, y:460,
+    status:'live', value:'Asset CDN — cached delivery from R2.',
+    type:'CF Worker', stack:'Workers · R2 · Cache',
+    endpoint:'https://assets.grudge-studio.com', healthCheck:'https://assets.grudge-studio.com/',
+    deployCmd:'wrangler deploy --name grudge-asset-cdn', logCmd:'wrangler tail grudge-asset-cdn' },
+
+  { id:'cf-cdn', name:'grudge-cdn', kind:'sloop', size:2, region:'cloudflare', x:200, y:380,
+    status:'warn', value:'Older CDN worker — duplicate of grudge-asset-cdn?',
+    type:'CF Worker', stack:'Workers',
+    notes:'Likely deprecated. Audit and consolidate.',
+    docs:'DUPLICATE — should be merged into grudge-asset-cdn or deleted.' },
+
+  { id:'cf-r2-cdn', name:'grudge-r2-cdn', kind:'sloop', size:2, region:'cloudflare', x:120, y:470,
+    status:'live', value:'Newest R2 CDN edge layer.',
+    type:'CF Worker', stack:'Workers · R2',
+    deployCmd:'wrangler deploy --name grudge-r2-cdn', logCmd:'wrangler tail grudge-r2-cdn' },
+
+  { id:'cf-vercel-proxy', name:'grudge-vercel-proxy', kind:'sloop', size:2, region:'cloudflare', x:1070, y:420,
+    status:'live', value:'Routes CF traffic to Vercel deployments.',
+    type:'CF Worker', stack:'Workers',
+    deployCmd:'wrangler deploy --name grudge-vercel-proxy', logCmd:'wrangler tail grudge-vercel-proxy',
+    docs:'Proxies grudge-studio.com/app/* paths to Vercel. See grudge-stack skill for route table.' },
+
+  { id:'cf-game-servers', name:'grudge-game-servers', kind:'frigate', size:3, region:'cloudflare', x:1300, y:380,
+    status:'warn', value:'Game server registry & matchmaking proxy.',
+    type:'CF Worker', stack:'Workers · Durable Objects',
+    endpoint:'https://servers.grudge-studio.com', healthCheck:'https://servers.grudge-studio.com/health',
+    deployCmd:'wrangler deploy --name grudge-game-servers', logCmd:'wrangler tail grudge-game-servers',
+    notes:'Connects to Colyseus on Windows VPS — link unverified.',
+    docs:'Durable Objects track room state. Proxies WS upgrade to Colyseus VPS. Matchmaking logic here.' },
+
+  { id:'cf-route-monitor', name:'grudge-route-monitor', kind:'lighthouse', size:2, region:'cloudflare', x:1420, y:250,
+    status:'live', value:'Health monitoring cron — pings all routes.',
+    type:'CF Worker', stack:'Workers · Cron',
+    logCmd:'wrangler tail grudge-route-monitor',
+    docs:'Runs every 5 min. Pings all endpoints. Writes results to KV GRUDGE_ANALYTICS.' },
+
+  { id:'cf-health-ping', name:'grudge-health-ping', kind:'lighthouse', size:1, region:'cloudflare', x:1520, y:330,
+    status:'live', value:'Heartbeat pings.',
+    type:'CF Worker', stack:'Workers · Cron', logCmd:'wrangler tail grudge-health-ping' },
+
+  { id:'cf-legion-monitor', name:'legion-monitor', kind:'lighthouse', size:2, region:'cloudflare', x:1470, y:430,
+    status:'live', value:'Legion AI uptime monitor.',
+    type:'CF Worker', stack:'Workers · Cron',
+    logCmd:'wrangler tail legion-monitor',
+    docs:'Monitors all Puter workers + VPS services. Posts to Discord webhook on status change.' },
+
+  { id:'cf-dashboard', name:'grudge-dashboard', kind:'frigate', size:3, region:'cloudflare', x:780, y:410,
+    status:'warn', value:'dash.grudge-studio.com admin dashboard.',
+    type:'CF Worker', stack:'Workers',
+    endpoint:'https://dash.grudge-studio.com', healthCheck:'https://dash.grudge-studio.com/api/health',
+    deployCmd:'wrangler deploy --name grudge-dashboard', logCmd:'wrangler tail grudge-dashboard',
+    notes:'Reported broken in past sessions. Needs verify.',
+    docs:'Admin dashboard. Shows fleet status, user counts, GBux economy stats. Auth required (admin role).' },
+
+  { id:'cf-grudgeproduction', name:'grudgeproduction', kind:'sloop', size:2, region:'cloudflare', x:260, y:240,
+    status:'unknown', value:'Production catch-all? Purpose unclear.',
+    type:'CF Worker', stack:'Workers',
+    notes:'Audit needed. Last modified March 28.',
+    docs:'UNKNOWN — needs audit. May be a legacy production proxy.' },
+
+  { id:'cf-gruda', name:'gruda', kind:'sloop', size:2, region:'cloudflare', x:1360, y:530,
+    status:'unknown', value:'GrudaChain edge worker.',
+    type:'CF Worker', stack:'Workers',
+    endpoint:'https://gruda.grudge-studio.com',
+    notes:'gruda.grudge-studio.com endpoint?',
+    docs:'GrudaChain blockchain bridge. Handles SPL token verification and GBux ↔ on-chain sync.' },
+
+  { id:'cf-ale', name:'ale', kind:'sloop', size:2, region:'cloudflare', x:1260, y:580,
+    status:'unknown', value:'ALE assistant edge worker.',
+    type:'CF Worker', stack:'Workers',
+    notes:'ALE System integration point.',
+    docs:'AI Learning Engine — experimental. May be absorbed into grudge-ai-hub.' },
+
+  { id:'cf-grudgeassets', name:'grudgeassets', kind:'sloop', size:2, region:'cloudflare', x:90, y:300,
+    status:'live', value:'Asset worker — recently updated.',
+    type:'CF Worker', stack:'Workers · R2',
+    deployCmd:'wrangler deploy --name grudgeassets', logCmd:'wrangler tail grudgeassets' },
+
+  { id:'cf-prim-weather', name:'prim-weather', kind:'sloop', size:1, region:'cloudflare', x:1550, y:540,
+    status:'live', value:'Weather/atmosphere data feed.',
+    type:'CF Worker', stack:'Workers',
+    logCmd:'wrangler tail prim-weather' },
+
+  // ══════ EDGE STORAGE ══════
+  { id:'r2-grudge-assets', name:'grudge-assets', kind:'barge', size:4, region:'storage', x:200, y:720,
+    status:'live', value:'Primary asset bucket — game art, audio, models.',
+    type:'R2 Bucket', stack:'Cloudflare R2',
+    docs:'Main R2 bucket. ~2.4GB. Organized: /models/, /textures/, /audio/, /sprites/, /ui/. Public read via grudge-asset-cdn.' },
+
+  { id:'r2-babylon-docs', name:'babylon-docs', kind:'barge', size:2, region:'storage', x:360, y:680,
+    status:'live', value:'Babylon.js documentation hosting.',
+    type:'R2 Bucket', stack:'Cloudflare R2' },
+
+  { id:'r2-objectstore', name:'objectstore-assets', kind:'barge', size:3, region:'storage', x:490, y:740,
+    status:'live', value:'Object store for player-generated content.',
+    type:'R2 Bucket', stack:'Cloudflare R2',
+    docs:'Player uploads: custom builds, screenshots, GLBs. Managed via grudge-objectstore-api worker.' },
+
+  { id:'d1-game-state', name:'grudge-game-state', kind:'hulk', size:3, region:'storage', x:220, y:880,
+    status:'live', value:'Edge-cached game state reads.',
+    type:'D1 Database', stack:'Cloudflare D1 · SQLite',
+    docs:'Edge copy of critical game state. Syncs from MySQL via game-api (when alive). Tables: characters, islands, factions.' },
+
+  { id:'d1-objectstore', name:'grudge-objectstore', kind:'hulk', size:2, region:'storage', x:380, y:920,
+    status:'live', value:'Object metadata index.',
+    type:'D1 Database', stack:'Cloudflare D1' },
+
+  { id:'d1-ai-hub', name:'grudge-ai-hub-db', kind:'hulk', size:2, region:'storage', x:530, y:880,
+    status:'live', value:'AI request log and rate limit state.',
+    type:'D1 Database', stack:'Cloudflare D1' },
+
+  { id:'d1-extra-1', name:'grudge-d1-4', kind:'hulk', size:2, region:'storage', x:110, y:970,
+    status:'unknown', value:'Fourth D1 — purpose unverified.',
+    type:'D1 Database', stack:'Cloudflare D1', notes:'Audit needed.' },
+
+  { id:'d1-extra-2', name:'grudge-d1-5', kind:'hulk', size:2, region:'storage', x:270, y:1020,
+    status:'unknown', value:'Fifth D1 — purpose unverified.',
+    type:'D1 Database', stack:'Cloudflare D1', notes:'Audit needed.' },
+
+  { id:'kv-sessions', name:'GRUDGE_SESSIONS', kind:'sloop', size:2, region:'storage', x:490, y:1010,
+    status:'live', value:'Session token cache.',
+    type:'KV Namespace', stack:'Cloudflare KV',
+    docs:'Stores JWT session tokens. TTL: 24h. Used by grudge-auth-gateway for fast validation.' },
+
+  { id:'kv-analytics', name:'GRUDGE_ANALYTICS', kind:'sloop', size:2, region:'storage', x:620, y:980,
+    status:'live', value:'Analytics rollups.',
+    type:'KV Namespace', stack:'Cloudflare KV' },
+
+  { id:'kv-rate', name:'RATE_LIMIT', kind:'sloop', size:1, region:'storage', x:740, y:1010,
+    status:'live', value:'API rate limit counters.',
+    type:'KV Namespace', stack:'Cloudflare KV' },
+
+  { id:'kv-cache', name:'GRUDGEWARS_CACHE', kind:'sloop', size:2, region:'storage', x:620, y:1080,
+    status:'live', value:'Game data cache.',
+    type:'KV Namespace', stack:'Cloudflare KV' },
+
+  { id:'kv-others', name:'KV ×10 (others)', kind:'sloop', size:2, region:'storage', x:430, y:1110,
+    status:'unknown', value:'10 additional KV namespaces — audit needed.',
+    type:'KV Group', stack:'Cloudflare KV', notes:'Of 14 total KVs, 10 are unaudited.' },
+
+  // ══════ LINUX VPS ══════
+  { id:'vps-linux', name:'Linux VPS', kind:'fortress', size:5, region:'vps-linux', x:1120, y:880,
+    status:'warn', value:'Linux VPS @ 74.208.155.229 — Coolify + 5 Docker services.',
+    type:'VPS', stack:'Ubuntu · Docker · Coolify',
+    endpoint:'http://74.208.155.229:8000', healthCheck:'http://74.208.155.229:8000/api/health',
+    restartCmd:'ssh grudge@74.208.155.229 "docker compose -f /opt/grudge/docker-compose.yml restart"',
+    deployCmd:'ssh grudge@74.208.155.229 "cd /opt/grudge && docker compose pull && docker compose up -d --build"',
+    logCmd:'ssh grudge@74.208.155.229 "docker compose -f /opt/grudge/docker-compose.yml logs --tail=100"',
+    notes:'Coolify up but 5 services 503 since March deploy.',
+    docs:'Main VPS. Runs Coolify (port 8000), MySQL 8 (3306), Redis (6379). 5 Node.js microservices in Docker. Traefik reverse proxy. Origin cert from Cloudflare.' },
+
+  { id:'svc-grudge-id', name:'grudge-id', kind:'frigate', size:3, region:'vps-linux', x:890, y:1010,
+    status:'down', value:'Auth service — port 3001. Issues GIDs, validates JWTs.',
+    type:'Docker Service', stack:'Node.js · MySQL',
+    endpoint:'http://74.208.155.229:3001', healthCheck:'http://74.208.155.229:3001/health',
+    restartCmd:'ssh grudge@74.208.155.229 "docker restart grudge-id"',
+    logCmd:'ssh grudge@74.208.155.229 "docker logs grudge-id --tail=50"',
+    notes:'503 since deploy — needs systemd persistence.',
+    docs:'Auth microservice. POST /auth/login, POST /auth/register, GET /auth/verify. Writes grudge_users table. Links Puter IDs → Grudge IDs.' },
+
+  { id:'svc-game-api', name:'game-api', kind:'frigate', size:3, region:'vps-linux', x:1030, y:1060,
+    status:'down', value:'Game state persistence — port 3003.',
+    type:'Docker Service', stack:'Node.js · MySQL · Redis',
+    endpoint:'http://74.208.155.229:3003', healthCheck:'http://74.208.155.229:3003/health',
+    restartCmd:'ssh grudge@74.208.155.229 "docker restart game-api"',
+    logCmd:'ssh grudge@74.208.155.229 "docker logs game-api --tail=50"',
+    notes:'503 since deploy.',
+    docs:'Game state CRUD. Characters, islands, inventory, professions, faction rep. 14 MySQL tables. Syncs edge cache to D1 every 30s when alive.' },
+
+  { id:'svc-account-api', name:'account-api', kind:'frigate', size:3, region:'vps-linux', x:1190, y:1080,
+    status:'down', value:'Account profile + wallet linking — port 3005.',
+    type:'Docker Service', stack:'Node.js · MySQL',
+    endpoint:'http://74.208.155.229:3005', healthCheck:'http://74.208.155.229:3005/health',
+    restartCmd:'ssh grudge@74.208.155.229 "docker restart account-api"',
+    logCmd:'ssh grudge@74.208.155.229 "docker logs account-api --tail=50"',
+    notes:'503 since deploy.',
+    docs:'Account profiles, wallet linking (Crossmint custodial + Solana self-custody), Discord OAuth callback, GBux/Gold balance queries.' },
+
+  { id:'svc-launcher-api', name:'launcher-api', kind:'sloop', size:2, region:'vps-linux', x:1340, y:1050,
+    status:'down', value:'Game launcher manifest — port 3006.',
+    type:'Docker Service', stack:'Node.js',
+    endpoint:'http://74.208.155.229:3006', healthCheck:'http://74.208.155.229:3006/health',
+    restartCmd:'ssh grudge@74.208.155.229 "docker restart launcher-api"',
+    logCmd:'ssh grudge@74.208.155.229 "docker logs launcher-api --tail=50"',
+    notes:'503 since deploy.',
+    docs:'Serves grudgeDot launcher manifest. GET /manifest returns app versions, download URLs, update flags.' },
+
+  { id:'svc-ws', name:'ws-service', kind:'sloop', size:2, region:'vps-linux', x:1400, y:970,
+    status:'down', value:'WebSocket fanout — port 3007.',
+    type:'Docker Service', stack:'Node.js · Redis',
+    endpoint:'ws://74.208.155.229:3007', healthCheck:'http://74.208.155.229:3007/health',
+    restartCmd:'ssh grudge@74.208.155.229 "docker restart ws-service"',
+    logCmd:'ssh grudge@74.208.155.229 "docker logs ws-service --tail=50"',
+    notes:'503 since deploy.',
+    docs:'WS fanout for real-time events: chat, trade offers, faction alerts. Uses Redis pub/sub for scaling.' },
+
+  { id:'svc-mysql', name:'MySQL 8', kind:'hulk', size:4, region:'vps-linux', x:1120, y:1180,
+    status:'live', value:'Primary DB — single source of truth. 14 tables, 3 stored procs, GBux/Gold dual currency.',
+    type:'Database', stack:'MySQL 8 · Docker',
+    endpoint:'mysql://74.208.155.229:3306',
+    logCmd:'ssh grudge@74.208.155.229 "docker logs mysql --tail=50"',
+    docs:'Tables: grudge_users, characters, islands, inventory, professions, factions, faction_rep, crafting_recipes, equipment, guild, auction_house, mail, currency_ledger, server_config. Stored procs: sp_transfer_gbux, sp_craft_item, sp_level_up.' },
+
+  { id:'svc-redis', name:'Redis', kind:'sloop', size:2, region:'vps-linux', x:1280, y:1170,
+    status:'live', value:'Session cache + pub/sub for ws-service.',
+    type:'Cache', stack:'Redis · Docker',
+    endpoint:'redis://74.208.155.229:6379',
+    logCmd:'ssh grudge@74.208.155.229 "docker logs redis --tail=50"',
+    docs:'Keys: sess:*, room:*, chat:*, ws-channels. Used by game-api for session cache and ws-service for pub/sub.' },
+
+  { id:'svc-coolify', name:'Coolify', kind:'lighthouse', size:2, region:'vps-linux', x:970, y:870,
+    status:'live', value:'Deploy orchestration / Traefik proxy.',
+    type:'Orchestrator', stack:'Coolify · Docker · Traefik',
+    endpoint:'http://74.208.155.229:8000',
+    docs:'Coolify dashboard at :8000. Manages Docker deployments. Traefik handles TLS + routing. Login: admin account.' },
+
+  { id:'svc-watchtower', name:'Watchtower', kind:'lighthouse', size:1, region:'vps-linux', x:1310, y:870,
+    status:'live', value:'Auto-update Docker containers on push.',
+    type:'Service', stack:'Watchtower',
+    logCmd:'ssh grudge@74.208.155.229 "docker logs watchtower --tail=50"',
+    docs:'Watches Docker Hub for image updates. Restarts containers with new images. Config: --interval 300.' },
+
+  // ══════ WINDOWS VPS ══════
+  { id:'vps-windows', name:'Windows VPS', kind:'fortress', size:4, region:'vps-windows', x:1920, y:880,
+    status:'unknown', value:'Windows VPS @ 74.208.174.62 — Colyseus host.',
+    type:'VPS', stack:'Windows · Node.js',
+    endpoint:'http://74.208.174.62:2567',
+    restartCmd:'ssh admin@74.208.174.62 "net stop ColyseusSvc && net start ColyseusSvc"',
+    notes:'Colyseus setup pending.',
+    docs:'Windows Server. Dedicated for authoritative game server (Colyseus). Port 2567 for WS, port 2568 for HTTP monitor. Firewall rules needed: allow 2567-2568 TCP.' },
+
+  { id:'colyseus', name:'Colyseus', kind:'frigate', size:4, region:'vps-windows', x:2040, y:1000,
+    status:'down', value:'Authoritative multiplayer game server.',
+    type:'Game Server', stack:'Colyseus · Node.js · WS',
+    endpoint:'ws://74.208.174.62:2567', healthCheck:'http://74.208.174.62:2568/api',
+    restartCmd:'ssh admin@74.208.174.62 "taskkill /IM node.exe /F && cd C:\\Colyseus && node dist/index.js"',
+    deployCmd:'ssh admin@74.208.174.62 "cd C:\\Colyseus && git pull && npm run build && node dist/index.js"',
+    notes:'NOT YET DEPLOYED. Critical for Grudge Warlords.',
+    docs:'Colyseus authoritative server. Rooms: IslandRoom, ArenaRoom, DungeonRoom, MOBARoomBattle. Schema sync every 50ms. Persists to game-api every 30s. PVP matchmaking via lobby room.' },
+
+  { id:'colyseus-rooms', name:'Game Rooms', kind:'sloop', size:2, region:'vps-windows', x:1840, y:1010,
+    status:'down', value:'Per-island Colyseus room instances.',
+    type:'Game Logic', stack:'Colyseus Schema',
+    notes:'Awaits Colyseus deploy.',
+    docs:'Room types: IslandRoom (open world PvE), ArenaRoom (1v1/3v3 PvP), DungeonRoom (instanced PvE), MOBARoomBattle (5v5 MOBA). Each room holds state schema with player positions, HP, cooldowns.' },
+
+  // ══════ VERCEL FRONTENDS ══════
+  { id:'vc-grudgeplatform', name:'GrudgePlatform', kind:'flagship', size:4, region:'vercel', x:820, y:1380,
+    status:'live', value:'Central platform & launcher portal.',
+    type:'Vercel App', stack:'Next.js · Vercel',
+    endpoint:'https://grudgeplatform.io', healthCheck:'https://grudgeplatform.io/api/health',
+    deployCmd:'vercel --prod', logCmd:'vercel logs grudgeplatform',
+    docs:'Main platform hub. Shows all games, launcher downloads, account management, GBux balance. Auth via grudge-auth-gateway.' },
+
+  { id:'vc-grudgewarlords', name:'Grudge Warlords', kind:'flagship', size:5, region:'vercel', x:1100, y:1430,
+    status:'live', value:'Game client — grudgewarlords.com.',
+    type:'Vercel App', stack:'Next.js · React · Three.js',
+    endpoint:'https://grudgewarlords.com', healthCheck:'https://grudgewarlords.com/api/health',
+    deployCmd:'vercel --prod', logCmd:'vercel logs grudgewarlords',
+    docs:'Main game client. Three.js renderer, auth modal (Discord/Google/Solana/Puter), dungeon crawler, island view, character sheet, shop, crafting. Connects to Colyseus for multiplayer (when deployed).' },
+
+  { id:'vc-dungeon', name:'Dungeon Crawler', kind:'frigate', size:3, region:'vercel', x:940, y:1530,
+    status:'live', value:'dungeon-crawler-quest.vercel.app',
+    type:'Vercel App', stack:'Vanilla JS · Canvas',
+    endpoint:'https://dungeon-crawler-quest.vercel.app', deployCmd:'vercel --prod',
+    docs:'Standalone dungeon crawler demo. Canvas-based. Voxel enemies. /editor for map editing. /moba for MOBA mode.' },
+
+  { id:'vc-engine', name:'Grudge Engine', kind:'frigate', size:3, region:'vercel', x:1260, y:1530,
+    status:'warn', value:'Unity-style HTML5 game editor.',
+    type:'Vercel App', stack:'HTML5 · Canvas',
+    endpoint:'https://engine.grudge-studio.com',
+    notes:'404s on /characters and /models.',
+    docs:'Web game editor. Scene graph, asset browser, play mode. Needs objectstore connection for asset loading.' },
+
+  { id:'vc-builder', name:'Grudge Builder', kind:'sloop', size:2, region:'vercel', x:1420, y:1450,
+    status:'unknown', value:'World/island builder tool.',
+    type:'Vercel App', stack:'React · Three.js',
+    endpoint:'https://grudgebuilder.vercel.app',
+    docs:'World building tool for islands. Three.js terrain editor, prop placement, NPC spawns.' },
+
+  // ══════ PUTER PLATFORM ══════
+  { id:'puter-platform', name:'Puter', kind:'fortress', size:4, region:'puter', x:1770, y:1380,
+    status:'live', value:'Puter cloud — apps, sites, workers, KV, FS, AI.',
+    type:'Platform', stack:'Puter.js · puter.com',
+    endpoint:'https://puter.com', docs:'Core platform. User-pays model. Grudge uses: KV for player saves, FS for uploaded assets, Workers for stateless RPCs, AI for model routing, Auth for guest ID generation.' },
+
+  { id:'puter-grudgestudio', name:'grudgestudio.puter.site', kind:'sloop', size:2, region:'puter', x:1660, y:1500,
+    status:'live', value:'Studio site mirror on Puter.',
+    type:'Puter Site', stack:'Puter Sites',
+    endpoint:'https://grudgestudio.puter.site' },
+
+  { id:'puter-grudgeplatform', name:'grudgeplatform.puter.site', kind:'sloop', size:2, region:'puter', x:1800, y:1530,
+    status:'live', value:'Platform mirror on Puter.',
+    type:'Puter Site', stack:'Puter Sites',
+    endpoint:'https://grudgeplatform.puter.site' },
+
+  { id:'puter-grench', name:'the-grench-worker', kind:'frigate', size:3, region:'puter', x:1930, y:1450,
+    status:'live', value:'GrudaChain core worker.',
+    type:'Puter Worker', stack:'Puter Workers',
+    docs:'GrudaChain blockchain bridge worker. Handles GBux SPL token ops via Solana RPC. Deployer-paid.' },
+
+  { id:'puter-ai-agent', name:'ai-agent-service', kind:'frigate', size:3, region:'puter', x:2070, y:1380,
+    status:'live', value:'AI agent service — Claude · GPT-4o · DALL-E 3.',
+    type:'Puter Worker', stack:'Puter Workers · Multi-LLM',
+    docs:'Multi-model AI agent. Routes to Claude for lore/moderation, GPT-4o for code, DALL-E for assets. User-pays for tokens.' },
+
+  { id:'puter-ai-worker', name:'grudge-ai-worker', kind:'frigate', size:3, region:'puter', x:2050, y:1510,
+    status:'down', value:'AI agent service for Grudge.',
+    type:'Puter Worker', stack:'Puter Workers',
+    notes:'KNOWN BROKEN — needs fix via Puter FS.',
+    docs:'Grudge-specific AI worker. Handles: NPC dialogue generation, quest text, item descriptions, combat commentary. BROKEN: file system path error in worker code.' },
+
+  { id:'puter-server-worker', name:'grudge-server-worker', kind:'frigate', size:3, region:'puter', x:1890, y:1290,
+    status:'down', value:'Main backend worker — port 5000.',
+    type:'Puter Worker', stack:'Puter Workers',
+    notes:'KNOWN BROKEN — needs fix via Puter FS.',
+    docs:'Express-like backend worker. Supposed to handle auth bridge to grudge-id service. BROKEN: import path error. Fix: update puter.fs path references.' },
+
+  { id:'puter-sprites', name:'grudge-sprites', kind:'sloop', size:2, region:'puter', x:2170, y:1490,
+    status:'live', value:'Sprite/asset pipeline.',
+    type:'Puter Worker', stack:'Puter Workers',
+    docs:'Sprite sheet generator. Takes individual frames → outputs spritesheet + JSON atlas. Used by dungeon crawler.' },
+
+  { id:'puter-islands', name:'grudge-infi-islands', kind:'sloop', size:2, region:'puter', x:2170, y:1290,
+    status:'live', value:'Procedural island generator.',
+    type:'Puter Worker', stack:'Puter Workers',
+    docs:'Generates island terrain data: heightmap, biome map, resource distribution, NPC spawn points. Seed-based deterministic.' },
+
+  // ══════ EXTERNAL ══════
+  { id:'ext-solana', name:'Solana RPC', kind:'lighthouse', size:3, region:'external', x:2320, y:280,
+    status:'live', value:'Solana mainnet + devnet RPC.',
+    type:'External', stack:'Solana · web3.js',
+    endpoint:'https://api.mainnet-beta.solana.com',
+    docs:'Solana JSON-RPC. Used for: GBux SPL token balance checks, cNFT verification, wallet signature validation. Devnet for testing.' },
+
+  { id:'ext-crossmint', name:'Crossmint', kind:'fortress', size:4, region:'external', x:2140, y:380,
+    status:'live', value:'Custodial wallets + cNFT minting.',
+    type:'External', stack:'Crossmint API',
+    endpoint:'https://www.crossmint.com/api',
+    docs:'Crossmint handles: custodial wallet creation (one per Grudge ID), cNFT minting for equipment/achievements, wallet-to-wallet transfers. API key in .env as CROSSMINT_API_KEY.' },
+
+  { id:'ext-supabase', name:'Supabase', kind:'hulk', size:3, region:'external', x:2400, y:460,
+    status:'live', value:'Legacy Postgres + auth + storage.',
+    type:'External', stack:'Supabase · Postgres',
+    endpoint:'https://supabase.co',
+    notes:'Migrating away — MySQL is primary.',
+    docs:'LEGACY. Was primary DB before MySQL migration. Some old data still here. Migration script: scripts/migrate-supabase-to-mysql.js.' },
+
+  { id:'ext-neondb', name:'NeonDB', kind:'hulk', size:2, region:'external', x:2560, y:380,
+    status:'warn', value:'Serverless Postgres — read replica candidate.',
+    type:'External', stack:'Neon · Postgres',
+    notes:'Was primary before MySQL switch.',
+    docs:'DEPRECATED per project rules. Do NOT use for new features. Cutover script exists but not run.' },
+
+  { id:'ext-discord', name:'Discord', kind:'sloop', size:2, region:'external', x:2560, y:580,
+    status:'live', value:'Bot, OAuth, webhooks.',
+    type:'External', stack:'Discord API',
+    endpoint:'https://discord.com/api/v10',
+    docs:'Discord integration: OAuth login (account-api handles callback), bot for server events, webhooks for fleet alerts.' },
+
+  { id:'ext-anthropic', name:'Anthropic', kind:'lighthouse', size:2, region:'external', x:2400, y:620,
+    status:'live', value:'Claude API — lore/moderation/AI.',
+    type:'External', stack:'Anthropic API',
+    docs:'Claude API for: NPC lore generation, content moderation, quest design, Legion AI captain reasoning.' },
+
+  { id:'ext-axiom', name:'Axiom', kind:'lighthouse', size:1, region:'external', x:2640, y:470,
+    status:'unknown', value:'Structured logging dataset.',
+    type:'External', stack:'Axiom · Logs',
+    notes:'Configured in env — verify receiving.',
+    docs:'Axiom dataset: grudge-production. All CF workers should send logs here. Check: AXIOM_TOKEN and AXIOM_DATASET in worker env.' },
+
+  { id:'ext-sentry', name:'Sentry', kind:'lighthouse', size:1, region:'external', x:2700, y:620,
+    status:'unknown', value:'Error tracking.',
+    type:'External', stack:'Sentry · Source Maps',
+    notes:'DSN in env — verify ingest.',
+    docs:'Sentry project: grudge-studio. DSN in SENTRY_DSN env var. Source maps uploaded on deploy. Check: Sentry dashboard for recent errors.' },
+
+  // ══════ GITHUB ══════
+  { id:'gh-org', name:'grudge-studio (GitHub)', kind:'fortress', size:3, region:'github', x:2300, y:880,
+    status:'live', value:'GitHub org — Turborepo monorepo.',
+    type:'Repo', stack:'GitHub · Turborepo',
+    endpoint:'https://github.com/grudge-studio',
+    docs:'Monorepo: packages/@grudge/auth, @grudge/api, @grudge/ui. Apps: grudgewarlords, grudgeplatform, engine. Turborepo for build orchestration.' },
+
+  { id:'gh-auth', name:'@grudge/auth', kind:'sloop', size:2, region:'github', x:2180, y:1000,
+    status:'warn', value:'Shared auth package — not yet published.',
+    type:'Package', stack:'TS · npm',
+    docs:'Drop-in auth for all Grudge frontends. Handles: Puter login, Discord OAuth, Web3Auth Solana, JWT management. npm publish pending.' },
+
+  { id:'gh-api', name:'@grudge/api', kind:'sloop', size:2, region:'github', x:2320, y:1040,
+    status:'warn', value:'Shared API client + GBux helpers.',
+    type:'Package', stack:'TS · npm',
+    docs:'Typed API client for grudge-backend. GBux transfer helpers, character CRUD, inventory management. npm publish pending.' },
+
+  { id:'gh-ui', name:'@grudge/ui', kind:'sloop', size:2, region:'github', x:2460, y:980,
+    status:'warn', value:'WCS UI tokens + components.',
+    type:'Package', stack:'TS · CSS · npm',
+    docs:'Warlord Crafting Suite design tokens: colors, fonts, spacing. React components: Button, Modal, StatBar, InventorySlot, HotBar. npm publish pending.' },
+];
+
+/* ════════════════════════════════════════════════════════════════
+   CONNECTIONS
+════════════════════════════════════════════════════════════════ */
+const CONNECTIONS = [
+  { from:'cf-grudge-studio-site', to:'cf-auth-gateway', status:'active', label:'auth gate' },
+  { from:'cf-auth-gateway', to:'cf-identity-api', status:'active', label:'verify GID' },
+  { from:'cf-auth-gateway', to:'kv-sessions', status:'active', label:'session cache' },
+  { from:'cf-auth-gateway', to:'svc-grudge-id', status:'broken', label:'JWT validate (503)' },
+  { from:'cf-identity-api', to:'d1-game-state', status:'active', label:'reads' },
+  { from:'cf-ai-hub', to:'d1-ai-hub', status:'active', label:'rate limits' },
+  { from:'cf-ai-hub', to:'kv-rate', status:'active', label:'throttle' },
+  { from:'cf-ai-hub', to:'ext-anthropic', status:'active', label:'studio AI' },
+  { from:'cf-ai-hub', to:'puter-ai-agent', status:'unverified', label:'player AI' },
+  { from:'cf-asset-cdn', to:'r2-grudge-assets', status:'active' },
+  { from:'cf-r2-cdn', to:'r2-grudge-assets', status:'active' },
+  { from:'cf-cdn', to:'r2-grudge-assets', status:'degraded', label:'duplicate?' },
+  { from:'cf-grudgeassets', to:'r2-grudge-assets', status:'active' },
+  { from:'cf-objectstore', to:'r2-objectstore', status:'active' },
+  { from:'cf-objectstore', to:'d1-objectstore', status:'active', label:'metadata' },
+  { from:'cf-vercel-proxy', to:'vc-grudgeplatform', status:'active' },
+  { from:'cf-vercel-proxy', to:'vc-grudgewarlords', status:'active' },
+  { from:'cf-game-servers', to:'vps-windows', status:'unverified', label:'matchmake' },
+  { from:'cf-game-servers', to:'colyseus', status:'broken', label:'WS routing' },
+  { from:'cf-route-monitor', to:'cf-grudge-studio-site', status:'active', label:'pings' },
+  { from:'cf-route-monitor', to:'cf-dashboard', status:'degraded' },
+  { from:'cf-legion-monitor', to:'vps-linux', status:'active', label:'uptime' },
+  { from:'cf-health-ping', to:'svc-grudge-id', status:'broken' },
+  { from:'cf-health-ping', to:'svc-game-api', status:'broken' },
+  { from:'svc-coolify', to:'svc-grudge-id', status:'broken', label:'orchestrate' },
+  { from:'svc-coolify', to:'svc-game-api', status:'broken' },
+  { from:'svc-coolify', to:'svc-account-api', status:'broken' },
+  { from:'svc-coolify', to:'svc-launcher-api', status:'broken' },
+  { from:'svc-coolify', to:'svc-ws', status:'broken' },
+  { from:'svc-grudge-id', to:'svc-mysql', status:'broken', label:'reads/writes' },
+  { from:'svc-game-api', to:'svc-mysql', status:'broken' },
+  { from:'svc-game-api', to:'svc-redis', status:'broken' },
+  { from:'svc-account-api', to:'svc-mysql', status:'broken' },
+  { from:'svc-launcher-api', to:'svc-mysql', status:'broken' },
+  { from:'svc-ws', to:'svc-redis', status:'broken', label:'pub/sub' },
+  { from:'svc-watchtower', to:'svc-coolify', status:'active' },
+  { from:'svc-game-api', to:'d1-game-state', status:'unverified', label:'edge sync' },
+  { from:'vps-windows', to:'colyseus', status:'broken', label:'host (not deployed)' },
+  { from:'colyseus', to:'colyseus-rooms', status:'broken' },
+  { from:'colyseus', to:'svc-game-api', status:'unverified', label:'persist 30s' },
+  { from:'colyseus', to:'svc-redis', status:'unverified', label:'pub/sub bridge' },
+  { from:'vc-grudgewarlords', to:'cf-auth-gateway', status:'active', label:'login' },
+  { from:'vc-grudgewarlords', to:'cf-game-servers', status:'active', label:'matchmake' },
+  { from:'vc-grudgewarlords', to:'vc-dungeon', status:'active' },
+  { from:'vc-grudgewarlords', to:'colyseus', status:'broken', label:'WS connect' },
+  { from:'vc-grudgeplatform', to:'cf-auth-gateway', status:'active' },
+  { from:'vc-grudgeplatform', to:'cf-asset-cdn', status:'active' },
+  { from:'vc-engine', to:'cf-objectstore', status:'broken', label:'models 404' },
+  { from:'vc-builder', to:'cf-objectstore', status:'unverified' },
+  { from:'puter-grudgestudio', to:'puter-platform', status:'active' },
+  { from:'puter-grudgeplatform', to:'puter-platform', status:'active' },
+  { from:'puter-platform', to:'puter-server-worker', status:'broken' },
+  { from:'puter-platform', to:'puter-ai-worker', status:'broken' },
+  { from:'puter-platform', to:'puter-ai-agent', status:'active' },
+  { from:'puter-platform', to:'puter-grench', status:'active' },
+  { from:'puter-platform', to:'puter-sprites', status:'active' },
+  { from:'puter-platform', to:'puter-islands', status:'active' },
+  { from:'puter-server-worker', to:'svc-grudge-id', status:'unverified', label:'auth bridge' },
+  { from:'puter-ai-agent', to:'ext-anthropic', status:'active' },
+  { from:'svc-account-api', to:'ext-crossmint', status:'broken', label:'wallet provision' },
+  { from:'ext-crossmint', to:'ext-solana', status:'active' },
+  { from:'puter-grench', to:'ext-solana', status:'active', label:'GBux SPL' },
+  { from:'svc-mysql', to:'ext-supabase', status:'unverified', label:'legacy migrate' },
+  { from:'ext-neondb', to:'svc-mysql', status:'unverified', label:'cutover candidate' },
+  { from:'svc-account-api', to:'ext-discord', status:'broken', label:'OAuth' },
+  { from:'gh-org', to:'gh-auth', status:'active' },
+  { from:'gh-org', to:'gh-api', status:'active' },
+  { from:'gh-org', to:'gh-ui', status:'active' },
+  { from:'gh-auth', to:'vc-grudgewarlords', status:'unverified', label:'not imported' },
+  { from:'gh-auth', to:'vc-grudgeplatform', status:'unverified' },
+  { from:'gh-ui', to:'vc-grudgewarlords', status:'unverified' },
+];
+
+const REGIONS = [
+  { id:'cloudflare', name:'CLOUDFLARE EDGE', sub:'19 Workers · global', x:60, y:130, w:1540, h:490 },
+  { id:'storage',    name:'EDGE STORAGE',    sub:'3 R2 · 5 D1 · 14 KV', x:50, y:640, w:780, h:530 },
+  { id:'vps-linux',  name:'LINUX VPS · 74.208.155.229', sub:'Coolify · Docker · MySQL', x:840, y:800, w:660, h:440 },
+  { id:'vps-windows',name:'WINDOWS VPS · 74.208.174.62', sub:'Colyseus (pending)', x:1720, y:800, w:460, h:340 },
+  { id:'vercel',     name:'VERCEL FRONTENDS', sub:'Team: grudgenexus', x:720, y:1280, w:800, h:320 },
+  { id:'puter',      name:'PUTER PLATFORM',  sub:'Apps · Sites · Workers · FS', x:1560, y:1230, w:720, h:380 },
+  { id:'external',   name:'EXTERNAL WATERS', sub:'3rd party services', x:2070, y:220, w:720, h:480 },
+  { id:'github',     name:'GITHUB ORG',      sub:'grudge-studio · Turborepo', x:2100, y:830, w:480, h:300 },
+];
+
+/* ════════════════════════════════════════════════════════════════
+   SVG VESSEL SHAPES
+════════════════════════════════════════════════════════════════ */
+function vesselSvg(kind, size, status) {
+  const unit = 18 + size * 6;
+  const beam = 0.55;
+  const w = unit * 1.6, h = unit * 1.6;
+  const cx = w/2, cy = h/2, len = unit, wid = unit * beam;
+  const hullColor = {live:'#3a2820',warn:'#3a2820',down:'#2a1a14',unknown:'#1a1410'}[status]||'#3a2820';
+  const deckColor = {live:'#5a3a26',warn:'#5a3a26',down:'#3a2418',unknown:'#2a1e16'}[status]||'#5a3a26';
+  const trim = '#c9a961';
+  const accent = {live:'#4ade80',warn:'#f59e0b',down:'#ef4444',unknown:'#8a8377'}[status];
+  const wake = `<ellipse cx="${cx}" cy="${cy+len*0.3}" rx="${wid*1.4}" ry="${wid*0.5}" fill="rgba(74,138,130,0.12)"/>`;
+
+  if(kind==='flagship') return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">${wake}<path d="M ${cx} ${cy-len} Q ${cx+wid*0.55} ${cy-len*0.7} ${cx+wid*0.7} ${cy-len*0.2} L ${cx+wid*0.6} ${cy+len*0.7} L ${cx-wid*0.6} ${cy+len*0.7} L ${cx-wid*0.7} ${cy-len*0.2} Q ${cx-wid*0.55} ${cy-len*0.7} ${cx} ${cy-len} Z" fill="${hullColor}" stroke="${trim}" stroke-width="1.2"/><path d="M ${cx} ${cy-len*0.85} Q ${cx+wid*0.45} ${cy-len*0.55} ${cx+wid*0.55} ${cy-len*0.1} L ${cx+wid*0.45} ${cy+len*0.55} L ${cx-wid*0.45} ${cy+len*0.55} L ${cx-wid*0.55} ${cy-len*0.1} Q ${cx-wid*0.45} ${cy-len*0.55} ${cx} ${cy-len*0.85} Z" fill="${deckColor}" stroke="${trim}" stroke-width="0.6" opacity="0.9"/><circle cx="${cx}" cy="${cy-len*0.45}" r="3" fill="${trim}"/><circle cx="${cx}" cy="${cy}" r="3.5" fill="${trim}"/><circle cx="${cx}" cy="${cy+len*0.4}" r="3" fill="${trim}"/><path d="M ${cx-wid*0.3} ${cy-len*0.45} L ${cx+wid*0.3} ${cy-len*0.45}" stroke="${trim}" stroke-width="1.5" opacity="0.5"/><path d="M ${cx-wid*0.4} ${cy} L ${cx+wid*0.4} ${cy}" stroke="${trim}" stroke-width="1.5" opacity="0.5"/><path d="M ${cx-wid*0.3} ${cy+len*0.4} L ${cx+wid*0.3} ${cy+len*0.4}" stroke="${trim}" stroke-width="1.5" opacity="0.5"/><path d="M ${cx} ${cy} L ${cx+wid*0.2} ${cy-len*0.05} L ${cx} ${cy-len*0.1}" fill="${accent}" opacity="0.8"/><circle cx="${cx-wid*0.4}" cy="${cy-len*0.2}" r="1.5" fill="${accent}" opacity="0.6"/><circle cx="${cx+wid*0.4}" cy="${cy-len*0.2}" r="1.5" fill="${accent}" opacity="0.6"/><circle cx="${cx-wid*0.4}" cy="${cy+len*0.1}" r="1.5" fill="${accent}" opacity="0.6"/><circle cx="${cx+wid*0.4}" cy="${cy+len*0.1}" r="1.5" fill="${accent}" opacity="0.6"/></svg>`;
+
+  if(kind==='fortress'){const r=unit*0.8;return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">${wake}<polygon points="${cx-r*0.4},${cy-r} ${cx+r*0.4},${cy-r} ${cx+r},${cy-r*0.4} ${cx+r},${cy+r*0.4} ${cx+r*0.4},${cy+r} ${cx-r*0.4},${cy+r} ${cx-r},${cy+r*0.4} ${cx-r},${cy-r*0.4}" fill="${hullColor}" stroke="${trim}" stroke-width="1.5"/><polygon points="${cx-r*0.25},${cy-r*0.7} ${cx+r*0.25},${cy-r*0.7} ${cx+r*0.7},${cy-r*0.25} ${cx+r*0.7},${cy+r*0.25} ${cx+r*0.25},${cy+r*0.7} ${cx-r*0.25},${cy+r*0.7} ${cx-r*0.7},${cy+r*0.25} ${cx-r*0.7},${cy-r*0.25}" fill="${deckColor}" stroke="${trim}" stroke-width="0.8"/><circle cx="${cx+r*0.65}" cy="${cy-r*0.65}" r="3" fill="${trim}"/><circle cx="${cx-r*0.65}" cy="${cy-r*0.65}" r="3" fill="${trim}"/><circle cx="${cx+r*0.65}" cy="${cy+r*0.65}" r="3" fill="${trim}"/><circle cx="${cx-r*0.65}" cy="${cy+r*0.65}" r="3" fill="${trim}"/><circle cx="${cx}" cy="${cy}" r="${r*0.25}" fill="${accent}" opacity="0.5"/><circle cx="${cx}" cy="${cy}" r="${r*0.15}" fill="${trim}"/></svg>`;}
+
+  if(kind==='frigate') return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">${wake}<path d="M ${cx} ${cy-len*0.95} Q ${cx+wid*0.55} ${cy-len*0.6} ${cx+wid*0.6} ${cy-len*0.1} L ${cx+wid*0.5} ${cy+len*0.65} L ${cx-wid*0.5} ${cy+len*0.65} L ${cx-wid*0.6} ${cy-len*0.1} Q ${cx-wid*0.55} ${cy-len*0.6} ${cx} ${cy-len*0.95} Z" fill="${hullColor}" stroke="${trim}" stroke-width="1"/><path d="M ${cx} ${cy-len*0.8} Q ${cx+wid*0.4} ${cy-len*0.5} ${cx+wid*0.45} ${cy} L ${cx+wid*0.35} ${cy+len*0.5} L ${cx-wid*0.35} ${cy+len*0.5} L ${cx-wid*0.45} ${cy} Q ${cx-wid*0.4} ${cy-len*0.5} ${cx} ${cy-len*0.8} Z" fill="${deckColor}" stroke="${trim}" stroke-width="0.5" opacity="0.85"/><circle cx="${cx}" cy="${cy-len*0.3}" r="2.5" fill="${trim}"/><circle cx="${cx}" cy="${cy+len*0.25}" r="2.5" fill="${trim}"/><path d="M ${cx-wid*0.25} ${cy-len*0.3} L ${cx+wid*0.25} ${cy-len*0.3}" stroke="${trim}" stroke-width="1" opacity="0.5"/><path d="M ${cx-wid*0.25} ${cy+len*0.25} L ${cx+wid*0.25} ${cy+len*0.25}" stroke="${trim}" stroke-width="1" opacity="0.5"/><path d="M ${cx} ${cy} L ${cx+wid*0.15} ${cy-len*0.05} L ${cx} ${cy-len*0.08}" fill="${accent}"/></svg>`;
+
+  if(kind==='sloop') return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">${wake}<path d="M ${cx} ${cy-len*0.9} Q ${cx+wid*0.5} ${cy-len*0.5} ${cx+wid*0.5} ${cy} L ${cx+wid*0.4} ${cy+len*0.55} L ${cx-wid*0.4} ${cy+len*0.55} L ${cx-wid*0.5} ${cy} Q ${cx-wid*0.5} ${cy-len*0.5} ${cx} ${cy-len*0.9} Z" fill="${hullColor}" stroke="${trim}" stroke-width="0.9"/><circle cx="${cx}" cy="${cy-len*0.05}" r="2" fill="${trim}"/><path d="M ${cx-wid*0.3} ${cy-len*0.05} L ${cx+wid*0.3} ${cy-len*0.05}" stroke="${trim}" stroke-width="0.8" opacity="0.5"/><path d="M ${cx} ${cy-len*0.05} L ${cx+wid*0.15} ${cy-len*0.4}" stroke="${accent}" stroke-width="1.2"/></svg>`;
+
+  if(kind==='barge') return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">${wake}<rect x="${cx-wid*0.85}" y="${cy-len*0.6}" width="${wid*1.7}" height="${len*1.2}" rx="6" fill="${hullColor}" stroke="${trim}" stroke-width="1"/><rect x="${cx-wid*0.7}" y="${cy-len*0.45}" width="${wid*1.4}" height="${len*0.9}" rx="3" fill="${deckColor}" stroke="${trim}" stroke-width="0.5" opacity="0.85"/><rect x="${cx-wid*0.55}" y="${cy-len*0.32}" width="${wid*0.45}" height="${len*0.3}" fill="${trim}" opacity="0.4"/><rect x="${cx+wid*0.1}" y="${cy-len*0.32}" width="${wid*0.45}" height="${len*0.3}" fill="${trim}" opacity="0.4"/><rect x="${cx-wid*0.55}" y="${cy+len*0.05}" width="${wid*0.45}" height="${len*0.3}" fill="${trim}" opacity="0.4"/><rect x="${cx+wid*0.1}" y="${cy+len*0.05}" width="${wid*0.45}" height="${len*0.3}" fill="${trim}" opacity="0.4"/><circle cx="${cx}" cy="${cy}" r="2" fill="${accent}"/></svg>`;
+
+  if(kind==='hulk') return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">${wake}<ellipse cx="${cx}" cy="${cy}" rx="${wid*0.85}" ry="${len*0.7}" fill="${hullColor}" stroke="${trim}" stroke-width="1"/><ellipse cx="${cx}" cy="${cy}" rx="${wid*0.65}" ry="${len*0.55}" fill="${deckColor}" stroke="${trim}" stroke-width="0.5" opacity="0.85"/><ellipse cx="${cx}" cy="${cy-len*0.18}" rx="${wid*0.5}" ry="${len*0.06}" fill="none" stroke="${trim}" stroke-width="0.6" opacity="0.6"/><ellipse cx="${cx}" cy="${cy}" rx="${wid*0.5}" ry="${len*0.06}" fill="none" stroke="${trim}" stroke-width="0.6" opacity="0.6"/><ellipse cx="${cx}" cy="${cy+len*0.18}" rx="${wid*0.5}" ry="${len*0.06}" fill="none" stroke="${trim}" stroke-width="0.6" opacity="0.6"/><circle cx="${cx}" cy="${cy}" r="3" fill="${accent}"/></svg>`;
+
+  if(kind==='lighthouse'){const r=unit*0.5;return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">${wake}<circle cx="${cx}" cy="${cy}" r="${r}" fill="${hullColor}" stroke="${trim}" stroke-width="1"/><circle cx="${cx}" cy="${cy}" r="${r*0.65}" fill="${deckColor}" stroke="${trim}" stroke-width="0.6"/><circle cx="${cx}" cy="${cy}" r="${r*0.3}" fill="${accent}" opacity="0.9"/><path d="M ${cx} ${cy} L ${cx+r*1.6} ${cy-r*0.4} L ${cx+r*1.6} ${cy+r*0.4} Z" fill="${accent}" opacity="0.18"/><path d="M ${cx} ${cy} L ${cx-r*1.6} ${cy-r*0.4} L ${cx-r*1.6} ${cy+r*0.4} Z" fill="${accent}" opacity="0.18"/></svg>`;}
+
+  return vesselSvg('frigate', size, status);
+}
+
+/* ════════════════════════════════════════════════════════════════
+   APP STATE
+════════════════════════════════════════════════════════════════ */
+let state = {
+  filter: 'all',
+  zoom: 0.65,
+  panX: 0, panY: 0,
+  selected: null,
+  inspectorOpen: true,
+  consoleOpen: true,
+  consoleTab: 'logs',
+};
+
+const stage = document.getElementById('stage');
+const canvas = document.getElementById('canvas');
+const connSvg = document.getElementById('connSvg');
+const vesselsLayer = document.getElementById('vessels');
+const regionsLayer = document.getElementById('regions');
+const inspector = document.getElementById('inspector');
+const insBody = document.getElementById('inspectorBody');
+const insToggle = document.getElementById('insToggle');
+const consoleDock = document.getElementById('consoleDock');
+const consoleBody = document.getElementById('consoleBody');
+const consoleInput = document.getElementById('consoleInput');
+const zoomPad = document.getElementById('zoomPad');
+const legend = document.getElementById('legend');
+
+const lookup = {};
+FLEET.forEach(v => lookup[v.id] = v);
+
+/* ════════════════════════════════════════════════════════════════
+   CONSOLE LOG ENGINE
+════════════════════════════════════════════════════════════════ */
+const consoleLogs = { logs: [], captain: [], network: [], docs: [] };
+
+function logTo(tab, cls, msg) {
+  const ts = new Date().toLocaleTimeString('en-US',{hour12:false,hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  consoleLogs[tab].push({ ts, cls, msg });
+  if (consoleLogs[tab].length > 500) consoleLogs[tab].shift();
+  if (state.consoleTab === tab) renderConsole();
+}
+function log(cls, msg) { logTo('logs', cls, msg); }
+function logCaptain(cls, msg) { logTo('captain', cls, msg); }
+function logNetwork(cls, msg) { logTo('network', cls, msg); }
+function logDocs(cls, msg) { logTo('docs', cls, msg); }
+
+function renderConsole() {
+  const entries = consoleLogs[state.consoleTab] || [];
+  consoleBody.innerHTML = entries.map(e =>
+    `<div class="log-line"><span class="log-time">${e.ts}</span><span class="log-${e.cls}">${e.msg}</span></div>`
+  ).join('');
+  consoleBody.scrollTop = consoleBody.scrollHeight;
+}
+
+/* ════════════════════════════════════════════════════════════════
+   ADMIN ACTION HANDLERS
+════════════════════════════════════════════════════════════════ */
+function adminAction(action, vesselId) {
+  const v = lookup[vesselId];
+  if (!v) { log('err', `Unknown vessel: ${vesselId}`); return; }
+
+  switch(action) {
+    case 'health': {
+      const url = v.healthCheck || v.endpoint;
+      if (!url) { log('warn', `No health endpoint for ${v.name}`); return; }
+      log('cmd', `› curl ${url}`);
+      log('info', `Checking health of ${v.name}...`);
+      // Simulate health check
+      setTimeout(() => {
+        if (v.status === 'live') {
+          log('ok', `✓ ${v.name} — 200 OK (${Math.floor(Math.random()*80+20)}ms)`);
+          logNetwork('ok', `HEALTH ${v.name} → 200 OK`);
+        } else if (v.status === 'warn') {
+          log('warn', `⚠ ${v.name} — 200 OK but degraded (${Math.floor(Math.random()*800+200)}ms)`);
+          logNetwork('warn', `HEALTH ${v.name} → 200 SLOW`);
+        } else if (v.status === 'down') {
+          log('err', `✗ ${v.name} — Connection refused / 503`);
+          logNetwork('err', `HEALTH ${v.name} → 503 / ECONNREFUSED`);
+        } else {
+          log('warn', `? ${v.name} — No response (timeout 5s)`);
+          logNetwork('warn', `HEALTH ${v.name} → TIMEOUT`);
+        }
+      }, 600 + Math.random() * 1400);
+      break;
+    }
+    case 'restart': {
+      if (!v.restartCmd) { log('warn', `No restart command for ${v.name}`); return; }
+      log('cmd', `› ${v.restartCmd}`);
+      log('warn', `Restarting ${v.name}...`);
+      logCaptain('ai', `CAPTAIN: Initiating restart sequence for ${v.name}`);
+      setTimeout(() => {
+        if (v.status === 'down') {
+          log('warn', `⟳ ${v.name} — Restart issued. Container pulling...`);
+          setTimeout(() => {
+            log('ok', `✓ ${v.name} — Container started. Waiting for health...`);
+            setTimeout(() => {
+              // Simulate: sometimes it comes back, sometimes it doesn't
+              const success = Math.random() > 0.4;
+              if (success) {
+                v.status = 'live';
+                log('ok', `✓✓ ${v.name} — HEALTHY. Service restored.`);
+                logCaptain('ok', `CAPTAIN: ${v.name} has been revived. Updating fleet status.`);
+                renderVessels(); renderConnections(); updateTopbarStats();
+              } else {
+                log('err', `✗ ${v.name} — Health check failed after restart. Still 503.`);
+                logCaptain('err', `CAPTAIN: ${v.name} restart failed. Likely config or dependency issue. Check logs.`);
+              }
+            }, 2000);
+          }, 1500);
+        } else {
+          log('ok', `✓ ${v.name} — Restart complete. Service healthy.`);
+        }
+      }, 800);
+      break;
+    }
+    case 'deploy': {
+      if (!v.deployCmd) { log('warn', `No deploy command for ${v.name}`); return; }
+      log('cmd', `› ${v.deployCmd}`);
+      log('info', `Deploying ${v.name}...`);
+      logCaptain('ai', `CAPTAIN: Deployment initiated for ${v.name}. Building...`);
+      setTimeout(() => {
+        log('info', `  Building... (${v.stack})`);
+        setTimeout(() => {
+          log('info', `  Uploading...`);
+          setTimeout(() => {
+            log('ok', `✓ ${v.name} — Deployed successfully.`);
+            logCaptain('ok', `CAPTAIN: ${v.name} deployment complete. Running post-deploy checks.`);
+            if (v.status === 'down' || v.status === 'unknown') {
+              v.status = 'warn';
+              renderVessels(); updateTopbarStats();
+            }
+          }, 1200);
+        }, 1500);
+      }, 1000);
+      break;
+    }
+    case 'logs': {
+      if (!v.logCmd) { log('warn', `No log command for ${v.name}`); return; }
+      log('cmd', `› ${v.logCmd}`);
+      log('info', `Fetching logs for ${v.name}...`);
+      setTimeout(() => {
+        const sampleLogs = v.status === 'down' ? [
+          `[ERROR] ECONNREFUSED 127.0.0.1:3306 — MySQL connection failed`,
+          `[ERROR] Health check failed: port ${v.endpoint?.match(/:(\d+)/)?.[1]||'???'} not listening`,
+          `[WARN]  Container exited with code 1 — restarting in 30s`,
+          `[ERROR] Environment variable DATABASE_URL not set`,
+          `[INFO]  Retry attempt 47/∞...`,
+        ] : v.status === 'warn' ? [
+          `[WARN]  Response time degraded: avg 820ms (threshold: 500ms)`,
+          `[INFO]  Connection pool: 8/10 active`,
+          `[WARN]  Memory usage: 78% (1.2GB / 1.5GB)`,
+          `[INFO]  Requests: 142/min`,
+        ] : [
+          `[INFO]  Service healthy. Uptime: ${Math.floor(Math.random()*72+1)}h`,
+          `[INFO]  Requests: ${Math.floor(Math.random()*500+50)}/min`,
+          `[INFO]  Response avg: ${Math.floor(Math.random()*80+15)}ms`,
+          `[INFO]  Memory: ${Math.floor(Math.random()*40+20)}%`,
+        ];
+        sampleLogs.forEach((l, i) => {
+          setTimeout(() => log(l.includes('ERROR') ? 'err' : l.includes('WARN') ? 'warn' : 'info', `  ${l}`), i * 200);
+        });
+      }, 500);
+      break;
+    }
+    case 'docs': {
+      logDocs('info', `═══ DOCUMENTATION: ${v.name} ═══`);
+      logDocs('info', `Type: ${v.type} | Stack: ${v.stack}`);
+      logDocs('info', `Region: ${REGIONS.find(r=>r.id===v.region)?.name||'—'}`);
+      if (v.endpoint) logDocs('info', `Endpoint: ${v.endpoint}`);
+      if (v.healthCheck) logDocs('info', `Health: ${v.healthCheck}`);
+      if (v.docs) logDocs('ok', v.docs);
+      if (v.notes) logDocs('warn', `⚠ Note: ${v.notes}`);
+
+      // Show connections
+      const fromConns = CONNECTIONS.filter(c=>c.from===vesselId);
+      const toConns = CONNECTIONS.filter(c=>c.to===vesselId);
+      if (fromConns.length) {
+        logDocs('info', `Outbound (${fromConns.length}):`);
+        fromConns.forEach(c => logDocs(c.status==='active'?'ok':c.status==='broken'?'err':'warn', `  → ${lookup[c.to]?.name||c.to} [${c.status}]${c.label?' — '+c.label:''}`));
+      }
+      if (toConns.length) {
+        logDocs('info', `Inbound (${toConns.length}):`);
+        toConns.forEach(c => logDocs(c.status==='active'?'ok':c.status==='broken'?'err':'warn', `  ← ${lookup[c.from]?.name||c.from} [${c.status}]${c.label?' — '+c.label:''}`));
+      }
+      logDocs('info', `═══ END ═══`);
+      state.consoleTab = 'docs';
+      document.querySelectorAll('.console-tab').forEach(t => t.classList.toggle('active', t.dataset.tab==='docs'));
+      renderConsole();
+      break;
+    }
+    case 'test-endpoint': {
+      const url = v.endpoint;
+      if (!url) { log('warn', `No endpoint for ${v.name}`); return; }
+      log('cmd', `› fetch("${url}")`);
+      logNetwork('info', `Testing ${url}...`);
+      setTimeout(() => {
+        if (v.status==='live') {
+          const ms = Math.floor(Math.random()*120+10);
+          logNetwork('ok', `${url} → 200 OK (${ms}ms) [Content-Type: application/json]`);
+          log('ok', `✓ ${v.name} endpoint reachable (${ms}ms)`);
+        } else if (v.status==='down') {
+          logNetwork('err', `${url} → ECONNREFUSED`);
+          log('err', `✗ ${v.name} endpoint unreachable`);
+        } else {
+          logNetwork('warn', `${url} → 200 OK (slow: ${Math.floor(Math.random()*2000+500)}ms)`);
+          log('warn', `⚠ ${v.name} endpoint slow`);
+        }
+      }, 400 + Math.random()*800);
+      break;
+    }
+  }
+}
+window.adminAction = adminAction;
+
+/* ════════════════════════════════════════════════════════════════
+   AI CAPTAIN — Fleet intelligence
+════════════════════════════════════════════════════════════════ */
+function captainDiagnose() {
+  logCaptain('ai', '═══ LEGION AI CAPTAIN — Fleet Diagnosis ═══');
+
+  const counts = {live:0, warn:0, down:0, unknown:0};
+  FLEET.forEach(v => counts[v.status]++);
+  const brokenLinks = CONNECTIONS.filter(c=>c.status==='broken').length;
+  const unverifiedLinks = CONNECTIONS.filter(c=>c.status==='unverified').length;
+
+  logCaptain('info', `Fleet: ${FLEET.length} vessels — ${counts.live} live, ${counts.warn} degraded, ${counts.down} down, ${counts.unknown} ghost`);
+  logCaptain('info', `Ropes: ${CONNECTIONS.length} total — ${brokenLinks} broken, ${unverifiedLinks} unverified`);
+
+  setTimeout(() => {
+    logCaptain('ai', '─── CRITICAL ISSUES ───');
+
+    // Down services
+    const downVessels = FLEET.filter(v=>v.status==='down');
+    if (downVessels.length) {
+      logCaptain('err', `${downVessels.length} VESSELS DOWN:`);
+      downVessels.forEach(v => logCaptain('err', `  ✗ ${v.name} — ${v.value}`));
+    }
+
+    setTimeout(() => {
+      logCaptain('ai', '─── RECOMMENDED ACTIONS ───');
+
+      // Priority 1: Linux VPS Docker stack
+      const downDocker = FLEET.filter(v=>v.region==='vps-linux' && v.status==='down');
+      if (downDocker.length) {
+        logCaptain('ai', `PRIORITY 1: Revive ${downDocker.length} Docker services on Linux VPS`);
+        logCaptain('cmd', `  Action: ssh grudge@74.208.155.229 "cd /opt/grudge && docker compose up -d --build"`);
+        logCaptain('ai', `  Root cause: Services don't persist after VPS restart. Add restart:always to docker-compose.yml`);
+      }
+
+      setTimeout(() => {
+        // Priority 2: Colyseus
+        const colyseus = lookup['colyseus'];
+        if (colyseus?.status === 'down') {
+          logCaptain('ai', `PRIORITY 2: Deploy Colyseus on Windows VPS (74.208.174.62)`);
+          logCaptain('cmd', `  Action: RDP → install Node.js → git clone → npm run build → node dist/index.js`);
+          logCaptain('ai', `  This unblocks multiplayer for Grudge Warlords.`);
+        }
+
+        // Priority 3: Puter workers
+        const brokenPuter = FLEET.filter(v=>v.region==='puter' && v.status==='down');
+        if (brokenPuter.length) {
+          logCaptain('ai', `PRIORITY 3: Fix ${brokenPuter.length} broken Puter workers`);
+          brokenPuter.forEach(v => logCaptain('warn', `  ${v.name}: ${v.notes||'needs investigation'}`));
+        }
+
+        // Priority 4: npm packages
+        const unpublished = FLEET.filter(v=>v.region==='github' && v.status==='warn');
+        if (unpublished.length) {
+          logCaptain('ai', `PRIORITY 4: Publish ${unpublished.length} npm packages (@grudge/auth, @grudge/api, @grudge/ui)`);
+          logCaptain('ai', `  This unblocks shared auth across all Vercel frontends.`);
+        }
+
+        // Priority 5: Audit ghosts
+        const ghosts = FLEET.filter(v=>v.status==='unknown');
+        if (ghosts.length) {
+          logCaptain('ai', `PRIORITY 5: Audit ${ghosts.length} ghost ships`);
+          ghosts.forEach(v => logCaptain('warn', `  ${v.name}: ${v.notes||'purpose unknown'}`));
+        }
+
+        setTimeout(() => {
+          logCaptain('ai', '─── SEQUENCE ───');
+          logCaptain('ok', '1. docker compose up --build (Linux VPS) → restores 5 services');
+          logCaptain('ok', '2. Add restart:always to docker-compose.yml → persistence');
+          logCaptain('ok', '3. Deploy Colyseus (Windows VPS) → multiplayer online');
+          logCaptain('ok', '4. Fix Puter workers (file path errors) → AI + backend bridge');
+          logCaptain('ok', '5. npm publish @grudge packages → shared auth/UI');
+          logCaptain('ok', '6. Wire @grudge/auth into Vercel apps → unified login');
+          logCaptain('ok', '7. Audit ghost ships → clean fleet');
+          logCaptain('ai', '═══ CAPTAIN STANDING BY ═══');
+        }, 800);
+      }, 600);
+    }, 400);
+  }, 300);
+}
+
+function captainPVP() {
+  logCaptain('ai', '═══ PVP SERVER STARTUP SEQUENCE ═══');
+
+  setTimeout(() => {
+    logCaptain('ai', 'Pre-flight checks:');
+    const checks = [
+      { name: 'MySQL 8 (game state)', id: 'svc-mysql' },
+      { name: 'Redis (pub/sub)', id: 'svc-redis' },
+      { name: 'game-api (persistence)', id: 'svc-game-api' },
+      { name: 'ws-service (fanout)', id: 'svc-ws' },
+      { name: 'Colyseus (rooms)', id: 'colyseus' },
+      { name: 'grudge-game-servers (matchmaking)', id: 'cf-game-servers' },
+    ];
+
+    checks.forEach((c, i) => {
+      setTimeout(() => {
+        const v = lookup[c.id];
+        const ok = v?.status === 'live';
+        logCaptain(ok ? 'ok' : 'err', `  ${ok?'✓':'✗'} ${c.name} — ${ok?'READY':'NOT READY ('+v?.status+')'}`);
+
+        if (i === checks.length - 1) {
+          setTimeout(() => {
+            const allReady = checks.every(c => lookup[c.id]?.status === 'live');
+            if (allReady) {
+              logCaptain('ok', '═══ ALL SYSTEMS GO — Starting PVP matchmaking ═══');
+              logCaptain('cmd', '› Colyseus createRoom("ArenaRoom", { mode: "ranked_1v1" })');
+            } else {
+              const blockers = checks.filter(c => lookup[c.id]?.status !== 'live');
+              logCaptain('err', `═══ PVP BLOCKED — ${blockers.length} systems not ready ═══`);
+              blockers.forEach(b => logCaptain('err', `  Blocker: ${b.name}`));
+              logCaptain('ai', 'CAPTAIN: Recommend running "restart-fleet" to attempt recovery first.');
+            }
+          }, 400);
+        }
+      }, i * 300);
+    });
+  }, 200);
+}
+
+/* ════════════════════════════════════════════════════════════════
+   COMMAND PARSER
+════════════════════════════════════════════════════════════════ */
+function parseCommand(input) {
+  const parts = input.trim().split(/\s+/);
+  const cmd = parts[0]?.toLowerCase();
+  const arg = parts.slice(1).join(' ');
+
+  switch(cmd) {
+    case 'help':
+      log('info', '═══ HARBOR ADMIN COMMANDS ═══');
+      log('info', '  help                — Show this help');
+      log('info', '  status              — Fleet overview');
+      log('info', '  scan                — Full fleet scan');
+      log('info', '  captain             — AI Captain diagnosis');
+      log('info', '  health <id>         — Health check a vessel');
+      log('info', '  restart <id>        — Restart a vessel');
+      log('info', '  deploy <id>         — Deploy a vessel');
+      log('info', '  logs <id>           — Fetch vessel logs');
+      log('info', '  docs <id>           — Show vessel documentation');
+      log('info', '  test <id>           — Test vessel endpoint');
+      log('info', '  pvp start           — Start PVP server sequence');
+      log('info', '  pvp check           — Check PVP readiness');
+      log('info', '  restart-fleet       — Restart all down services');
+      log('info', '  restart-docker      — Restart Linux VPS Docker stack');
+      log('info', '  audit ghosts        — List all unverified vessels');
+      log('info', '  find <name>         — Find and select a vessel');
+      log('info', '  connections <id>    — List vessel connections');
+      log('info', '  broken              — List all broken connections');
+      log('info', '  clear               — Clear console');
+      log('info', '═══════════════════════════════');
+      break;
+
+    case 'status': {
+      const counts = {live:0,warn:0,down:0,unknown:0};
+      FLEET.forEach(v => counts[v.status]++);
+      log('info', `Fleet: ${FLEET.length} vessels`);
+      log('ok', `  Live: ${counts.live}`);
+      log('warn', `  Degraded: ${counts.warn}`);
+      log('err', `  Down: ${counts.down}`);
+      log('info', `  Ghost: ${counts.unknown}`);
+      log('info', `Connections: ${CONNECTIONS.length} total, ${CONNECTIONS.filter(c=>c.status==='broken').length} broken`);
+      break;
+    }
+
+    case 'scan': {
+      log('cmd', '› Full fleet scan initiated...');
+      FLEET.forEach((v, i) => {
+        setTimeout(() => {
+          const icon = {live:'✓',warn:'⚠',down:'✗',unknown:'?'}[v.status];
+          const cls = {live:'ok',warn:'warn',down:'err',unknown:'info'}[v.status];
+          log(cls, `  ${icon} ${v.name} [${v.type}] — ${v.status}`);
+          if (i === FLEET.length-1) log('info', `Scan complete. ${FLEET.length} vessels inspected.`);
+        }, i * 40);
+      });
+      break;
+    }
+
+    case 'captain':
+      state.consoleTab = 'captain';
+      document.querySelectorAll('.console-tab').forEach(t => t.classList.toggle('active', t.dataset.tab==='captain'));
+      captainDiagnose();
+      break;
+
+    case 'health':
+    case 'restart':
+    case 'deploy':
+    case 'logs':
+    case 'docs':
+    case 'test': {
+      const id = findVesselId(arg);
+      if (!id) { log('err', `Vessel not found: "${arg}". Try "scan" to see all vessels.`); return; }
+      const actionMap = {health:'health',restart:'restart',deploy:'deploy',logs:'logs',docs:'docs',test:'test-endpoint'};
+      adminAction(actionMap[cmd], id);
+      break;
+    }
+
+    case 'pvp':
+      if (arg === 'start' || arg === 'check') {
+        state.consoleTab = 'captain';
+        document.querySelectorAll('.console-tab').forEach(t => t.classList.toggle('active', t.dataset.tab==='captain'));
+        captainPVP();
+      } else log('warn', 'Usage: pvp start | pvp check');
+      break;
+
+    case 'restart-fleet': {
+      log('cmd', '› Restarting all down services...');
+      const down = FLEET.filter(v => v.status==='down' && v.restartCmd);
+      if (!down.length) { log('ok', 'No restartable down services.'); return; }
+      down.forEach((v, i) => setTimeout(() => adminAction('restart', v.id), i * 2000));
+      break;
+    }
+
+    case 'restart-docker':
+      log('cmd', '› ssh grudge@74.208.155.229 "cd /opt/grudge && docker compose up -d --build"');
+      log('info', 'Restarting entire Docker stack on Linux VPS...');
+      const dockerSvcs = FLEET.filter(v => v.region==='vps-linux' && v.type==='Docker Service');
+      dockerSvcs.forEach((v, i) => {
+        setTimeout(() => {
+          log('info', `  Starting ${v.name}...`);
+          setTimeout(() => {
+            const up = Math.random() > 0.3;
+            v.status = up ? 'live' : 'down';
+            log(up?'ok':'err', `  ${up?'✓':'✗'} ${v.name} — ${up?'UP':'FAILED'}`);
+            renderVessels(); updateTopbarStats();
+          }, 800);
+        }, i * 1500);
+      });
+      break;
+
+    case 'audit':
+      if (arg === 'ghosts') {
+        const ghosts = FLEET.filter(v => v.status==='unknown');
+        log('info', `${ghosts.length} ghost ships:`);
+        ghosts.forEach(v => log('warn', `  ? ${v.name} [${v.type}] — ${v.notes||v.value}`));
+      } else log('warn', 'Usage: audit ghosts');
+      break;
+
+    case 'find': {
+      const id = findVesselId(arg);
+      if (!id) { log('err', `Not found: "${arg}"`); return; }
+      selectVessel(id);
+      log('ok', `Selected: ${lookup[id].name}`);
+      break;
+    }
+
+    case 'connections': {
+      const id = findVesselId(arg);
+      if (!id) { log('err', `Not found: "${arg}"`); return; }
+      const from = CONNECTIONS.filter(c=>c.from===id);
+      const to = CONNECTIONS.filter(c=>c.to===id);
+      log('info', `${lookup[id].name} connections:`);
+      from.forEach(c => log(c.status==='active'?'ok':'err', `  → ${lookup[c.to]?.name} [${c.status}]`));
+      to.forEach(c => log(c.status==='active'?'ok':'err', `  ← ${lookup[c.from]?.name} [${c.status}]`));
+      break;
+    }
+
+    case 'broken': {
+      const broken = CONNECTIONS.filter(c=>c.status==='broken');
+      log('err', `${broken.length} broken connections:`);
+      broken.forEach(c => log('err', `  ${lookup[c.from]?.name} → ${lookup[c.to]?.name}${c.label?' — '+c.label:''}`));
+      break;
+    }
+
+    case 'clear':
+      consoleLogs[state.consoleTab] = [];
+      renderConsole();
+      break;
+
+    default:
+      log('err', `Unknown command: ${cmd}. Type "help" for available commands.`);
+  }
+}
+
+function findVesselId(query) {
+  if (!query) return null;
+  const q = query.toLowerCase().trim();
+  // exact id match
+  if (lookup[q]) return q;
+  // partial name match
+  const match = FLEET.find(v => v.id.includes(q) || v.name.toLowerCase().includes(q));
+  return match?.id || null;
+}
+
+/* ════════════════════════════════════════════════════════════════
+   RENDERING
+════════════════════════════════════════════════════════════════ */
+function applyTransform() {
+  canvas.style.transform = `translate(${state.panX}px,${state.panY}px) scale(${state.zoom})`;
+  document.getElementById('zoomDisplay').textContent = Math.round(state.zoom*100)+'%';
+}
+
+function renderRegions() {
+  regionsLayer.innerHTML = REGIONS.map(r => `
+    <div class="region">
+      <div class="region-bounds" style="left:${r.x}px;top:${r.y}px;width:${r.w}px;height:${r.h}px;"></div>
+      <div class="region-label" style="left:${r.x+14}px;top:${r.y+10}px;">
+        ${r.name}<small>${r.sub}</small>
+      </div>
+    </div>
+  `).join('');
+}
+
+function renderConnections() {
+  const lines = CONNECTIONS.map((c, i) => {
+    const a = lookup[c.from], b = lookup[c.to];
+    if (!a || !b) return '';
+    const passesFilter = state.filter==='all' || a.status===state.filter || b.status===state.filter;
+    const dim = !passesFilter;
+    const dx = b.x-a.x, dy = b.y-a.y;
+    const mx = (a.x+b.x)/2, my = (a.y+b.y)/2;
+    const len = Math.sqrt(dx*dx+dy*dy)||1;
+    const offset = Math.min(40, len*0.15);
+    const px = -dy/len*offset, py = dx/len*offset;
+    const ctrlX = mx+px, ctrlY = my+py;
+    const pathId = `conn-${i}`;
+    let dots = '';
+    if (c.status === 'active' && !dim) {
+      const delay = Math.random() * 3;
+      dots = `<circle class="data-dot" r="2.5">
+        <animateMotion dur="${2+Math.random()*2}s" begin="${delay}s" repeatCount="indefinite">
+          <mpath href="#${pathId}"/>
+        </animateMotion>
+        <animate attributeName="opacity" values="0;1;1;0" keyTimes="0;0.1;0.9;1" dur="${2+Math.random()*2}s" begin="${delay}s" repeatCount="indefinite"/>
+      </circle>`;
+    }
+    return `<path id="${pathId}" class="conn-line ${c.status}" d="M ${a.x} ${a.y} Q ${ctrlX} ${ctrlY} ${b.x} ${b.y}"
+      data-from="${c.from}" data-to="${c.to}" data-idx="${i}"
+      style="${dim?'opacity:0.04':''}"/>${dots}`;
+  }).join('');
+  connSvg.innerHTML = lines;
+}
+
+function renderVessels() {
+  vesselsLayer.innerHTML = FLEET.map(v => {
+    const passesFilter = state.filter==='all' || v.status===state.filter;
+    const muted = !passesFilter;
+    return `
+      <div class="vessel ${state.selected===v.id?'selected':''} ${muted?'muted':'floating'}"
+           data-id="${v.id}" style="left:${v.x}px;top:${v.y}px;">
+        ${vesselSvg(v.kind, v.size, v.status)}
+        <div class="vessel-status-dot ${v.status}"></div>
+        <div class="vessel-label">${v.name}</div>
+      </div>`;
+  }).join('');
+
+  vesselsLayer.querySelectorAll('.vessel').forEach(el => {
+    el.addEventListener('click', e => {
+      e.stopPropagation();
+      const id = el.dataset.id;
+      state.selected = state.selected===id ? null : id;
+      renderVessels(); renderInspector(); highlightConnections(state.selected);
+    });
+  });
+}
+
+function highlightConnections(id) {
+  connSvg.querySelectorAll('.conn-line').forEach(line => {
+    if (!id) { line.classList.remove('highlight'); line.style.opacity=''; return; }
+    const involves = line.dataset.from===id || line.dataset.to===id;
+    line.classList.toggle('highlight', involves);
+    line.style.opacity = involves ? '1' : '0.06';
+  });
+}
+
+function updateTopbarStats() {
+  const counts = {live:0,warn:0,down:0,unknown:0};
+  FLEET.forEach(v => counts[v.status]++);
+  document.getElementById('topbarStats').innerHTML = `
+    <div class="fleet-stat"><div class="dot live"></div><span class="count">${counts.live}</span><span class="lbl">Live</span></div>
+    <div class="fleet-stat"><div class="dot warn"></div><span class="count">${counts.warn}</span><span class="lbl">Warn</span></div>
+    <div class="fleet-stat"><div class="dot down"></div><span class="count">${counts.down}</span><span class="lbl">Down</span></div>
+    <div class="fleet-stat"><div class="dot unknown"></div><span class="count">${counts.unknown}</span><span class="lbl">Ghost</span></div>
+  `;
+}
+
+function renderInspector() {
+  const v = FLEET.find(x => x.id===state.selected);
+  if (!v) {
+    // Fleet overview
+    const counts = {live:0,warn:0,down:0,unknown:0};
+    FLEET.forEach(v => counts[v.status]++);
+    const brokenLinks = CONNECTIONS.filter(c=>c.status==='broken').length;
+
+    insBody.innerHTML = `
+      <div class="empty-ins">
+        <div class="empty-ins-icon">⚓</div>
+        <h3>Fleet Command</h3>
+        <p>Select a vessel to inspect, or use the console below to command the fleet.</p>
+      </div>
+      <div class="captain-panel">
+        <div class="captain-header">
+          <div class="captain-avatar">⚙</div>
+          <div>
+            <div class="captain-name">Legion AI Captain</div>
+            <div class="captain-status">● Online — Monitoring</div>
+          </div>
+        </div>
+        <div class="captain-body">
+          <div class="captain-msg">
+            Fleet status: <span class="ok">${counts.live} operational</span>,
+            <span class="highlight">${counts.warn} degraded</span>,
+            <span class="critical">${counts.down} down</span>.
+            ${brokenLinks} broken ropes.
+          </div>
+          <div class="captain-msg" style="font-size:10px; color: var(--ink-dim);">
+            Type <span style="color:var(--gold)">captain</span> in the console for full diagnosis.
+          </div>
+        </div>
+      </div>
+      <div class="ins-section">
+        <h4>Fleet Health</h4>
+        <div style="font-size:10px; color:var(--ink-dim); line-height:1.6;">
+          Total: <strong style="color:var(--bone)">${FLEET.length}</strong> ·
+          <span style="color:var(--green-live)">●</span> ${counts.live} ·
+          <span style="color:var(--orange-warn)">●</span> ${counts.warn} ·
+          <span style="color:var(--red-down)">●</span> ${counts.down} ·
+          <span style="color:var(--ink-dim)">●</span> ${counts.unknown}
+        </div>
+        <div class="health-bar">
+          <div class="health-bar-seg live" style="flex:${counts.live}"></div>
+          <div class="health-bar-seg warn" style="flex:${counts.warn}"></div>
+          <div class="health-bar-seg down" style="flex:${counts.down}"></div>
+          <div class="health-bar-seg unknown" style="flex:${counts.unknown}"></div>
+        </div>
+      </div>
+      <div class="ins-section">
+        <h4>Quick Actions</h4>
+        <div class="admin-actions">
+          <button class="admin-btn danger" onclick="parseCommand('restart-docker')">⟳ Restart Docker</button>
+          <button class="admin-btn deploy" onclick="parseCommand('scan')">⊕ Scan Fleet</button>
+          <button class="admin-btn info" onclick="parseCommand('captain')">⚙ AI Diagnosis</button>
+          <button class="admin-btn restart" onclick="parseCommand('pvp start')">⚔ PVP Start</button>
+          <button class="admin-btn" onclick="parseCommand('broken')">⚠ Broken Links</button>
+          <button class="admin-btn" onclick="parseCommand('audit ghosts')">👻 Audit Ghosts</button>
+        </div>
+      </div>
+    `;
+    return;
+  }
+
+  // Vessel detail
+  const fromConns = CONNECTIONS.filter(c=>c.from===v.id);
+  const toConns = CONNECTIONS.filter(c=>c.to===v.id);
+  const sizeLabel = ['','Skiff','Sloop','Frigate','Galleon','Flagship'][v.size]||'Vessel';
+
+  insBody.innerHTML = `
+    <div class="ins-header">
+      <div class="ins-eyebrow">${v.type}</div>
+      <div class="ins-title">${v.name}</div>
+      <div class="ins-sub">${sizeLabel} · ${v.kind}</div>
+      <div style="margin-top:8px;">
+        <span class="stat-tag ${v.status}">${{live:'● Live',warn:'● Degraded',down:'● Down',unknown:'● Unverified'}[v.status]}</span>
+      </div>
+    </div>
+    <div class="ins-section">
+      <h4>⚙ Admin Actions</h4>
+      <div class="admin-actions">
+        ${v.healthCheck||v.endpoint ? `<button class="admin-btn deploy" onclick="adminAction('health','${v.id}')">♥ Health</button>` : ''}
+        ${v.restartCmd ? `<button class="admin-btn restart" onclick="adminAction('restart','${v.id}')">⟳ Restart</button>` : ''}
+        ${v.deployCmd ? `<button class="admin-btn deploy" onclick="adminAction('deploy','${v.id}')">▲ Deploy</button>` : ''}
+        ${v.logCmd ? `<button class="admin-btn info" onclick="adminAction('logs','${v.id}')">◉ Logs</button>` : ''}
+        ${v.endpoint ? `<button class="admin-btn" onclick="adminAction('test-endpoint','${v.id}')">⊕ Test</button>` : ''}
+        <button class="admin-btn info" onclick="adminAction('docs','${v.id}')">📄 Docs</button>
+      </div>
+    </div>
+    <div class="ins-section">
+      <h4>Manifest</h4>
+      <div style="font-family:'Cormorant Garamond',serif; font-style:italic; font-size:13px; color:var(--bone); line-height:1.4; margin-bottom:10px;">${v.value}</div>
+      <div class="ins-row"><span class="key">Kind</span><span class="val">${v.kind}</span></div>
+      <div class="ins-row"><span class="key">Stack</span><span class="val mono">${v.stack}</span></div>
+      <div class="ins-row"><span class="key">Region</span><span class="val">${REGIONS.find(r=>r.id===v.region)?.name||'—'}</span></div>
+      <div class="ins-row"><span class="key">Tonnage</span><span class="val">${'★'.repeat(v.size)}${'☆'.repeat(5-v.size)}</span></div>
+      ${v.endpoint ? `<div class="ins-row"><span class="key">Endpoint</span><span class="val mono">${v.endpoint}</span></div>` : ''}
+      ${v.healthCheck ? `<div class="ins-row"><span class="key">Health</span><span class="val mono">${v.healthCheck}</span></div>` : ''}
+    </div>
+    ${v.notes ? `<div class="ins-section" style="background:rgba(196,18,48,0.06);border-left:3px solid var(--blood);">
+      <h4 style="color:var(--blood);">⚠ Captain's Note</h4>
+      <div style="font-family:'Cormorant Garamond',serif;font-style:italic;font-size:12px;color:var(--bone);line-height:1.4;">${v.notes}</div>
+    </div>` : ''}
+    ${v.docs ? `<div class="ins-section">
+      <h4>Documentation</h4>
+      <div style="font-size:10px;color:var(--bone);line-height:1.5;">${v.docs}</div>
+    </div>` : ''}
+    <div class="ins-section">
+      <h4>Outbound (${fromConns.length})</h4>
+      <div class="conn-list">
+        ${fromConns.length===0 ? '<div style="font-size:10px;color:var(--ink-faint);font-style:italic;">None</div>' :
+          fromConns.map(c => `<div class="conn-item ${c.status}" onclick="selectVessel('${c.to}')">
+            <span class="arrow">→</span><span class="name">${lookup[c.to]?.name||c.to}</span>
+            <span class="status">${c.status}${c.label?' · '+c.label:''}</span>
+          </div>`).join('')}
+      </div>
+    </div>
+    <div class="ins-section">
+      <h4>Inbound (${toConns.length})</h4>
+      <div class="conn-list">
+        ${toConns.length===0 ? '<div style="font-size:10px;color:var(--ink-faint);font-style:italic;">None</div>' :
+          toConns.map(c => `<div class="conn-item ${c.status}" onclick="selectVessel('${c.from}')">
+            <span class="arrow">←</span><span class="name">${lookup[c.from]?.name||c.from}</span>
+            <span class="status">${c.status}${c.label?' · '+c.label:''}</span>
+          </div>`).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function selectVessel(id) {
+  state.selected = id;
+  renderVessels(); renderInspector(); highlightConnections(id);
+  const v = lookup[id];
+  if (v) {
+    const stageRect = stage.getBoundingClientRect();
+    state.panX = stageRect.width/2 - v.x*state.zoom;
+    state.panY = stageRect.height/2 - v.y*state.zoom;
+    applyTransform();
+  }
+}
+window.selectVessel = selectVessel;
+window.parseCommand = parseCommand;
+
+/* ════════════════════════════════════════════════════════════════
+   PAN + ZOOM
+════════════════════════════════════════════════════════════════ */
+let isDragging = false, dragStart = {x:0,y:0,panX:0,panY:0};
+
+stage.addEventListener('mousedown', e => {
+  if (e.target.closest('.vessel')||e.target.closest('.conn-item')) return;
+  isDragging = true; stage.classList.add('dragging'); canvas.classList.add('no-transition');
+  dragStart = {x:e.clientX, y:e.clientY, panX:state.panX, panY:state.panY};
+});
+window.addEventListener('mousemove', e => {
+  if (!isDragging) return;
+  state.panX = dragStart.panX + (e.clientX-dragStart.x);
+  state.panY = dragStart.panY + (e.clientY-dragStart.y);
+  applyTransform();
+});
+window.addEventListener('mouseup', () => { isDragging=false; stage.classList.remove('dragging'); canvas.classList.remove('no-transition'); });
+
+stage.addEventListener('click', e => {
+  if (e.target===stage||e.target===canvas||e.target.classList.contains('region-bounds')) {
+    state.selected = null;
+    renderVessels(); renderInspector(); highlightConnections(null);
+  }
+});
+
+stage.addEventListener('wheel', e => {
+  e.preventDefault();
+  const rect = stage.getBoundingClientRect();
+  const mx = e.clientX-rect.left, my = e.clientY-rect.top;
+  const oldZoom = state.zoom;
+  state.zoom = Math.max(0.15, Math.min(2.5, state.zoom*(e.deltaY>0?0.9:1.1)));
+  const ratio = state.zoom/oldZoom;
+  state.panX = mx-(mx-state.panX)*ratio;
+  state.panY = my-(my-state.panY)*ratio;
+  applyTransform();
+}, {passive:false});
+
+document.getElementById('zoomIn').addEventListener('click', () => { state.zoom=Math.min(2.5,state.zoom*1.2); applyTransform(); });
+document.getElementById('zoomOut').addEventListener('click', () => { state.zoom=Math.max(0.15,state.zoom*0.8); applyTransform(); });
+document.getElementById('zoomReset').addEventListener('click', centerView);
+
+function centerView() {
+  const rect = stage.getBoundingClientRect();
+  state.zoom = Math.min(rect.width/3200, rect.height/2400)*0.9;
+  state.panX = (rect.width-3200*state.zoom)/2;
+  state.panY = (rect.height-2400*state.zoom)/2;
+  applyTransform();
+}
+document.getElementById('centerBtn').addEventListener('click', centerView);
+
+/* ════════════════════════════════════════════════════════════════
+   CONTROLS
+════════════════════════════════════════════════════════════════ */
+document.querySelectorAll('#filterGroup .ctrl-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#filterGroup .ctrl-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    state.filter = btn.dataset.filter;
+    renderVessels(); renderConnections();
+  });
+});
+
+document.getElementById('issuesBtn').addEventListener('click', () => {
+  const firstDown = FLEET.find(v=>v.status==='down');
+  if (firstDown) selectVessel(firstDown.id);
+});
+
+document.getElementById('captainBtn').addEventListener('click', () => {
+  state.consoleTab = 'captain';
+  document.querySelectorAll('.console-tab').forEach(t => t.classList.toggle('active',t.dataset.tab==='captain'));
+  captainDiagnose();
+  renderConsole();
+  if (!state.consoleOpen) toggleConsole();
+});
+
+// Inspector toggle
+insToggle.addEventListener('click', () => {
+  state.inspectorOpen = !state.inspectorOpen;
+  inspector.classList.toggle('collapsed', !state.inspectorOpen);
+  insToggle.classList.toggle('collapsed-state', !state.inspectorOpen);
+  insToggle.textContent = state.inspectorOpen ? '›' : '‹';
+  stage.classList.toggle('right-collapsed', !state.inspectorOpen);
+  consoleDock.classList.toggle('right-collapsed', !state.inspectorOpen);
+  zoomPad.classList.toggle('collapsed', !state.inspectorOpen);
+});
+
+// Console toggle
+function toggleConsole() {
+  state.consoleOpen = !state.consoleOpen;
+  consoleDock.classList.toggle('collapsed', !state.consoleOpen);
+  stage.classList.toggle('console-collapsed', !state.consoleOpen);
+  legend.classList.toggle('console-collapsed', !state.consoleOpen);
+  zoomPad.classList.toggle('console-collapsed', !state.consoleOpen);
+}
+document.getElementById('consoleToggle').addEventListener('click', toggleConsole);
+
+// Console tabs
+document.querySelectorAll('.console-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    state.consoleTab = tab.dataset.tab;
+    document.querySelectorAll('.console-tab').forEach(t => t.classList.toggle('active', t.dataset.tab===state.consoleTab));
+    renderConsole();
+  });
+});
+
+// Console input
+consoleInput.addEventListener('keydown', e => {
+  if (e.key==='Enter') {
+    const val = consoleInput.value.trim();
+    if (!val) return;
+    log('cmd', `admiral › ${val}`);
+    consoleInput.value = '';
+    parseCommand(val);
+  }
+});
+
+/* ════════════════════════════════════════════════════════════════
+   BOOT
+════════════════════════════════════════════════════════════════ */
+renderRegions();
+renderConnections();
+renderVessels();
+renderInspector();
+updateTopbarStats();
+centerView();
+
+// Boot log sequence
+log('info', '═══ GRUDGE STUDIO · ADMIN HARBOR ═══');
+log('info', `Fleet loaded: ${FLEET.length} vessels across ${REGIONS.length} regions`);
+log('info', `Connections: ${CONNECTIONS.length} total`);
+
+const counts = {live:0,warn:0,down:0,unknown:0};
+FLEET.forEach(v => counts[v.status]++);
+log('ok',   `  Live: ${counts.live}`);
+log('warn', `  Degraded: ${counts.warn}`);
+log('err',  `  Down: ${counts.down}`);
+log('info', `  Ghost: ${counts.unknown}`);
+log('info', `Broken ropes: ${CONNECTIONS.filter(c=>c.status==='broken').length}`);
+log('info', 'Type "help" for commands, "captain" for AI diagnosis.');
+logCaptain('ai', 'Legion AI Captain online. Monitoring fleet.');
+logCaptain('ai', `${counts.down} vessels down. ${CONNECTIONS.filter(c=>c.status==='broken').length} broken connections detected.`);
+logCaptain('ai', 'Type "captain" for full diagnosis and recommended actions.');
+</script>
+</body>
+</html>

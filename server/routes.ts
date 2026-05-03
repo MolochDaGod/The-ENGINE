@@ -25,6 +25,9 @@ import { sendDiscordWebhook, DiscordEmbedType, trackNowPlaying } from "./discord
 import { onScoreSubmitted, startRewardWorker, getRewardQueueStatus } from "./web3/reward-worker";
 import { getPlatformBalances, listOnChainTransactions, listDBTransactions, disconnectWallet, getActiveConnections, recordWalletConnection } from "./web3/admin-wallet";
 import { getWalletStatus } from "./web3/solana-client";
+import { getFleetHealth, checkSingleService, getServiceRegistry } from "./fleet-health";
+import { legionAI, generateNPCDialogue, moderateContent, generateQuestText, analyzeFleetStatus, type LegionTask } from "./legion-ai";
+import { getGBuxBalance, requestGBuxMint, savePlayerData, loadPlayerData, listPlayerSaves, deletePlayerSave, linkPuterToGrudge, resolveGrudgeId, getGrudaChainStatus } from "./grudachain";
 
 const ADMIN_SESSION_COOKIE = "gs_admin_session";
 const ADMIN_SESSION_TTL_MS = 1000 * 60 * 60 * 12; // 12 hours
@@ -2851,6 +2854,149 @@ export async function registerRoutes(app: Express): Promise<Server> {
       { id: "trading", name: "Trading Post", description: "Buy, sell, trade GBUX and assets" },
     ];
     res.json(rooms);
+  });
+
+  // ═══════════════════════════════════════════════════════════════
+  // FLEET HEALTH — Admin Harbor live status
+  // ═══════════════════════════════════════════════════════════════
+
+  app.get("/api/fleet/status", async (_req, res) => {
+    try {
+      const health = await getFleetHealth();
+      res.json(health);
+    } catch (error) {
+      res.status(500).json({ error: "Fleet health check failed" });
+    }
+  });
+
+  app.get("/api/fleet/status/refresh", async (_req, res) => {
+    try {
+      const health = await getFleetHealth(true);
+      res.json(health);
+    } catch (error) {
+      res.status(500).json({ error: "Fleet health refresh failed" });
+    }
+  });
+
+  app.get("/api/fleet/check/:serviceId", async (req, res) => {
+    const result = await checkSingleService(req.params.serviceId);
+    if (!result) return res.status(404).json({ error: "Unknown service" });
+    res.json(result);
+  });
+
+  app.get("/api/fleet/registry", (_req, res) => {
+    res.json(getServiceRegistry());
+  });
+
+  // ═══════════════════════════════════════════════════════════════
+  // LEGION AI — AI agent hub
+  // ═══════════════════════════════════════════════════════════════
+
+  app.post("/api/legion/chat", async (req, res) => {
+    try {
+      const { task, prompt, model, maxTokens, temperature, context } = req.body;
+      if (!prompt) return res.status(400).json({ error: "prompt required" });
+      const result = await legionAI({
+        task: (task as LegionTask) || "general",
+        prompt, model, maxTokens, temperature, context,
+      });
+      res.json(result);
+    } catch (error) {
+      res.status(500).json({ error: "Legion AI request failed" });
+    }
+  });
+
+  app.post("/api/legion/npc-dialogue", async (req, res) => {
+    const { npcName, faction, mood, playerAction } = req.body;
+    if (!npcName) return res.status(400).json({ error: "npcName required" });
+    const result = await generateNPCDialogue(npcName, faction || "neutral", mood || "calm", playerAction || "approached");
+    res.json(result);
+  });
+
+  app.post("/api/legion/moderate", async (req, res) => {
+    const { text } = req.body;
+    if (!text) return res.status(400).json({ error: "text required" });
+    const result = await moderateContent(text);
+    res.json(result);
+  });
+
+  app.post("/api/legion/quest", async (req, res) => {
+    const { questType, difficulty, location } = req.body;
+    const result = await generateQuestText(questType || "fetch", difficulty || "normal", location || "island");
+    res.json(result);
+  });
+
+  app.post("/api/legion/captain", async (req, res) => {
+    try {
+      const fleet = await getFleetHealth();
+      const result = await analyzeFleetStatus(fleet);
+      res.json(result);
+    } catch (error) {
+      res.status(500).json({ error: "Captain analysis failed" });
+    }
+  });
+
+  // ═══════════════════════════════════════════════════════════════
+  // GRUDACHAIN — Puter KV + GBux + account linking
+  // ═══════════════════════════════════════════════════════════════
+
+  app.get("/api/grudachain/status", async (_req, res) => {
+    try {
+      const status = await getGrudaChainStatus();
+      res.json(status);
+    } catch (error) {
+      res.status(500).json({ error: "GrudaChain status check failed" });
+    }
+  });
+
+  app.get("/api/grudachain/balance/:grudgeId", async (req, res) => {
+    const wallet = typeof req.query.wallet === "string" ? req.query.wallet : undefined;
+    const balance = await getGBuxBalance(req.params.grudgeId, wallet);
+    res.json(balance);
+  });
+
+  app.post("/api/grudachain/save", requirePlayer, async (req, res) => {
+    const player = getPlayer(req);
+    if (!player) return res.status(401).json({ error: "Not authenticated" });
+    const { slot, data } = req.body;
+    if (!slot || !data) return res.status(400).json({ error: "slot and data required" });
+    const ok = await savePlayerData(player.grudgeId, slot, data);
+    res.json({ success: ok });
+  });
+
+  app.get("/api/grudachain/save/:slot", requirePlayer, async (req, res) => {
+    const player = getPlayer(req);
+    if (!player) return res.status(401).json({ error: "Not authenticated" });
+    const data = await loadPlayerData(player.grudgeId, req.params.slot);
+    res.json({ data });
+  });
+
+  app.get("/api/grudachain/saves", requirePlayer, async (req, res) => {
+    const player = getPlayer(req);
+    if (!player) return res.status(401).json({ error: "Not authenticated" });
+    const slots = await listPlayerSaves(player.grudgeId);
+    res.json({ slots });
+  });
+
+  app.delete("/api/grudachain/save/:slot", requirePlayer, async (req, res) => {
+    const player = getPlayer(req);
+    if (!player) return res.status(401).json({ error: "Not authenticated" });
+    const ok = await deletePlayerSave(player.grudgeId, req.params.slot);
+    res.json({ success: ok });
+  });
+
+  app.post("/api/grudachain/link-puter", requirePlayer, async (req, res) => {
+    const player = getPlayer(req);
+    if (!player) return res.status(401).json({ error: "Not authenticated" });
+    const { puterId } = req.body;
+    if (!puterId) return res.status(400).json({ error: "puterId required" });
+    const ok = await linkPuterToGrudge(puterId, player.grudgeId);
+    res.json({ success: ok });
+  });
+
+  app.get("/api/grudachain/resolve/:puterId", async (req, res) => {
+    const grudgeId = await resolveGrudgeId(req.params.puterId);
+    res.json({ grudgeId });
   });
 
   const httpServer = createServer(app);
