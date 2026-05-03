@@ -1181,21 +1181,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Check if puter account already linked
       let user = await storage.getUserByPuterId(puterId);
+      let isNew = false;
       if (user) {
         await storage.updateUser(user.id, { lastLoginAt: new Date() });
         const token = createPlayerToken(user.id);
         setPlayerCookie(res, token);
-        return res.json({
-          id: user.id, username: user.username, grudgeId: user.grudgeId,
-          displayName: user.displayName, avatarUrl: user.avatarUrl,
-          gbuxBalance: user.gbuxBalance, role: user.role, isNew: false,
-        });
+        return res.json(publicPlayer(user, false));
       }
 
-      // Auto-create a Grudge account for this Puter user
+      // Auto-create a Grudge account for this Puter user.
+      // Sanitize the Puter username and ensure it is unique in our DB.
+      const baseUsername = puterUsername
+        ? sanitizeUsername(String(puterUsername))
+        : `puter_${puterId.slice(0, 8)}`;
+      const username = await uniqueUsername(baseUsername);
       const grudgeId = generateGrudgeId();
-      const username = puterUsername || `puter_${puterId.slice(0, 8)}`;
-      // Generate a random password (user can set one later)
+      // Generate a random password — user can set one later via complete-profile.
       const randomPass = crypto.randomBytes(16).toString("hex");
 
       user = await storage.createUser({
@@ -1204,20 +1205,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         grudgeId,
         puterId,
         email: email || null,
-        displayName: puterUsername || username,
+        displayName: puterUsername ? String(puterUsername).slice(0, 60) : username,
         avatarUrl: null,
         gbuxBalance: "0",
         role: "player",
+        solanaAddress: null,
+        discordId: null,
+        githubId: null,
+        googleId: null,
+        phone: null,
+        needsProfile: false,
       });
+      isNew = true;
 
       const token = createPlayerToken(user.id);
       setPlayerCookie(res, token);
-
-      return res.json({
-        id: user.id, username: user.username, grudgeId: user.grudgeId,
-        displayName: user.displayName, avatarUrl: user.avatarUrl,
-        gbuxBalance: user.gbuxBalance, role: user.role, isNew: true,
-      });
+      return res.json(publicPlayer(user, isNew));
     } catch (error) {
       console.error("Puter SSO error:", error);
       return res.status(500).json({ error: "SSO failed" });
