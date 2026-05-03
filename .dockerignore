@@ -8,11 +8,8 @@ dist
 .wrangler
 .sixth
 .replit
-attached_assets
 extracted_games
 stencyl-education-kit-1.0
-*.png
-*.glb
 *.md
 skills
 state
