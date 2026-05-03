@@ -233,6 +233,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (username.length < 3 || username.length > 30) {
         return res.status(400).json({ error: "username must be 3-30 characters" });
       }
+      if (!/^[a-zA-Z0-9_\-]+$/.test(username)) {
+        return res.status(400).json({ error: "username may only contain letters, numbers, underscores, and dashes" });
+      }
       if (password.length < 6) {
         return res.status(400).json({ error: "password must be at least 6 characters" });
       }
@@ -258,20 +261,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         avatarUrl: null,
         gbuxBalance: "0",
         role: "player",
+        solanaAddress: null,
+        discordId: null,
+        githubId: null,
+        googleId: null,
+        phone: null,
+        needsProfile: false,
       });
 
       const token = createPlayerToken(user.id);
       setPlayerCookie(res, token);
 
-      return res.json({
-        id: user.id,
-        username: user.username,
-        grudgeId: user.grudgeId,
-        displayName: user.displayName,
-        avatarUrl: user.avatarUrl,
-        gbuxBalance: user.gbuxBalance,
-        role: user.role,
-      });
+      return res.json(publicPlayer(user, true));
     } catch (error) {
       console.error("Register error:", error);
       return res.status(500).json({ error: "Registration failed" });
@@ -302,15 +303,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const token = createPlayerToken(user.id);
       setPlayerCookie(res, token);
 
-      return res.json({
-        id: user.id,
-        username: user.username,
-        grudgeId: user.grudgeId,
-        displayName: user.displayName,
-        avatarUrl: user.avatarUrl,
-        gbuxBalance: user.gbuxBalance,
-        role: user.role,
-      });
+      return res.json(publicPlayer(user, false));
     } catch (error) {
       console.error("Login error:", error);
       return res.status(500).json({ error: "Login failed" });
@@ -348,6 +341,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       avatarUrl: player.avatarUrl,
       gbuxBalance: player.gbuxBalance,
       role: player.role,
+      needsProfile: !!player.needsProfile,
       createdAt: player.createdAt,
     });
   });
@@ -1213,21 +1207,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Check if puter account already linked
       let user = await storage.getUserByPuterId(puterId);
+      let isNew = false;
       if (user) {
         await storage.updateUser(user.id, { lastLoginAt: new Date() });
         const token = createPlayerToken(user.id);
         setPlayerCookie(res, token);
-        return res.json({
-          id: user.id, username: user.username, grudgeId: user.grudgeId,
-          displayName: user.displayName, avatarUrl: user.avatarUrl,
-          gbuxBalance: user.gbuxBalance, role: user.role, isNew: false,
-        });
+        return res.json(publicPlayer(user, false));
       }
 
-      // Auto-create a Grudge account for this Puter user
+      // Auto-create a Grudge account for this Puter user.
+      // Sanitize the Puter username and ensure it is unique in our DB.
+      const baseUsername = puterUsername
+        ? sanitizeUsername(String(puterUsername))
+        : `puter_${puterId.slice(0, 8)}`;
+      const username = await uniqueUsername(baseUsername);
       const grudgeId = generateGrudgeId();
-      const username = puterUsername || `puter_${puterId.slice(0, 8)}`;
-      // Generate a random password (user can set one later)
+      // Generate a random password — user can set one later via complete-profile.
       const randomPass = crypto.randomBytes(16).toString("hex");
 
       user = await storage.createUser({
@@ -1236,20 +1231,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         grudgeId,
         puterId,
         email: email || null,
-        displayName: puterUsername || username,
+        displayName: puterUsername ? String(puterUsername).slice(0, 60) : username,
         avatarUrl: null,
         gbuxBalance: "0",
         role: "player",
+        solanaAddress: null,
+        discordId: null,
+        githubId: null,
+        googleId: null,
+        phone: null,
+        needsProfile: false,
       });
+      isNew = true;
 
       const token = createPlayerToken(user.id);
       setPlayerCookie(res, token);
-
-      return res.json({
-        id: user.id, username: user.username, grudgeId: user.grudgeId,
-        displayName: user.displayName, avatarUrl: user.avatarUrl,
-        gbuxBalance: user.gbuxBalance, role: user.role, isNew: true,
-      });
+      return res.json(publicPlayer(user, isNew));
     } catch (error) {
       console.error("Puter SSO error:", error);
       return res.status(500).json({ error: "SSO failed" });

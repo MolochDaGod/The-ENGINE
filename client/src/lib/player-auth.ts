@@ -138,9 +138,30 @@ export async function completeProfile(data: {
  *   2. Server issues nonce for that address
  *   3. SDK signs the nonce message
  *   4. Server verifies signature → creates/finds user → sets cookie
+ *
+ * When called without a provider argument the function tries "injected"
+ * (browser extension) first and automatically falls back to "google"
+ * (Phantom embedded wallet) if the extension is not available.
  */
 export async function phantomSignIn(
-  provider: "google" | "apple" | "phantom" | "injected" | "deeplink" = "injected",
+  provider: "google" | "apple" | "phantom" | "injected" | "deeplink" | "auto" = "auto",
+): Promise<{ ok: true; player: PlayerProfile } | { ok: false; error: string }> {
+  // Resolve "auto": prefer the browser extension, fall back to Google embedded wallet.
+  if (provider === "auto") {
+    try {
+      const { isPhantomExtensionInstalled } = await import("./phantom-sdk");
+      const hasExtension = await isPhantomExtensionInstalled();
+      provider = hasExtension ? "injected" : "google";
+    } catch {
+      provider = "injected";
+    }
+  }
+
+  return _phantomSignInWithProvider(provider as "google" | "apple" | "phantom" | "injected" | "deeplink");
+}
+
+async function _phantomSignInWithProvider(
+  provider: "google" | "apple" | "phantom" | "injected" | "deeplink",
 ): Promise<{ ok: true; player: PlayerProfile } | { ok: false; error: string }> {
   try {
     // Dynamic import to avoid bundling the SDK when not needed
@@ -174,47 +195,14 @@ export async function phantomSignIn(
     if (!verifyRes.ok) return { ok: false, error: verifyJson.error || "Wallet verification failed" };
     return { ok: true, player: verifyJson };
   } catch (err: any) {
-    // Fallback: try legacy window.solana if SDK connect fails
+    // If the injected provider failed, try the Google embedded wallet as a last resort.
     if (provider === "injected") {
-      return phantomSignInLegacy();
+      try {
+        return await _phantomSignInWithProvider("google");
+      } catch {
+        // fall through to the error below
+      }
     }
-    return { ok: false, error: err?.message || "Wallet sign-in failed" };
-  }
-}
-
-/** Legacy fallback: raw window.solana for extension-only. */
-async function phantomSignInLegacy(): Promise<{ ok: true; player: PlayerProfile } | { ok: false; error: string }> {
-  try {
-    const solana = (window as any).solana;
-    if (!solana?.isPhantom) return { ok: false, error: "Phantom wallet not detected. Install it from phantom.app or use Google/Apple sign-in." };
-    const resp = await solana.connect({ onlyIfTrusted: false });
-    const address = resp?.publicKey?.toString?.() || resp?.publicKey?.toBase58?.() || solana.publicKey?.toString();
-    if (!address) return { ok: false, error: "Could not read wallet address." };
-
-    const nonceRes = await fetch("/api/auth/phantom/nonce", {
-      method: "POST",
-      credentials: "include",
-      headers: JSON_HEADERS,
-      body: JSON.stringify({ address }),
-    });
-    const nonceJson = await nonceRes.json();
-    if (!nonceRes.ok) return { ok: false, error: nonceJson.error || "Nonce request failed" };
-
-    const encoded = new TextEncoder().encode(nonceJson.message);
-    const signed = await solana.signMessage(encoded, "utf8");
-    const sigBytes: Uint8Array = signed?.signature || signed;
-    const signatureB58 = base58Encode(sigBytes);
-
-    const verifyRes = await fetch("/api/auth/phantom/verify", {
-      method: "POST",
-      credentials: "include",
-      headers: JSON_HEADERS,
-      body: JSON.stringify({ address, nonce: nonceJson.nonce, signature: signatureB58 }),
-    });
-    const verifyJson = await verifyRes.json();
-    if (!verifyRes.ok) return { ok: false, error: verifyJson.error || "Wallet verification failed" };
-    return { ok: true, player: verifyJson };
-  } catch (err: any) {
     return { ok: false, error: err?.message || "Wallet sign-in failed" };
   }
 }
@@ -368,26 +356,3 @@ export async function twilioVerify(phone: string, code: string): Promise<{ ok: t
   }
 }
 
-// Minimal base58 encoder (Bitcoin alphabet) for Phantom signature bytes.
-const B58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
-function base58Encode(bytes: Uint8Array): string {
-  if (!bytes || bytes.length === 0) return "";
-  let zeros = 0;
-  while (zeros < bytes.length && bytes[zeros] === 0) zeros++;
-  const digits: number[] = [0];
-  for (let i = zeros; i < bytes.length; i++) {
-    let carry = bytes[i];
-    for (let j = 0; j < digits.length; j++) {
-      carry += digits[j] << 8;
-      digits[j] = carry % 58;
-      carry = (carry / 58) | 0;
-    }
-    while (carry > 0) {
-      digits.push(carry % 58);
-      carry = (carry / 58) | 0;
-    }
-  }
-  let result = "1".repeat(zeros);
-  for (let i = digits.length - 1; i >= 0; i--) result += B58_ALPHABET[digits[i]];
-  return result;
-}
