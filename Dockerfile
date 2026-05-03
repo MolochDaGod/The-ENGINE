@@ -9,6 +9,7 @@ COPY tsconfig.json drizzle.config.ts vite.config.ts postcss.config.js tailwind.c
 COPY server ./server
 COPY client ./client
 COPY shared ./shared
+COPY attached_assets ./attached_assets
 
 # Build client (Vite → dist/public) and server (esbuild → dist/index.js)
 RUN npm run build
@@ -27,6 +28,7 @@ COPY --from=build /app/dist ./dist
 
 # Copy source for drizzle-kit schema push (needs schema.ts)
 COPY shared ./shared
+COPY attached_assets ./attached_assets
 COPY drizzle.config.ts ./
 
 ENV NODE_ENV=production
@@ -34,7 +36,7 @@ ENV PORT=5000
 EXPOSE 5000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s \
-  CMD wget -qO- http://localhost:5000/api/auth/me || exit 1
+  CMD wget -qO- http://localhost:5000/api/health || exit 1
 
 # Run DB migration then start server
 CMD ["sh", "-c", "npx drizzle-kit push --config=drizzle.config.ts && node dist/index.js"]
