@@ -9,6 +9,7 @@ import {
   completeProfile,
   discordSignIn,
   githubSignIn,
+  googleSignIn,
   guestSignIn,
   loginPlayer,
   phantomSignIn,
@@ -143,30 +144,7 @@ function AuthModalDialog({ isOpen, onClose, options }: { isOpen: boolean; onClos
   }, []);
 
   const handleDiscord = () => discordSignIn(options.redirectTo || window.location.pathname);
-  const handleGoogle = () => run("google", async () => {
-    // Use Puter's embedded Google auth instead of direct Google OAuth
-    let puter = (window as any).puter;
-    let attempts = 0;
-    while (!puter && attempts < 50) {
-      await new Promise(resolve => setTimeout(resolve, 100));
-      puter = (window as any).puter;
-      attempts++;
-    }
-
-    if (!puter?.auth?.signIn) {
-      return { ok: false, error: "Puter SDK not loaded. Please refresh and try again." };
-    }
-
-    try {
-      // Puter's signIn with provider option for Google
-      await puter.auth.signIn({ provider: 'google' });
-      const u = await puter.auth.getUser();
-      if (!u?.uuid) return { ok: false, error: "Google sign-in via Puter did not return a user." };
-      return await puterSSO({ puterId: u.uuid, puterUsername: u.username, email: u.email });
-    } catch (err: any) {
-      return { ok: false, error: err?.message || "Google sign-in via Puter failed" };
-    }
-  });
+  const handleGoogle = () => googleSignIn(options.redirectTo || window.location.pathname);
   const handleGithub = () => githubSignIn(options.redirectTo || window.location.pathname);
   const handlePhantom = () => run("phantom", phantomSignIn);
   const handlePuter = () => run("puter", async () => {
