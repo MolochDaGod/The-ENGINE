@@ -9,7 +9,6 @@ import {
   completeProfile,
   discordSignIn,
   githubSignIn,
-  googleSignIn,
   guestSignIn,
   loginPlayer,
   phantomSignIn,
@@ -128,13 +127,62 @@ function AuthModalDialog({ isOpen, onClose, options }: { isOpen: boolean; onClos
     if (!r.ok) return setError(r.error || "Failed");
     await afterAuth();
   };
+  useEffect(() => {
+    // Check if Puter SDK is loaded
+    const checkPuter = () => {
+      const puter = (window as any).puter;
+      if (puter?.auth) {
+        console.log("[auth-modal] Puter SDK ready");
+      }
+    };
+
+    // Check immediately and after a delay
+    checkPuter();
+    const timer = setTimeout(checkPuter, 500);
+    return () => clearTimeout(timer);
+  }, []);
+
   const handleDiscord = () => discordSignIn(options.redirectTo || window.location.pathname);
-  const handleGoogle = () => googleSignIn(options.redirectTo || window.location.pathname);
+  const handleGoogle = () => run("google", async () => {
+    // Use Puter's embedded Google auth instead of direct Google OAuth
+    let puter = (window as any).puter;
+    let attempts = 0;
+    while (!puter && attempts < 50) {
+      await new Promise(resolve => setTimeout(resolve, 100));
+      puter = (window as any).puter;
+      attempts++;
+    }
+
+    if (!puter?.auth?.signIn) {
+      return { ok: false, error: "Puter SDK not loaded. Please refresh and try again." };
+    }
+
+    try {
+      // Puter's signIn with provider option for Google
+      await puter.auth.signIn({ provider: 'google' });
+      const u = await puter.auth.getUser();
+      if (!u?.uuid) return { ok: false, error: "Google sign-in via Puter did not return a user." };
+      return await puterSSO({ puterId: u.uuid, puterUsername: u.username, email: u.email });
+    } catch (err: any) {
+      return { ok: false, error: err?.message || "Google sign-in via Puter failed" };
+    }
+  });
   const handleGithub = () => githubSignIn(options.redirectTo || window.location.pathname);
   const handlePhantom = () => run("phantom", phantomSignIn);
   const handlePuter = () => run("puter", async () => {
-    const puter = (window as any).puter;
-    if (!puter?.auth?.signIn) return { ok: false, error: "Puter SDK not loaded." };
+    // Wait for Puter SDK to load
+    let puter = (window as any).puter;
+    let attempts = 0;
+    while (!puter && attempts < 50) {
+      await new Promise(resolve => setTimeout(resolve, 100));
+      puter = (window as any).puter;
+      attempts++;
+    }
+
+    if (!puter?.auth?.signIn) {
+      return { ok: false, error: "Puter SDK not loaded. Please refresh and try again." };
+    }
+
     try {
       await puter.auth.signIn();
       const u = await puter.auth.getUser();
@@ -207,7 +255,7 @@ function AuthModalDialog({ isOpen, onClose, options }: { isOpen: boolean; onClos
           <div className="px-6 pb-6 space-y-4">
             <div className="grid grid-cols-3 gap-2">
               <ProviderButton label="Discord" icon={<MessageCircle className="w-3.5 h-3.5" />} onClick={handleDiscord} disabled={!!busy} style={{ background: "#5865F2", color: "white", borderColor: "#4752C4" }} />
-              <ProviderButton label="Google" icon={<GoogleMark />} onClick={handleGoogle} disabled={!!busy} style={{ background: "#ffffff", color: "#202124", borderColor: "#dadce0" }} />
+              <ProviderButton label="Google" icon={<GoogleMark />} onClick={handleGoogle} disabled={!!busy} busy={busy === "google"} style={{ background: "#ffffff", color: "#202124", borderColor: "#dadce0" }} />
               <ProviderButton label="GitHub" icon={<Github className="w-3.5 h-3.5" />} onClick={handleGithub} disabled={!!busy} style={{ background: "#0d1117", color: "white", borderColor: "#30363d" }} />
               <ProviderButton label="Phantom" icon={<Wallet className="w-3.5 h-3.5" />} onClick={handlePhantom} disabled={!!busy} busy={busy === "phantom"} style={{ background: "#ab9ff2", color: "#2d1a5f", borderColor: "#8f84d6" }} />
               <ProviderButton label="Puter" icon={<Sparkles className="w-3.5 h-3.5" />} onClick={handlePuter} disabled={!!busy} busy={busy === "puter"} style={{ background: "#2b6cb0", color: "white", borderColor: "#1e4b7e" }} />
