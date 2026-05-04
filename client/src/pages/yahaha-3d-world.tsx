@@ -361,13 +361,13 @@ export default function Yahaha3DWorld() {
       ...prev,
       objects: prev.objects.map(obj =>
         obj.id === selectedObject.id
-          ? { ...obj, [property]: { ...obj[property as keyof YahahaObject], ...value } }
+          ? { ...obj, [property]: { ...(obj[property as keyof YahahaObject] as Record<string, unknown>), ...value } }
           : obj
       )
     }));
 
     setSelectedObject(prev => 
-      prev ? { ...prev, [property]: { ...prev[property as keyof YahahaObject], ...value } } : null
+      prev ? { ...prev, [property]: { ...(prev[property as keyof YahahaObject] as Record<string, unknown>), ...value } } : null
     );
   };
 

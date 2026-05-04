@@ -221,7 +221,7 @@ export default function ScrapingTool() {
                   </div>
                   <div className="text-center">
                     <div className="text-2xl font-bold text-amber-400">
-                      {Math.max(0, (activeJob.maxPages || 10) - activeJob.pagesScraped)}
+      {Math.max(0, (activeJob.maxPages || 10) - (activeJob.pagesScraped ?? 0))}
                     </div>
                     <div className="text-sm text-[hsl(45,15%,55%)]">Remaining</div>
                   </div>

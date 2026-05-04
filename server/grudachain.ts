@@ -19,6 +19,8 @@ let _puter: any = null;
 async function getPuter() {
   if (_puter) return _puter;
   try {
+    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+    // @ts-ignore — optional peer dependency; caught below if absent
     const { init } = await import("@heyputer/puter.js/src/init.cjs");
     const token = process.env.PUTER_DEPLOYER_TOKEN;
     if (!token) {
