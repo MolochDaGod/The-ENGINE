@@ -923,8 +923,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         body: new URLSearchParams({ To: normalized, Channel: "sms" }).toString(),
       });
       if (!resp.ok) {
-        const text = await resp.text();
-        return res.status(502).json({ error: `Twilio start failed: ${text}` });
+        let errBody: string;
+        try { errBody = await resp.json().then(j => JSON.stringify(j)); } catch { errBody = await resp.text(); }
+        console.error("[twilio] Verification API error:", errBody);
+        // Use 500 not 502 — Cloudflare replaces 502 responses with its own HTML error page,
+        // which would break JSON clients.
+        return res.status(500).json({ error: "Failed to send SMS code — phone provider error" });
       }
       return res.json({ status: "sent" });
     } catch (error) {
