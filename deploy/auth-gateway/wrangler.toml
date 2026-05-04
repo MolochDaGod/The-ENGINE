@@ -13,6 +13,16 @@ ALLOWED_ORIGINS = "https://grudge-studio.com,https://id.grudge-studio.com,https:
 # id = "REPLACE_WITH_GRUDGE_SESSIONS_KV_ID"
 
 [[routes]]
-# Routes the Worker onto the identity domain in Cloudflare
+# Identity / auth hub
 pattern = "id.grudge-studio.com/*"
+zone_name = "grudge-studio.com"
+
+[[routes]]
+# Root domain → same Railway app
+pattern = "grudge-studio.com/*"
+zone_name = "grudge-studio.com"
+
+[[routes]]
+# www subdomain → same Railway app
+pattern = "www.grudge-studio.com/*"
 zone_name = "grudge-studio.com"
