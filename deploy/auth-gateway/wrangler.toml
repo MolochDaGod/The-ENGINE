@@ -1,14 +1,18 @@
-name = "grudge-auth-gateway"
+name = "grudge-identity-api"
 main = "src/index.ts"
 compatibility_date = "2024-12-01"
 
 [vars]
-BACKEND_URL = "https://grudge-studio.com"
-ALLOWED_ORIGINS = "https://grudge-studio.com,https://grudgewarlords.com,https://grudgeplatform.io,https://dungeon-crawler-quest.vercel.app,https://grudgestudio.puter.site,https://grudgeplatform.puter.site,http://localhost:5173,http://localhost:5000"
+# Railway backend – the actual Express + Vite server
+BACKEND_URL = "https://the-engine.up.railway.app"
+ALLOWED_ORIGINS = "https://grudge-studio.com,https://id.grudge-studio.com,https://grudgewarlords.com,https://grudgeplatform.io,https://dungeon-crawler-quest.vercel.app,https://grudgestudio.puter.site,https://grudgeplatform.puter.site,http://localhost:5173,http://localhost:5000"
 
-[[kv_namespaces]]
-binding = "SESSIONS"
-id = "REPLACE_WITH_GRUDGE_SESSIONS_KV_ID"
+# KV namespace – create one in Cloudflare and replace the id if needed
+# [[kv_namespaces]]
+# binding = "SESSIONS"
+# id = "REPLACE_WITH_GRUDGE_SESSIONS_KV_ID"
 
-[routes]
-pattern = "auth.grudge-studio.com/*"
+[[routes]]
+# Routes the Worker onto the identity domain in Cloudflare
+pattern = "id.grudge-studio.com/*"
+zone_name = "grudge-studio.com"
