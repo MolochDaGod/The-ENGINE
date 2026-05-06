@@ -189,6 +189,60 @@ export const walletConnections = pgTable("wallet_connections", {
   disconnectedAt: timestamp("disconnected_at"),
 });
 
+// ── Friends ──────────────────────────────────────────────────────
+
+export const friends = pgTable("friends", {
+  id: serial("id").primaryKey(),
+  requesterId: integer("requester_id").references(() => users.id).notNull(),
+  recipientId: integer("recipient_id").references(() => users.id).notNull(),
+  status: text("status").notNull().default("pending"), // pending | accepted | blocked
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// ── Tournaments ──────────────────────────────────────────────────
+
+export const tournaments = pgTable("tournaments", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  gameId: integer("game_id").references(() => gameLibrary.id).notNull(),
+  format: text("format").notNull().default("single_elimination"), // single_elimination | double_elimination | round_robin
+  maxPlayers: integer("max_players").notNull().default(8),
+  entryFee: numeric("entry_fee", { precision: 18, scale: 4 }).default("0").notNull(),
+  prizePool: numeric("prize_pool", { precision: 18, scale: 4 }).default("0").notNull(),
+  status: text("status").notNull().default("open"), // open | active | completed | cancelled
+  bracket: jsonb("bracket"), // tournament bracket structure
+  createdById: integer("created_by_id").references(() => users.id).notNull(),
+  winnerId: integer("winner_id").references(() => users.id),
+  startAt: timestamp("start_at"),
+  endedAt: timestamp("ended_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const tournamentEntries = pgTable("tournament_entries", {
+  id: serial("id").primaryKey(),
+  tournamentId: integer("tournament_id").references(() => tournaments.id).notNull(),
+  userId: integer("user_id").references(() => users.id).notNull(),
+  seed: integer("seed"),
+  eliminated: boolean("eliminated").default(false).notNull(),
+  finalPlacement: integer("final_placement"),
+  joinedAt: timestamp("joined_at").defaultNow(),
+});
+
+export const tournamentMatches = pgTable("tournament_matches", {
+  id: serial("id").primaryKey(),
+  tournamentId: integer("tournament_id").references(() => tournaments.id).notNull(),
+  round: integer("round").notNull(),
+  matchIndex: integer("match_index").notNull(),
+  player1Id: integer("player1_id").references(() => users.id),
+  player2Id: integer("player2_id").references(() => users.id),
+  player1Score: integer("player1_score"),
+  player2Score: integer("player2_score"),
+  winnerId: integer("winner_id").references(() => users.id),
+  status: text("status").notNull().default("pending"), // pending | active | completed | bye
+  completedAt: timestamp("completed_at"),
+});
+
 export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true, lastLoginAt: true });
 export const insertChatMessageSchema = createInsertSchema(chatMessages).omit({ id: true, createdAt: true });
 export const insertScoreSchema = createInsertSchema(scores).omit({ id: true, createdAt: true, isPersonalBest: true, isGlobalRecord: true });

@@ -1,0 +1,13 @@
+name = "grudge-game-api"
+main = "src/index.ts"
+compatibility_date = "2024-12-01"
+
+[vars]
+# Same Railway backend as auth-gateway — The-ENGINE serves both auth and game API
+BACKEND_URL = "https://the-engine.up.railway.app"
+ALLOWED_ORIGINS = "https://grudgewarlords.com,https://www.grudgewarlords.com,https://client.grudge-studio.com,https://grudge-studio.com,https://id.grudge-studio.com,https://dash.grudge-studio.com,https://grudge-studio-dash.pages.dev,https://grudgedot.pages.dev,https://grudge-crafting.puter.site,https://grudgewarlords.puter.site,https://grudgestudio.puter.site,https://grudgeplatform.com,https://wallet.grudge-studio.com,https://molochdagod.github.io,https://app.puter.com,http://localhost:5173,http://localhost:5000"
+
+# Route: api.grudge-studio.com → this Worker → Railway
+[[routes]]
+pattern = "api.grudge-studio.com/*"
+zone_name = "grudge-studio.com"
