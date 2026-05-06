@@ -55,7 +55,7 @@
 |--------|----------|--------|--------|
 | `grudge-studio.com` | CF Worker → Railway | Portal SPA + API | ✅ Live |
 | `id.grudge-studio.com` | CF Worker → Railway | Auth gateway (SSO) | ✅ Live |
-| `api.grudge-studio.com` | CF Worker → Railway | Game API (deploy Worker to activate) | ⚠️ Deploy needed |
+| `api.grudge-studio.com` | CF Worker → Railway | Game API — Worker ready at `deploy/game-api-gateway/`, run `npx wrangler deploy` | ⚠️ Deploy needed |
 | `client.grudge-studio.com` | CNAME → Vercel | GrudgeBuilder SPA alias | ✅ Live |
 | `grudgewarlords.com` | Vercel | GrudgeBuilder SPA (main) | ✅ Live |
 | `assets.grudge-studio.com` | CF R2 | Binary assets CDN | ✅ Live |
@@ -160,6 +160,26 @@ All subsequent requests:
 | GET | `/api/leaderboards/global` | — | Global top players |
 | GET | `/api/leaderboards/:gameId` | — | Per-game leaderboard |
 | GET | `/api/leaderboards/:gameId/me` | ✅ | My rank on a game |
+
+### Friends
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| POST | `/api/friends/request` | ✅ | Send friend request (by userId or username) |
+| POST | `/api/friends/:id/accept` | ✅ | Accept pending request |
+| POST | `/api/friends/:id/block` | ✅ | Block user |
+| DELETE | `/api/friends/:id` | ✅ | Remove friend |
+| GET | `/api/friends` | ✅ | List accepted friends (with online status) |
+| GET | `/api/friends/pending` | ✅ | List pending incoming requests |
+
+### Tournaments
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | `/api/tournaments` | — | List tournaments (filter by ?status=) |
+| GET | `/api/tournaments/:id` | — | Tournament detail + bracket + players |
+| POST | `/api/tournaments` | ✅ | Create tournament (auto-joins creator) |
+| POST | `/api/tournaments/:id/join` | ✅ | Join open tournament |
+| POST | `/api/tournaments/:id/start` | admin | Start — generates bracket, seeds players |
+| POST | `/api/tournaments/:tid/matches/:mid/result` | ✅ | Report match scores → auto-advance winner |
 
 ### Challenges (PvP)
 | Method | Path | Auth | Description |
