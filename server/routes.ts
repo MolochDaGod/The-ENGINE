@@ -3017,11 +3017,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     const dryRun = req.query.dryRun === "1" || req.query.dryRun === "true";
     const platformFilter = typeof req.query.platform === "string" ? req.query.platform : undefined;
+    const limit = Math.min(parseInt(req.query.limit as string) || 20, 100);
+    const offset = Math.max(parseInt(req.query.offset as string) || 0, 0);
 
     try {
-      const allGames = platformFilter
-        ? await db.select().from(gameLibrary).where(eq(gameLibrary.platform, platformFilter))
-        : await db.select().from(gameLibrary);
+      const allGamesQuery = platformFilter
+        ? db.select().from(gameLibrary).where(eq(gameLibrary.platform, platformFilter)).orderBy(gameLibrary.id)
+        : db.select().from(gameLibrary).orderBy(gameLibrary.id);
+      const allGames = await allGamesQuery.limit(limit).offset(offset);
 
       const results: Array<{ id: number; title: string; platform: string; status: number | "error" | "ok"; url: string; bytes?: number }> = [];
       const dead: number[] = [];
