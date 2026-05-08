@@ -3040,7 +3040,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const resp = await fetch(testUrl, {
             method: "GET",
             headers: { "Range": "bytes=0-63" },
-            signal: AbortSignal.timeout(15000),
+            signal: AbortSignal.timeout(30000),
           });
 
           if (resp.ok || resp.status === 206) {
@@ -3060,8 +3060,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
 
         tested++;
-        // Rate-limit: 200ms between requests to be polite to rec0ded88.com
-        await new Promise(r => setTimeout(r, 200));
+        // Rate-limit: 1 full second between requests — be patient, ROMs are big zips on shared hosting
+        await new Promise(r => setTimeout(r, 1000));
       }
 
       // Delete dead games (unless dry run)
