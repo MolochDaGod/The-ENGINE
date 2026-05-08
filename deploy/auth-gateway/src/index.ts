@@ -22,6 +22,12 @@ const DEFAULT_ALLOWED_ORIGINS = [
   "https://dungeon-crawler-quest.vercel.app",
   "https://grudgestudio.puter.site",
   "https://grudgeplatform.puter.site",
+  "https://puter.com",
+  "https://app.puter.com",
+  "https://grudge-crafting.puter.site",
+  "https://dash.grudge-studio.com",
+  "https://wallet.grudge-studio.com",
+  "https://client.grudge-studio.com",
   "http://localhost:5173",
   "http://localhost:5000",
 ];

@@ -1,6 +1,6 @@
 # Grudge Studio — Architecture & Operations Guide
 
-> **Last updated**: 2026-05-06
+> **Last updated**: 2026-05-08
 > **Owner**: Racalvin The Pirate King
 > **Canonical backend**: The-ENGINE on Railway (`the-engine.up.railway.app`)
 
@@ -191,11 +191,22 @@ All subsequent requests:
 | GET | `/api/challenges/active` | ✅ | My active challenges |
 | GET | `/api/challenges/pending` | ✅ | My pending challenges |
 
+### Account / Profile
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | `/api/me/stats` | ✅ | Player stats aggregate |
+| GET | `/api/me/scores` | ✅ | Recent scores (limit param) |
+| GET | `/api/me/games` | ✅ | Games played with best scores |
+| PATCH | `/api/me/profile` | ✅ | Update displayName, bio, avatarUrl |
+| GET | `/api/me/connections` | ✅ | All linked providers + wallets |
+| GET | `/api/me/wallets` | ✅ | List wallet_connections rows |
+| POST | `/api/me/wallets` | ✅ | Add wallet connection |
+| DELETE | `/api/me/wallets/:id` | ✅ | Remove wallet connection |
+
 ### Economy
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
 | GET | `/api/transactions` | ✅ | GBUX transaction history |
-| GET | `/api/me/stats` | ✅ | Player stats + balance |
 
 ### Chat (REST + WebSocket)
 | Method | Path | Auth | Description |
@@ -230,7 +241,7 @@ All subsequent requests:
 
 Core tables managed by Drizzle ORM (`shared/schema.ts`):
 
-- `users` — accounts with grudgeId, puterId, solanaAddress, discordId, etc.
+- `users` — accounts with grudgeId, puterId, solanaAddress, discordId, bio, etc.
 - `scores` — per-game score entries with personal best / global record flags
 - `challenges` — PvP challenges with GBUX wager escrow
 - `transactions` — GBUX ledger (wager, reward, purchase, refund)
@@ -337,3 +348,30 @@ npx wrangler tail             # live logs
 - **GBUX is the universal currency**: Earned via scores, wagered in challenges, spent in store.
 - **Discord webhooks**: Scores, records, and challenge results auto-post to Discord.
 - **Puter SDK for AI**: Client-side AI calls go through `puter.ai.*` (user pays). Server AI uses Legion module.
+
+## 12. Account Page Architecture
+
+The unified account page at `/account` is a tabbed layout that consolidates patterns from multiple earlier repos:
+
+| Source Repo | What was reused | Files |
+|-------------|----------------|-------|
+| `GrudgeBuilder/client/src/pages/AccountPage.tsx` | Profile card, Grudge ID display, XP/GBUX, avatar | → `AccountOverview.tsx` |
+| `GrudgeBuilder/client/src/pages/WalletPage.tsx` | Wallet management, cNFT listing, Crossmint flow | → `AccountWallet.tsx` |
+| `Warlord-Crafting-Suite/client/src/pages/Settings.tsx` | Settings sidebar with account/avatar/security sections | → `AccountSettings.tsx` |
+
+Tab components live in `client/src/components/account/`. The main page shell is `client/src/pages/account.tsx`.
+
+**Key difference from older repos**: All API calls use The-ENGINE's cookie-based session pattern (`credentials: "include"`) at `/api/me/*` routes. No Bearer tokens, no localStorage auth. The older GrudgeBuilder repo used `authHeaders()` with `localStorage.getItem('grudge_auth_token')` — that pattern is retired for portal pages.
+
+## 13. Puter App Integration
+
+The Puter command hub app (grudgestudio-2) lives at `deploy/puter-app/index.html`. It connects to The-ENGINE via:
+- Cookie-based auth against `id.grudge-studio.com/api/auth/*`
+- Cross-domain SSO using `?grudge_token=` + `/api/auth/session/exchange`
+- Puter SDK for auto-login (`puter.auth.signIn()` → `puterSSO`)
+
+CORS for `https://puter.com` and `https://app.puter.com` is configured in both CF Worker gateways (auth + game API).
+
+To deploy the Puter app:
+1. Upload `deploy/puter-app/index.html` to Puter FS as `index.html` in the grudgestudio-2 site folder
+2. The app auto-discovers the player's session from the `.grudge-studio.com` cookie or Puter SSO

@@ -39,6 +39,7 @@ const DEFAULT_ALLOWED_ORIGINS = [
   "https://grudgeplatform.com",
   "https://wallet.grudge-studio.com",
   "https://molochdagod.github.io",
+  "https://puter.com",
   "https://app.puter.com",
   "http://localhost:5173",
   "http://localhost:5000",

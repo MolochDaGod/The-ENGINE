@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Send, Users, Hash, MessageSquare, Circle } from "lucide-react";
 import type { ChatMessage } from "@shared/schema";
+import { useAuth } from "@/components/auth-provider";
 
 interface ChatRoom {
   id: string;
@@ -33,11 +34,15 @@ function getRandomName(): string {
 }
 
 export default function Chat() {
+  const { player } = useAuth();
+
+  // If authed, use their Grudge display name; otherwise fall back to localStorage
   const [username, setUsername] = useState(() => {
+    if (player) return player.displayName || player.username;
     return localStorage.getItem(USERNAME_KEY) || "";
   });
   const [usernameInput, setUsernameInput] = useState(username);
-  const [hasJoined, setHasJoined] = useState(!!username);
+  const [hasJoined, setHasJoined] = useState(!!username || !!player);
   const [currentRoom, setCurrentRoom] = useState("general");
   const [messages, setMessages] = useState<WsMessage[]>([]);
   const [input, setInput] = useState("");
@@ -120,6 +125,16 @@ export default function Chat() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  // Auto-join if player is authenticated (skip the name entry screen)
+  useEffect(() => {
+    if (player && !hasJoined) {
+      const name = player.displayName || player.username;
+      setUsername(name);
+      setUsernameInput(name);
+      setHasJoined(true);
+    }
+  }, [player]);
 
   const handleJoin = () => {
     const name = usernameInput.trim() || getRandomName();

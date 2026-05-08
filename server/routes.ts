@@ -3,7 +3,7 @@ import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import { setupArenaRooms } from "./arena-rooms";
 import { storage } from "./storage";
-import { insertScrapingJobSchema, insertOrderSchema, insertGameSchema, insertArticleSchema, gameLibrary, scores, users } from "@shared/schema";
+import { insertScrapingJobSchema, insertOrderSchema, insertGameSchema, insertArticleSchema, gameLibrary, scores, users, walletConnections } from "@shared/schema";
 import { z } from "zod";
 import { eq, sql } from "drizzle-orm";
 import { db } from "./db";
@@ -339,8 +339,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       email: player.email,
       displayName: player.displayName,
       avatarUrl: player.avatarUrl,
+      bio: (player as any).bio || null,
       gbuxBalance: player.gbuxBalance,
       role: player.role,
+      solanaAddress: player.solanaAddress || null,
+      discordId: player.discordId || null,
+      githubId: player.githubId || null,
+      googleId: player.googleId || null,
+      phone: player.phone || null,
       needsProfile: !!player.needsProfile,
       createdAt: player.createdAt,
     });
@@ -1614,6 +1620,143 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // PORTAL AGGREGATES (account, top games, top players)
   // ═════════════════════════════════════════════════════════════════
 
+  // ── Profile update ────────────────────────────────────────────
+  app.patch("/api/me/profile", requirePlayer, async (req, res) => {
+    try {
+      const player = getPlayer(req)!;
+      const { displayName, bio, avatarUrl } = req.body || {};
+      const updates: Record<string, any> = {};
+
+      if (typeof displayName === "string") {
+        const trimmed = displayName.trim().slice(0, 60);
+        if (trimmed.length < 1) return res.status(400).json({ error: "Display name cannot be empty" });
+        updates.displayName = trimmed;
+      }
+      if (typeof bio === "string") {
+        updates.bio = bio.trim().slice(0, 500);
+      }
+      if (typeof avatarUrl === "string") {
+        updates.avatarUrl = avatarUrl.trim().slice(0, 500) || null;
+      }
+
+      if (Object.keys(updates).length === 0) {
+        return res.status(400).json({ error: "Nothing to update" });
+      }
+
+      const updated = await storage.updateUser(player.id, updates);
+      return res.json({
+        displayName: updated?.displayName ?? player.displayName,
+        bio: (updated as any)?.bio ?? null,
+        avatarUrl: updated?.avatarUrl ?? player.avatarUrl,
+      });
+    } catch (error) {
+      console.error("PATCH /api/me/profile error:", error);
+      return res.status(500).json({ error: "Failed to update profile" });
+    }
+  });
+
+  // ── Connected accounts / providers ────────────────────────────
+  app.get("/api/me/connections", requirePlayer, async (req, res) => {
+    try {
+      const player = getPlayer(req)!;
+      const wallets = await db
+        .select()
+        .from(walletConnections)
+        .where(eq(walletConnections.userId, player.id));
+
+      return res.json({
+        discord: player.discordId || null,
+        google: player.googleId || null,
+        github: player.githubId || null,
+        solana: player.solanaAddress || null,
+        puter: player.puterId || null,
+        email: player.email || null,
+        phone: player.phone || null,
+        wallets: wallets.map((w) => ({
+          id: w.id,
+          address: w.walletAddress,
+          provider: w.provider,
+          chain: w.chain,
+          isActive: w.isActive,
+          connectedAt: w.connectedAt,
+        })),
+      });
+    } catch (error) {
+      console.error("GET /api/me/connections error:", error);
+      return res.status(500).json({ error: "Failed to fetch connections" });
+    }
+  });
+
+  // ── Wallet management ─────────────────────────────────────────
+  app.get("/api/me/wallets", requirePlayer, async (req, res) => {
+    try {
+      const player = getPlayer(req)!;
+      const wallets = await db
+        .select()
+        .from(walletConnections)
+        .where(eq(walletConnections.userId, player.id));
+      return res.json(wallets.map((w) => ({
+        id: w.id,
+        address: w.walletAddress,
+        provider: w.provider,
+        chain: w.chain,
+        isActive: w.isActive,
+        connectedAt: w.connectedAt,
+      })));
+    } catch (error) {
+      return res.status(500).json({ error: "Failed to fetch wallets" });
+    }
+  });
+
+  app.post("/api/me/wallets", requirePlayer, async (req, res) => {
+    try {
+      const player = getPlayer(req)!;
+      const { walletAddress, provider, chain } = req.body || {};
+      if (!walletAddress || typeof walletAddress !== "string") {
+        return res.status(400).json({ error: "walletAddress is required" });
+      }
+      const [created] = await db
+        .insert(walletConnections)
+        .values({
+          userId: player.id,
+          walletAddress: walletAddress.trim(),
+          provider: provider || "manual",
+          chain: chain || "solana",
+        })
+        .returning();
+      return res.status(201).json({
+        id: created.id,
+        address: created.walletAddress,
+        provider: created.provider,
+        chain: created.chain,
+        isActive: created.isActive,
+        connectedAt: created.connectedAt,
+      });
+    } catch (error) {
+      console.error("POST /api/me/wallets error:", error);
+      return res.status(500).json({ error: "Failed to add wallet" });
+    }
+  });
+
+  app.delete("/api/me/wallets/:id", requirePlayer, async (req, res) => {
+    try {
+      const player = getPlayer(req)!;
+      const walletId = parseInt(req.params.id);
+      const [wallet] = await db
+        .select()
+        .from(walletConnections)
+        .where(eq(walletConnections.id, walletId))
+        .limit(1);
+      if (!wallet || wallet.userId !== player.id) {
+        return res.status(404).json({ error: "Wallet not found" });
+      }
+      await db.delete(walletConnections).where(eq(walletConnections.id, walletId));
+      return res.json({ success: true });
+    } catch (error) {
+      return res.status(500).json({ error: "Failed to remove wallet" });
+    }
+  });
+
   app.get("/api/me/stats", requirePlayer, async (req, res) => {
     try {
       const player = getPlayer(req)!;
@@ -2856,6 +2999,90 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ success: true, total: allGames.length, updated });
     } catch (error) {
       res.status(500).json({ error: error instanceof Error ? error.message : "Failed to generate embed URLs" });
+    }
+  });
+
+  // ── Admin: Test all game ROMs for 404s and remove broken ones ──
+  app.post("/api/admin/games/prune-dead", async (req, res) => {
+    const sessionSecret = process.env.ADMIN_SESSION_SECRET || process.env.SESSION_SECRET;
+    if (!sessionSecret) return res.status(500).json({ error: "Admin auth not configured" });
+    const cookies = parseCookies(req.headers.cookie);
+    const token = cookies[ADMIN_SESSION_COOKIE];
+    if (!token || !verifyAdminSessionToken(token, sessionSecret)) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const dryRun = req.query.dryRun === "1" || req.query.dryRun === "true";
+    const platformFilter = typeof req.query.platform === "string" ? req.query.platform : undefined;
+
+    try {
+      const allGames = platformFilter
+        ? await db.select().from(gameLibrary).where(eq(gameLibrary.platform, platformFilter))
+        : await db.select().from(gameLibrary);
+
+      const results: Array<{ id: number; title: string; platform: string; status: number | "error"; url: string }> = [];
+      const dead: number[] = [];
+      let tested = 0;
+
+      for (const game of allGames) {
+        // Build the ROM URL the same way the emulator player does
+        let testUrl = "";
+        if (game.embedUrl && game.embedUrl.includes("gameName=")) {
+          // Extract gameName from embedUrl query string and build the ROM fetch URL
+          const match = game.embedUrl.match(/gameName=([^&]+)/);
+          if (match) {
+            const gameName = decodeURIComponent(match[1]);
+            testUrl = `https://rec0ded88.com/wp-content/games/${game.platform}/${gameName}`;
+          }
+        } else if (game.sourceUrl) {
+          testUrl = game.sourceUrl;
+        }
+
+        if (!testUrl) continue;
+
+        try {
+          // HEAD request is fastest — just check if the resource exists
+          const resp = await fetch(testUrl, { method: "HEAD", signal: AbortSignal.timeout(8000) });
+          if (!resp.ok) {
+            results.push({ id: game.id, title: game.title, platform: game.platform, status: resp.status, url: testUrl });
+            if (resp.status === 404 || resp.status === 403 || resp.status === 410) {
+              dead.push(game.id);
+            }
+          }
+        } catch (err: any) {
+          results.push({ id: game.id, title: game.title, platform: game.platform, status: "error", url: testUrl });
+          dead.push(game.id);
+        }
+
+        tested++;
+        // Rate-limit: 50ms between requests to avoid hammering the ROM server
+        if (tested % 10 === 0) await new Promise(r => setTimeout(r, 50));
+      }
+
+      // Delete dead games (unless dry run)
+      let deleted = 0;
+      if (!dryRun && dead.length > 0) {
+        for (const id of dead) {
+          try {
+            // Delete scores referencing this game first (FK constraint)
+            await db.delete(scores).where(eq(scores.gameId, id));
+            await db.delete(gameLibrary).where(eq(gameLibrary.id, id));
+            deleted++;
+          } catch { /* skip FK issues */ }
+        }
+      }
+
+      res.json({
+        dryRun,
+        total: allGames.length,
+        tested,
+        deadCount: dead.length,
+        deleted,
+        platformFilter: platformFilter || "all",
+        dead: results,
+      });
+    } catch (error) {
+      res.status(500).json({ error: error instanceof Error ? error.message : "Prune failed" });
     }
   });
 

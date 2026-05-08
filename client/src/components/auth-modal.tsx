@@ -4,6 +4,7 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/compone
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Github, Loader2, MessageCircle, Phone as PhoneIcon, Shield, ShieldAlert, UserCircle, Wallet } from "lucide-react";
+import grudgeLogo from "@assets/uXpJmRe_1773828784729.png";
 import { useAuth } from "@/components/auth-provider";
 import {
   completeProfile,
@@ -149,7 +150,7 @@ function AuthModalDialog({ isOpen, onClose, options }: { isOpen: boolean; onClos
   // Google sign-in is handled via Puter SDK (no Google Cloud credentials needed).
   // Puter's own OAuth dialog handles Google authentication and gives us a Puter ID
   // which we then link to a Grudge account via /api/auth/puter-sso.
-  const handleGoogle = () => run("google", async () => {
+  const handlePuterAuth = () => run("grudge-puter", async () => {
     let puter = (window as any).puter;
     let attempts = 0;
     while (!puter && attempts < 50) {
@@ -163,12 +164,15 @@ function AuthModalDialog({ isOpen, onClose, options }: { isOpen: boolean; onClos
     try {
       await puter.auth.signIn();
       const u = await puter.auth.getUser();
-      if (!u?.uuid) return { ok: false, error: "Google sign-in did not return a user." };
+      if (!u?.uuid) return { ok: false, error: "Sign-in did not return a user." };
       return await puterSSO({ puterId: u.uuid, puterUsername: u.username, email: u.email });
     } catch (err: any) {
-      return { ok: false, error: err?.message || "Google sign-in failed" };
+      return { ok: false, error: err?.message || "Sign-in failed" };
     }
   });
+
+  // Google button uses the same Puter flow (Puter handles Google OAuth internally)
+  const handleGoogle = handlePuterAuth;
 
   const handleGuest = () => run("guest", guestSignIn);
   const handlePhoneStart = async () => {
@@ -231,13 +235,14 @@ function AuthModalDialog({ isOpen, onClose, options }: { isOpen: boolean; onClos
           <div className="px-6 pb-6"><SignedInInline onClose={onClose} /></div>
         ) : (
           <div className="px-6 pb-6 space-y-4">
-            {/* 5-button grid: Discord · Google (via Puter) · GitHub · Phantom (all Solana wallets) · Phone */}
+            {/* 6-button grid: Discord · Google · Grudge (Puter auth) · Phantom · Phone · GitHub */}
             <div className="grid grid-cols-3 gap-2">
               <ProviderButton label="Discord" icon={<MessageCircle className="w-3.5 h-3.5" />} onClick={handleDiscord} disabled={!!busy} style={{ background: "#5865F2", color: "white", borderColor: "#4752C4" }} />
-              <ProviderButton label="Google" icon={<GoogleMark />} onClick={handleGoogle} disabled={!!busy} busy={busy === "google"} style={{ background: "#ffffff", color: "#202124", borderColor: "#dadce0" }} />
-              <ProviderButton label="GitHub" icon={<Github className="w-3.5 h-3.5" />} onClick={handleGithub} disabled={!!busy} style={{ background: "#0d1117", color: "white", borderColor: "#30363d" }} />
+              <ProviderButton label="Google" icon={<GoogleMark />} onClick={handleGoogle} disabled={!!busy} busy={busy === "grudge-puter"} style={{ background: "#ffffff", color: "#202124", borderColor: "#dadce0" }} />
+              <ProviderButton label="grudge" icon={<img src={grudgeLogo} alt="" className="w-4 h-4 rounded-sm object-contain" />} onClick={handlePuterAuth} disabled={!!busy} busy={busy === "grudge-puter"} style={{ background: "#e87420", color: "white", borderColor: "#c45f15" }} />
               <ProviderButton label="Phantom" icon={<Wallet className="w-3.5 h-3.5" />} onClick={handlePhantom} disabled={!!busy} busy={busy === "phantom"} style={{ background: "#ab9ff2", color: "#2d1a5f", borderColor: "#8f84d6" }} />
               <ProviderButton label="Phone" icon={<PhoneIcon className="w-3.5 h-3.5" />} onClick={() => setPhoneStep(phoneStep === "hidden" ? "idle" : "hidden")} disabled={!!busy} style={{ background: "#14b869", color: "white", borderColor: "#0f8c50" }} />
+              <ProviderButton label="GitHub" icon={<Github className="w-3.5 h-3.5" />} onClick={handleGithub} disabled={!!busy} style={{ background: "#0d1117", color: "white", borderColor: "#30363d" }} />
             </div>
 
             {phoneStep !== "hidden" && (

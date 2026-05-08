@@ -11,6 +11,7 @@ export const users = pgTable("users", {
   email: text("email").unique(),
   displayName: text("display_name"),
   avatarUrl: text("avatar_url"),
+  bio: text("bio"),
   gbuxBalance: numeric("gbux_balance", { precision: 18, scale: 4 }).default("0").notNull(),
   role: text("role").default("player").notNull(), // player | guest | member | admin | master
   // External identities (all optional, all unique)

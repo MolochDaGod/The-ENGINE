@@ -10,8 +10,14 @@ export interface PlayerProfile {
   email?: string | null;
   displayName: string | null;
   avatarUrl: string | null;
+  bio?: string | null;
   gbuxBalance: string;
   role: string;
+  solanaAddress?: string | null;
+  discordId?: string | null;
+  githubId?: string | null;
+  googleId?: string | null;
+  phone?: string | null;
   needsProfile?: boolean;
   createdAt?: string;
   isNew?: boolean;
