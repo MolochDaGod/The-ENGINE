@@ -375,3 +375,50 @@ CORS for `https://puter.com` and `https://app.puter.com` is configured in both C
 To deploy the Puter app:
 1. Upload `deploy/puter-app/index.html` to Puter FS as `index.html` in the grudgestudio-2 site folder
 2. The app auto-discovers the player's session from the `.grudge-studio.com` cookie or Puter SSO
+
+## 14. Production Verification Log (2026-05-08)
+
+Full end-to-end verification after commit `35c5faf`:
+
+| Endpoint | Method | Expected | Actual | Status |
+|----------|--------|----------|--------|--------|
+| `/api/health` | GET | 200 | 200 | ✅ |
+| `/api/auth/me` (no cookie) | GET | 401 | 401 | ✅ |
+| `/api/auth/puter-sso` | POST | Creates user, sets cookie | `{id, username, grudgeId, ...}` | ✅ |
+| `/api/auth/me` (with cookie) | GET | Returns full profile incl. bio, providers | All fields present | ✅ |
+| `/api/me/profile` | PATCH | Updates bio, displayName | `{displayName, bio, avatarUrl}` | ✅ |
+| `/api/me/connections` | GET | Returns linked providers | `{discord, google, github, solana, puter, email, phone, wallets}` | ✅ |
+| `/api/chat/rooms` | GET | 200 | 200 | ✅ |
+| `/api/games/top` | GET | 200 | 200 | ✅ |
+| `/api/leaderboards/global` | GET | 200 | 200 | ✅ |
+| `/api/platforms` | GET | 200 | 200 | ✅ |
+
+Fleet status: 11 live, 2 warn, 9 down (down = decommissioned VPS services, expected).
+
+## 15. Database Migration Notes
+
+### Why `drizzle-kit push` fails locally
+Railway's `DATABASE_URL` uses the internal hostname `postgres.railway.internal` which only resolves inside Railway's network. Running `npx railway run npm run db:push` also fails because it injects the internal URL.
+
+### Working approach: Public proxy
+Railway exposes a TCP proxy at `roundhouse.proxy.rlwy.net:21911`. To run migrations locally:
+
+```bash
+# Get the internal URL and swap the hostname for the public proxy
+$DB_URL = (npx railway variables --kv | Select-String "DATABASE_URL=") -replace "DATABASE_URL=", ""
+$PUBLIC_URL = $DB_URL -replace "postgres\.railway\.internal:\d+", "roundhouse.proxy.rlwy.net:21911"
+$env:DATABASE_URL = $PUBLIC_URL
+npx drizzle-kit push
+```
+
+### Known issue: Drizzle PK conflict
+`drizzle-kit push` may error with `column "id" is in a primary key` on this DB due to schema drift. For simple column additions, use direct SQL instead:
+
+```bash
+node -e "const { Client } = require('pg'); const c = new Client({ connectionString: process.env.DATABASE_URL }); c.connect().then(() => c.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS bio TEXT')).then(() => { console.log('Done'); c.end(); })"
+```
+
+### Migration history
+| Date | Change | Method | Notes |
+|------|--------|--------|-------|
+| 2026-05-08 | Add `bio TEXT` to users | Direct ALTER TABLE via public proxy | `drizzle-kit push` hit PK conflict, used raw SQL |
