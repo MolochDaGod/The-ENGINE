@@ -3003,6 +3003,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ── Admin: Test all game ROMs for 404s and remove broken ones ──
+  // Uses the EXACT same ROM path as emulator.html:
+  //   https://rec0ded88.com/wp-content/emu/games/{platform}/{title}.zip
+  // Tests via GET (not HEAD — rec0ded88 blocks HEAD) with 15s timeout per ROM.
   app.post("/api/admin/games/prune-dead", async (req, res) => {
     const sessionSecret = process.env.ADMIN_SESSION_SECRET || process.env.SESSION_SECRET;
     if (!sessionSecret) return res.status(500).json({ error: "Admin auth not configured" });
@@ -3020,43 +3023,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ? await db.select().from(gameLibrary).where(eq(gameLibrary.platform, platformFilter))
         : await db.select().from(gameLibrary);
 
-      const results: Array<{ id: number; title: string; platform: string; status: number | "error"; url: string }> = [];
+      const results: Array<{ id: number; title: string; platform: string; status: number | "error" | "ok"; url: string; bytes?: number }> = [];
       const dead: number[] = [];
+      const alive: number[] = [];
       let tested = 0;
 
       for (const game of allGames) {
-        // Build the ROM URL the same way the emulator player does
-        let testUrl = "";
-        if (game.embedUrl && game.embedUrl.includes("gameName=")) {
-          // Extract gameName from embedUrl query string and build the ROM fetch URL
-          const match = game.embedUrl.match(/gameName=([^&]+)/);
-          if (match) {
-            const gameName = decodeURIComponent(match[1]);
-            testUrl = `https://rec0ded88.com/wp-content/games/${game.platform}/${gameName}`;
-          }
-        } else if (game.sourceUrl) {
-          testUrl = game.sourceUrl;
-        }
-
-        if (!testUrl) continue;
+        // Build ROM URL using the SAME path as emulator.html line 38-39:
+        //   /wp-content/emu/games/{platform}/{title}.zip
+        const title = normalizeRomName(game.title);
+        const testUrl = `https://rec0ded88.com/wp-content/emu/games/${encodeURIComponent(game.platform)}/${encodeURIComponent(title)}.zip`;
 
         try {
-          // HEAD request is fastest — just check if the resource exists
-          const resp = await fetch(testUrl, { method: "HEAD", signal: AbortSignal.timeout(8000) });
-          if (!resp.ok) {
+          // Use GET with range header to only fetch the first few bytes (proves file exists)
+          // 15s timeout — some ROMs are on slow CDN
+          const resp = await fetch(testUrl, {
+            method: "GET",
+            headers: { "Range": "bytes=0-63" },
+            signal: AbortSignal.timeout(15000),
+          });
+
+          if (resp.ok || resp.status === 206) {
+            // ROM exists — read the partial body and discard
+            const buf = await resp.arrayBuffer();
+            results.push({ id: game.id, title: game.title, platform: game.platform, status: "ok", url: testUrl, bytes: buf.byteLength });
+            alive.push(game.id);
+          } else {
             results.push({ id: game.id, title: game.title, platform: game.platform, status: resp.status, url: testUrl });
-            if (resp.status === 404 || resp.status === 403 || resp.status === 410) {
+            if (resp.status === 404 || resp.status === 410) {
               dead.push(game.id);
             }
           }
         } catch (err: any) {
+          // Network error or timeout — don't mark as dead, mark as error
           results.push({ id: game.id, title: game.title, platform: game.platform, status: "error", url: testUrl });
-          dead.push(game.id);
         }
 
         tested++;
-        // Rate-limit: 50ms between requests to avoid hammering the ROM server
-        if (tested % 10 === 0) await new Promise(r => setTimeout(r, 50));
+        // Rate-limit: 200ms between requests to be polite to rec0ded88.com
+        await new Promise(r => setTimeout(r, 200));
       }
 
       // Delete dead games (unless dry run)
@@ -3076,10 +3081,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         dryRun,
         total: allGames.length,
         tested,
+        aliveCount: alive.length,
         deadCount: dead.length,
+        errorCount: results.filter(r => r.status === "error").length,
         deleted,
         platformFilter: platformFilter || "all",
-        dead: results,
+        // Only include dead + error entries to keep response small
+        dead: results.filter(r => r.status !== "ok"),
       });
     } catch (error) {
       res.status(500).json({ error: error instanceof Error ? error.message : "Prune failed" });
