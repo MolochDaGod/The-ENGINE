@@ -1616,6 +1616,184 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ═══════════════════════════════════════════════════════════════
+  // GBUX ECONOMY — purchase, spend, transfer
+  // ═══════════════════════════════════════════════════════════════
+
+  /** Purchase GBUX with store product (deducts from store, credits GBUX) */
+  app.post("/api/gbux/purchase", requirePlayer, async (req, res) => {
+    try {
+      const player = getPlayer(req)!;
+      const { productId } = req.body;
+      if (!productId) return res.status(400).json({ error: "productId is required" });
+
+      const product = await storage.getStoreProduct(parseInt(productId));
+      if (!product || !product.isActive) return res.status(404).json({ error: "Product not found" });
+
+      // Product price is in GBUX cents (integer) — convert to GBUX decimal
+      const gbuxAmount = product.price / 100;
+      const newBalance = parseFloat(player.gbuxBalance) + gbuxAmount;
+
+      await storage.updateUser(player.id, { gbuxBalance: newBalance.toFixed(4) });
+      const tx = await storage.createTransaction({
+        userId: player.id,
+        type: "purchase",
+        amount: gbuxAmount.toFixed(4),
+        balanceAfter: newBalance.toFixed(4),
+        referenceType: "store",
+        referenceId: product.id,
+        description: `Purchased: ${product.name}`,
+      });
+
+      return res.json({
+        success: true,
+        gbuxAdded: gbuxAmount,
+        newBalance: newBalance.toFixed(4),
+        product: product.name,
+        transactionId: tx.id,
+      });
+    } catch (error) {
+      console.error("GBUX purchase error:", error);
+      return res.status(500).json({ error: "Purchase failed" });
+    }
+  });
+
+  /** Spend GBUX on an item or service */
+  app.post("/api/gbux/spend", requirePlayer, async (req, res) => {
+    try {
+      const player = getPlayer(req)!;
+      const { amount, description, referenceType, referenceId } = req.body;
+      const spendAmount = parseFloat(amount);
+
+      if (!spendAmount || spendAmount <= 0) return res.status(400).json({ error: "amount must be positive" });
+      if (!description) return res.status(400).json({ error: "description is required" });
+
+      const currentBalance = parseFloat(player.gbuxBalance);
+      if (currentBalance < spendAmount) {
+        return res.status(400).json({ error: "Insufficient GBUX balance", balance: currentBalance, required: spendAmount });
+      }
+
+      const newBalance = currentBalance - spendAmount;
+      await storage.updateUser(player.id, { gbuxBalance: newBalance.toFixed(4) });
+      const tx = await storage.createTransaction({
+        userId: player.id,
+        type: "purchase",
+        amount: (-spendAmount).toFixed(4),
+        balanceAfter: newBalance.toFixed(4),
+        referenceType: referenceType || "service",
+        referenceId: referenceId ? parseInt(referenceId) : undefined,
+        description: description.slice(0, 200),
+      });
+
+      return res.json({
+        success: true,
+        gbuxSpent: spendAmount,
+        newBalance: newBalance.toFixed(4),
+        transactionId: tx.id,
+      });
+    } catch (error) {
+      console.error("GBUX spend error:", error);
+      return res.status(500).json({ error: "Spend failed" });
+    }
+  });
+
+  /** Transfer GBUX to another player */
+  app.post("/api/gbux/transfer", requirePlayer, async (req, res) => {
+    try {
+      const player = getPlayer(req)!;
+      const { recipientUsername, amount, note } = req.body;
+      const transferAmount = parseFloat(amount);
+
+      if (!recipientUsername) return res.status(400).json({ error: "recipientUsername is required" });
+      if (!transferAmount || transferAmount <= 0) return res.status(400).json({ error: "amount must be positive" });
+      if (transferAmount < 0.01) return res.status(400).json({ error: "Minimum transfer is 0.01 GBUX" });
+
+      const recipient = await storage.getUserByUsername(recipientUsername);
+      if (!recipient) return res.status(404).json({ error: "Recipient not found" });
+      if (recipient.id === player.id) return res.status(400).json({ error: "Cannot transfer to yourself" });
+
+      const senderBalance = parseFloat(player.gbuxBalance);
+      if (senderBalance < transferAmount) {
+        return res.status(400).json({ error: "Insufficient GBUX balance" });
+      }
+
+      // Deduct from sender
+      const newSenderBalance = senderBalance - transferAmount;
+      await storage.updateUser(player.id, { gbuxBalance: newSenderBalance.toFixed(4) });
+      await storage.createTransaction({
+        userId: player.id,
+        type: "purchase",
+        amount: (-transferAmount).toFixed(4),
+        balanceAfter: newSenderBalance.toFixed(4),
+        referenceType: "transfer",
+        description: `Sent to @${recipient.username}${note ? `: ${note.slice(0, 100)}` : ""}`,
+      });
+
+      // Credit to recipient
+      const newRecipientBalance = parseFloat(recipient.gbuxBalance) + transferAmount;
+      await storage.updateUser(recipient.id, { gbuxBalance: newRecipientBalance.toFixed(4) });
+      await storage.createTransaction({
+        userId: recipient.id,
+        type: "reward",
+        amount: transferAmount.toFixed(4),
+        balanceAfter: newRecipientBalance.toFixed(4),
+        referenceType: "transfer",
+        description: `Received from @${player.username}${note ? `: ${note.slice(0, 100)}` : ""}`,
+      });
+
+      return res.json({
+        success: true,
+        sent: transferAmount,
+        to: recipient.username,
+        newBalance: newSenderBalance.toFixed(4),
+      });
+    } catch (error) {
+      console.error("GBUX transfer error:", error);
+      return res.status(500).json({ error: "Transfer failed" });
+    }
+  });
+
+  /** Admin: Grant GBUX to a player (for rewards, promotions, corrections) */
+  app.post("/api/admin/gbux/grant", async (req, res) => {
+    const sessionSecret = process.env.ADMIN_SESSION_SECRET || process.env.SESSION_SECRET;
+    if (!sessionSecret) return res.status(500).json({ error: "Admin auth not configured" });
+    const cookies = parseCookies(req.headers.cookie);
+    const token = cookies[ADMIN_SESSION_COOKIE];
+    if (!token || !verifyAdminSessionToken(token, sessionSecret)) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    try {
+      const { userId, username, amount, reason } = req.body;
+      const grantAmount = parseFloat(amount);
+      if (!grantAmount || grantAmount <= 0) return res.status(400).json({ error: "amount must be positive" });
+
+      let user = userId ? await storage.getUser(parseInt(userId)) : null;
+      if (!user && username) user = await storage.getUserByUsername(username);
+      if (!user) return res.status(404).json({ error: "User not found" });
+
+      const newBalance = parseFloat(user.gbuxBalance) + grantAmount;
+      await storage.updateUser(user.id, { gbuxBalance: newBalance.toFixed(4) });
+      await storage.createTransaction({
+        userId: user.id,
+        type: "reward",
+        amount: grantAmount.toFixed(4),
+        balanceAfter: newBalance.toFixed(4),
+        referenceType: "admin",
+        description: reason ? `Admin grant: ${reason.slice(0, 200)}` : "Admin GBUX grant",
+      });
+
+      return res.json({
+        success: true,
+        granted: grantAmount,
+        to: user.username,
+        newBalance: newBalance.toFixed(4),
+      });
+    } catch (error) {
+      return res.status(500).json({ error: "Grant failed" });
+    }
+  });
+
   // ═════════════════════════════════════════════════════════════════
   // PORTAL AGGREGATES (account, top games, top players)
   // ═════════════════════════════════════════════════════════════════
