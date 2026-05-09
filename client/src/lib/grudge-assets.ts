@@ -285,6 +285,221 @@ export class GrudgeAssets {
 }
 
 // ═══════════════════════════════════════════════════════════════════
+// AnimatedUnit — wraps a GLTF character with state-driven animations
+// ═══════════════════════════════════════════════════════════════════
+
+/**
+ * Animation states for RTS/game units.
+ * Maps to the toon-shooter character animation clips:
+ *   Idle, Run, Punch (attack), HitReact (hurt), Death, Idle_Shoot (attack2)
+ */
+export type UnitAnimState = 'idle' | 'run' | 'attack' | 'hurt' | 'death' | 'attack2';
+
+/** Maps our state names to the actual clip names in the GLB files */
+const ANIM_CLIP_MAP: Record<UnitAnimState, string> = {
+  idle:    'Idle',
+  run:     'Run',
+  attack:  'Punch',
+  hurt:    'HitReact',
+  death:   'Death',
+  attack2: 'Idle_Shoot',
+};
+
+/** Which states loop vs play once */
+const ANIM_LOOP_MAP: Record<UnitAnimState, boolean> = {
+  idle:    true,
+  run:     true,
+  attack:  false,
+  hurt:    false,
+  death:   false,
+  attack2: false,
+};
+
+/** Default crossfade duration in seconds */
+const CROSSFADE_DURATION = 0.15;
+
+export class AnimatedUnit {
+  readonly root: THREE.Group;
+  readonly mixer: THREE.AnimationMixer;
+  private _actions: Partial<Record<UnitAnimState, THREE.AnimationAction>> = {};
+  private _currentState: UnitAnimState = 'idle';
+  private _currentAction: THREE.AnimationAction | null = null;
+  private _dead = false;
+
+  /** Faction tint color applied to all mesh materials */
+  factionColor: number;
+
+  constructor(gltfScene: THREE.Group, clips: THREE.AnimationClip[], factionColor: number = 0xffffff, scale: number = 0.5) {
+    this.root = gltfScene;
+    this.root.scale.setScalar(scale);
+    this.factionColor = factionColor;
+    this.mixer = new THREE.AnimationMixer(this.root);
+
+    // Build action map from available clips
+    for (const [state, clipName] of Object.entries(ANIM_CLIP_MAP)) {
+      const clip = clips.find(c => c.name === clipName);
+      if (clip) {
+        const action = this.mixer.clipAction(clip);
+        const loops = ANIM_LOOP_MAP[state as UnitAnimState];
+        action.setLoop(loops ? THREE.LoopRepeat : THREE.LoopOnce, loops ? Infinity : 1);
+        if (!loops) action.clampWhenFinished = true;
+        this._actions[state as UnitAnimState] = action;
+      }
+    }
+
+    // Apply faction color tint to all meshes
+    this._applyFactionColor(factionColor);
+
+    // Enable shadows
+    this.root.traverse((child) => {
+      if ((child as THREE.Mesh).isMesh) {
+        (child as THREE.Mesh).castShadow = true;
+        (child as THREE.Mesh).receiveShadow = true;
+      }
+    });
+
+    // Start in idle
+    this.play('idle');
+
+    // Listen for one-shot animations finishing → return to idle
+    this.mixer.addEventListener('finished', (e: any) => {
+      const finishedAction = e.action as THREE.AnimationAction;
+      // If death finished, stay dead
+      if (finishedAction === this._actions.death) return;
+      // Otherwise go back to idle (or run if we were moving)
+      if (this._currentState !== 'idle' && this._currentState !== 'run') {
+        this.play('idle');
+      }
+    });
+  }
+
+  /** Get current animation state */
+  get state(): UnitAnimState { return this._currentState; }
+
+  /** Is the unit dead (death animation played) */
+  get isDead(): boolean { return this._dead; }
+
+  /** Transition to a new animation state with crossfade */
+  play(state: UnitAnimState): void {
+    if (this._dead && state !== 'death') return; // Can't animate a dead unit
+    if (state === this._currentState && this._currentAction?.isRunning()) return;
+
+    const newAction = this._actions[state];
+    if (!newAction) return;
+
+    if (state === 'death') this._dead = true;
+
+    // Crossfade from current to new
+    if (this._currentAction && this._currentAction !== newAction) {
+      newAction.reset();
+      newAction.setEffectiveWeight(1);
+      this._currentAction.crossFadeTo(newAction, CROSSFADE_DURATION, true);
+      newAction.play();
+    } else {
+      newAction.reset().play();
+    }
+
+    this._currentAction = newAction;
+    this._currentState = state;
+  }
+
+  /** Update the mixer — call every frame with delta time in seconds */
+  update(dt: number): void {
+    this.mixer.update(dt);
+  }
+
+  /** Set world position */
+  setPosition(x: number, y: number, z: number): void {
+    this.root.position.set(x, y, z);
+  }
+
+  /** Face a target direction (y-axis rotation) */
+  lookAt(targetX: number, targetZ: number): void {
+    const dx = targetX - this.root.position.x;
+    const dz = targetZ - this.root.position.z;
+    if (dx !== 0 || dz !== 0) {
+      this.root.rotation.y = Math.atan2(dx, dz);
+    }
+  }
+
+  /** Apply faction color as emissive tint to all materials */
+  private _applyFactionColor(color: number): void {
+    const tint = new THREE.Color(color);
+    this.root.traverse((child) => {
+      if ((child as THREE.Mesh).isMesh) {
+        const mesh = child as THREE.Mesh;
+        const mat = mesh.material;
+        if (Array.isArray(mat)) {
+          mat.forEach(m => {
+            if ((m as THREE.MeshStandardMaterial).emissive) {
+              (m as THREE.MeshStandardMaterial).emissive.copy(tint);
+              (m as THREE.MeshStandardMaterial).emissiveIntensity = 0.15;
+            }
+          });
+        } else if ((mat as THREE.MeshStandardMaterial).emissive) {
+          (mat as THREE.MeshStandardMaterial).emissive.copy(tint);
+          (mat as THREE.MeshStandardMaterial).emissiveIntensity = 0.15;
+        }
+      }
+    });
+  }
+
+  /** Change faction color at runtime */
+  setFactionColor(color: number): void {
+    this.factionColor = color;
+    this._applyFactionColor(color);
+  }
+
+  /** Dispose of all resources */
+  dispose(): void {
+    this.mixer.stopAllAction();
+    this.root.traverse((child) => {
+      if ((child as THREE.Mesh).isMesh) {
+        (child as THREE.Mesh).geometry?.dispose();
+        const mat = (child as THREE.Mesh).material;
+        if (Array.isArray(mat)) mat.forEach(m => m.dispose());
+        else if (mat) (mat as THREE.Material).dispose();
+      }
+    });
+  }
+}
+
+/**
+ * Create an AnimatedUnit from a manifest key.
+ * Loads the GLB, clones the scene, and wraps it with the animation state machine.
+ */
+export async function createAnimatedUnit(
+  manifestKey: string,
+  factionColor: number = 0xffffff,
+  scale: number = 0.5,
+): Promise<AnimatedUnit | null> {
+  const assets = GrudgeAssets.getInstance();
+  const gltf = await assets.loadModel(manifestKey);
+  if (!gltf) return null;
+
+  // Clone scene and animations
+  const clone = gltf.scene.clone();
+  // Deep clone skeleton for independent animation
+  const clips = gltf.animations;
+
+  return new AnimatedUnit(clone, clips, factionColor, scale);
+}
+
+/**
+ * Create an animated unit for a specific RTS entity.
+ * Maps entity ID → character model, applies faction color.
+ */
+export async function createRTSAnimatedUnit(
+  entityId: string,
+  factionColor: number,
+  scale: number = 0.5,
+): Promise<AnimatedUnit | null> {
+  const manifestKey = RTS_MODEL_MAP[entityId];
+  if (!manifestKey) return null;
+  return createAnimatedUnit(manifestKey, factionColor, scale);
+}
+
+// ═══════════════════════════════════════════════════════════════════
 // Convenience exports
 // ═══════════════════════════════════════════════════════════════════
 

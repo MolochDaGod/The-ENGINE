@@ -11,6 +11,7 @@ import * as CANNON from 'cannon-es';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
+import { type AnimatedUnit, createRTSAnimatedUnit, preloadRTS, RTS_MODEL_MAP } from '@/lib/grudge-assets';
 
 type Faction = 'human' | 'orc';
 type UnitType = 'peasant' | 'footman' | 'archer' | 'knight' | 'ballista' | 'mage' | 'paladin';
@@ -43,9 +44,10 @@ interface GameUnit {
   gatherTarget: string | null;
   lastGatherTarget: string | null;
   groupNumber: number | null;
-  mesh?: THREE.Mesh;
+  mesh?: THREE.Mesh | THREE.Object3D;
   selectionRing?: THREE.Mesh;
   healthBar?: THREE.Group;
+  animUnit?: AnimatedUnit;
   isVisible: boolean;
   lastSeenPosition: Position3D | null;
 }
@@ -199,6 +201,8 @@ export default function Wargus() {
   
   const [gameMode, setGameMode] = useState<GameMode>('menu');
   const [playerFaction, setPlayerFaction] = useState<Faction>('human');
+  const [assetsLoaded, setAssetsLoaded] = useState(false);
+  const [loadProgress, setLoadProgress] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [gameTime, setGameTime] = useState(0);
@@ -449,21 +453,48 @@ export default function Wargus() {
     
     if (sceneRef.current) {
       const size = type === 'knight' || type === 'paladin' ? 0.6 : type === 'ballista' ? 0.8 : 0.45;
-      const geometry = new THREE.CapsuleGeometry(size * 0.4, size * 0.6, 8, 16);
-      const color = faction === 'human' ? 0x4169e1 : 0xdc143c;
-      const material = new THREE.MeshStandardMaterial({ 
-        color,
-        metalness: 0.4,
-        roughness: 0.6
-      });
-      const mesh = new THREE.Mesh(geometry, material);
-      mesh.position.set(x, size * 0.5, z);
-      mesh.castShadow = true;
-      mesh.receiveShadow = true;
-      mesh.userData = { unitId: unit.id };
-      sceneRef.current.add(mesh);
-      unit.mesh = mesh;
-      
+      const factionColor = faction === 'human' ? 0x4169e1 : 0xdc143c;
+
+      // Map old unit types to RTS entity IDs for model lookup
+      const entityMap: Record<UnitType, string> = {
+        peasant: faction === 'human' ? 'sky_serf' : 'thrall_worker',
+        footman: faction === 'human' ? 'valor_guard' : 'chaos_grunt',
+        archer: faction === 'human' ? 'rune_marksman' : 'shadow_hunter',
+        knight: faction === 'human' ? 'thunder_charger' : 'warg_rider',
+        ballista: faction === 'human' ? 'cosmic_ram' : 'doom_catapult',
+        mage: faction === 'human' ? 'wisdom_seer' : 'hex_shaman',
+        paladin: faction === 'human' ? 'fate_lancer' : 'doom_berserker',
+      };
+      const entityId = entityMap[type];
+      const modelScale = type === 'ballista' ? 0.8 : type === 'knight' || type === 'paladin' ? 0.6 : 0.5;
+
+      // Try loading animated 3D model from CDN
+      if (entityId && RTS_MODEL_MAP[entityId]) {
+        createRTSAnimatedUnit(entityId, factionColor, modelScale).then(animUnit => {
+          if (animUnit && sceneRef.current) {
+            animUnit.setPosition(x, 0, z);
+            animUnit.root.userData = { unitId: unit.id };
+            sceneRef.current.add(animUnit.root);
+            unit.mesh = animUnit.root;
+            unit.animUnit = animUnit;
+          }
+        });
+      }
+
+      // Immediate fallback mesh (shown until GLB loads)
+      if (!unit.mesh) {
+        const geometry = new THREE.CapsuleGeometry(size * 0.4, size * 0.6, 8, 16);
+        const material = new THREE.MeshStandardMaterial({ color: factionColor, metalness: 0.4, roughness: 0.6 });
+        const mesh = new THREE.Mesh(geometry, material);
+        mesh.position.set(x, size * 0.5, z);
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        mesh.userData = { unitId: unit.id };
+        sceneRef.current.add(mesh);
+        unit.mesh = mesh;
+      }
+
+      // Selection ring
       const ringGeometry = new THREE.RingGeometry(size * 0.6, size * 0.8, 32);
       const ringMaterial = new THREE.MeshBasicMaterial({ 
         color: faction === 'human' ? 0x00ff00 : 0xff0000, 
@@ -477,6 +508,7 @@ export default function Wargus() {
       sceneRef.current.add(ring);
       unit.selectionRing = ring;
       
+      // Health bar
       const healthBarGroup = new THREE.Group();
       const bgGeometry = new THREE.PlaneGeometry(0.8, 0.12);
       const bgMaterial = new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.DoubleSide });
@@ -1931,9 +1963,15 @@ export default function Wargus() {
             z: unit.position.z + moveZ
           };
           
-          if (unit.mesh) {
+          if (unit.animUnit) {
+            unit.animUnit.setPosition(newPos.x, 0, newPos.z);
+            unit.animUnit.lookAt(unit.targetPosition.x, unit.targetPosition.z);
+            if (unit.animUnit.state !== 'run' && unit.animUnit.state !== 'attack' && unit.animUnit.state !== 'hurt') {
+              unit.animUnit.play('run');
+            }
+          } else if (unit.mesh) {
             unit.mesh.position.set(newPos.x, unit.mesh.position.y, newPos.z);
-            unit.mesh.lookAt(unit.targetPosition.x, unit.mesh.position.y, unit.targetPosition.z);
+            (unit.mesh as THREE.Mesh).lookAt?.(unit.targetPosition.x, unit.mesh.position.y, unit.targetPosition.z);
           }
           if (unit.selectionRing) {
             unit.selectionRing.position.set(newPos.x, 0.05, newPos.z);
@@ -1972,8 +2010,17 @@ export default function Wargus() {
           if (dist <= unit.range) {
             const isRanged = unit.type === 'archer' || unit.type === 'ballista' || unit.type === 'mage';
             
+            // Face the target
+            if (unit.animUnit) {
+              unit.animUnit.lookAt(target.position.x, target.position.z);
+            }
+
             if (isRanged) {
               if (Math.random() < deltaTime * 1.5) {
+                // Play ranged attack animation
+                if (unit.animUnit && unit.animUnit.state !== 'attack2') {
+                  unit.animUnit.play('attack2');
+                }
                 const projType = unit.type === 'ballista' ? 'ballista' : unit.type === 'mage' ? 'magic' : 'arrow';
                 spawnPhysicsProjectile(
                   unit.position.x, unit.position.y + 1.2, unit.position.z,
@@ -1983,10 +2030,22 @@ export default function Wargus() {
                 );
               }
             } else {
+              // Play melee attack animation
+              if (unit.animUnit && unit.animUnit.state !== 'attack' && unit.animUnit.state !== 'hurt') {
+                unit.animUnit.play('attack');
+              }
               const targetArmor = 'armor' in target ? target.armor : 0;
               const rawDmg = Math.max(1, unit.damage - targetArmor);
               const damageDealt = rawDmg * deltaTime;
               target.health -= damageDealt;
+
+              // Play hurt animation on the target
+              if ('animUnit' in target && (target as GameUnit).animUnit) {
+                const tUnit = target as GameUnit;
+                if (tUnit.animUnit && tUnit.animUnit.state !== 'hurt' && tUnit.animUnit.state !== 'death' && Math.random() < deltaTime * 3) {
+                  tUnit.animUnit.play('hurt');
+                }
+              }
               
               if (Math.random() < deltaTime * 2) {
                 spawnFloatingText(`-${rawDmg}`, target.position.x + (Math.random() - 0.5), 3, target.position.z + (Math.random() - 0.5), '#FF4444');
@@ -2063,7 +2122,17 @@ export default function Wargus() {
     
     unitsRef.current = unitsRef.current.filter(unit => {
       if (unit.health <= 0) {
-        if (unit.mesh) sceneRef.current?.remove(unit.mesh);
+        // Play death animation, then remove after it finishes
+        if (unit.animUnit && !unit.animUnit.isDead) {
+          unit.animUnit.play('death');
+          // Schedule removal after death animation (1.5s)
+          setTimeout(() => {
+            if (unit.mesh) sceneRef.current?.remove(unit.mesh);
+            if (unit.animUnit) unit.animUnit.dispose();
+          }, 1500);
+        } else if (!unit.animUnit) {
+          if (unit.mesh) sceneRef.current?.remove(unit.mesh);
+        }
         if (unit.selectionRing) sceneRef.current?.remove(unit.selectionRing);
         if (unit.healthBar) sceneRef.current?.remove(unit.healthBar);
         setFood(prev => ({
@@ -2071,6 +2140,10 @@ export default function Wargus() {
           [unit.faction]: { ...prev[unit.faction], used: Math.max(0, prev[unit.faction].used - 1) }
         }));
         return false;
+      }
+      // Set idle animation for units not doing anything
+      if (unit.animUnit && !unit.targetPosition && !unit.attackTarget && unit.animUnit.state !== 'idle' && unit.animUnit.state !== 'hurt') {
+        unit.animUnit.play('idle');
       }
       return true;
     });
@@ -2228,6 +2301,10 @@ export default function Wargus() {
         updateGame(deltaTime);
         updateParticles(deltaTime);
         updateBuildingFireEffects(deltaTime);
+        // Update all animation mixers
+        unitsRef.current.forEach(u => {
+          if (u.animUnit) u.animUnit.update(deltaTime);
+        });
       }
       
       const elapsed = now / 1000;
