@@ -1116,17 +1116,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Public landing feed ----------------------------------------------
-  // Drives the Squarespace-hosted grudgeplatform.io landing so the page
-  // can be updated server-side without republishing the Squarespace HTML.
+  // Drives the grudgeplatform.com landing so the page can be updated
+  // server-side without republishing the static HTML.
   app.get("/api/public/landing", (_req, res) => {
     res.setHeader("Cache-Control", "public, max-age=60");
     res.json({
-      version: "2.5.0",
+      version: "2.6.0",
       updatedAt: new Date().toISOString(),
       status: [
         { label: "grudge-studio.com", state: "online" },
         { label: "grudgewarlords.com", state: "online" },
-        { label: "grudgeplatform.io", state: "online" },
         { label: "Puter Workers", state: "warn" },
         { label: "Solana Devnet", state: "online" },
       ],

@@ -18,7 +18,7 @@ const DEFAULT_ALLOWED_ORIGINS = [
   "https://grudge-studio.com",
   "https://id.grudge-studio.com",
   "https://grudgewarlords.com",
-  "https://grudgeplatform.io",
+  "https://grudgeplatform.com",
   "https://dungeon-crawler-quest.vercel.app",
   "https://grudgestudio.puter.site",
   "https://grudgeplatform.puter.site",

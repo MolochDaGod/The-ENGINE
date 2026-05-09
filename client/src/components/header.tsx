@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ChevronRight, Cloud, ExternalLink, Flame, Home, Layers3, Library, LogIn, LogOut, Menu, Shield, Sparkles, Swords, Trophy, UserCircle, Wrench, X } from "lucide-react";
+import { Anchor, ChevronRight, Cloud, ExternalLink, Flame, Home, Layers3, Library, LogIn, LogOut, Menu, Rocket, Shield, Sparkles, Swords, Trophy, UserCircle, Wrench, X } from "lucide-react";
 import grudgeLogo from "@assets/uXpJmRe_1773828784729.png";
 import { useAuth } from "@/components/auth-provider";
 import { useAuthModal } from "@/components/auth-modal";
@@ -63,12 +63,12 @@ export default function Header() {
   }, [location]);
 
   const navLinks = [
-    { name: "Products", href: "/#products", icon: Layers3 },
-    { name: "Play", href: "/#play", icon: Swords },
+    { name: "Warlords", href: "/#warlords", icon: Swords },
+    { name: "Nexus", href: "/#nexus", icon: Flame },
+    { name: "Armada", href: "/#armada", icon: Anchor },
     { name: "Compete", href: "/leaderboards", icon: Trophy },
-    { name: "PvP", href: "/pvp", icon: Flame },
+    { name: "Games", href: "/games", icon: Library },
     { name: "Studio", href: "/#studio", icon: Wrench },
-    { name: "Retro", href: "/games", icon: Library },
   ] as const;
 
   const isHome = location === "/";
@@ -102,11 +102,9 @@ export default function Header() {
                     ? location.startsWith("/games")
                     : link.href === "/leaderboards"
                       ? location.startsWith("/leaderboards")
-                      : link.href === "/pvp"
-                        ? location.startsWith("/pvp")
-                        : link.href.startsWith("/#")
-                          ? isHome
-                          : location === link.href;
+                      : link.href.startsWith("/#")
+                        ? isHome
+                        : location === link.href;
                 const className = `transition-colors font-body text-sm ${active ? "text-[hsl(43,85%,55%)]" : "text-[hsl(45,30%,90%)] hover:text-[hsl(43,85%,55%)]"}`;
                 if (link.href.startsWith("/#")) {
                   return (
@@ -153,11 +151,6 @@ export default function Header() {
                   <LogIn className="w-4 h-4 mr-1" /> Sign In
                 </Button>
               )}
-              <a href="https://grudgewarlords.com" target="_blank" rel="noopener noreferrer">
-                <Button size="sm" className="gilded-button">
-                  <Sparkles className="w-4 h-4 mr-1" /> Open Warlords
-                </Button>
-              </a>
             </div>
           </div>
         </div>

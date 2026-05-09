@@ -1,8 +1,9 @@
+import { useState } from "react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ArrowUpRight, Bot, Crown, Flame, Gamepad2, Layers3, LayoutDashboard, Library, Loader2, Rocket, Sparkles, Trophy } from "lucide-react";
+import { Anchor, ArrowUpRight, Bot, Crown, Flame, Layers3, LayoutDashboard, Library, Loader2, Rocket, Sparkles, Swords, Trophy } from "lucide-react";
 import { useAuthModal } from "@/components/auth-modal";
 import grudgeLogo from "@assets/uXpJmRe_1773828784729.png";
 import homeBg from "@assets/2kljxaj_1773841543581.png";
@@ -12,6 +13,7 @@ import {
   playProducts,
   portalStats,
   studioProducts,
+  PORTAL_PRODUCTS,
   type PortalProduct,
 } from "@/data/portalProducts";
 import type { Game } from "@shared/schema";
@@ -108,6 +110,131 @@ const studioPrinciples = [
     icon: LayoutDashboard,
   },
 ];
+
+type EraKey = "warlords" | "nexus" | "armada";
+
+const ERAS: { key: EraKey; name: string; tagline: string; description: string; icon: typeof Swords; bgImage: string; accent: string; accentBorder: string; productIds: string[] }[] = [
+  {
+    key: "warlords",
+    name: "Warlords",
+    tagline: "Dark Fantasy RPG",
+    description: "The medieval dark-fantasy era. Character creation, professions, crafting, faction warfare, and Souls-like PvP combat across island territories.",
+    icon: Swords,
+    bgImage: "/assets/store/dark_fantasy_scenes.png",
+    accent: "hsl(43,85%,55%)",
+    accentBorder: "hsl(43,60%,30%)",
+    productIds: ["warlords", "grudge-crafting", "mage-arena", "avernus-arena", "tower-defense"],
+  },
+  {
+    key: "nexus",
+    name: "Nexus",
+    tagline: "Competitive Arena",
+    description: "The competitive era. MOBA-style battlegrounds, RTS strategy, multiplayer racing, and wave-survival arenas with GBUX wagers and ranked ladders.",
+    icon: Flame,
+    bgImage: "/assets/store/mmo_development.png",
+    accent: "hsl(0,70%,55%)",
+    accentBorder: "hsl(0,60%,35%)",
+    productIds: ["wargus", "multiplayer-racing", "annihilate-demo"],
+  },
+  {
+    key: "armada",
+    name: "Armada",
+    tagline: "Fleet & Space Combat",
+    description: "The fleet era. Dogfight gameplay, ship building, fleet command, and space exploration — the next frontier for Grudge Studio.",
+    icon: Anchor,
+    bgImage: "/assets/store/scifi_environment.png",
+    accent: "hsl(200,70%,55%)",
+    accentBorder: "hsl(200,60%,30%)",
+    productIds: [],
+  },
+];
+
+function EraCard({ era, isActive, onClick }: { era: typeof ERAS[number]; isActive: boolean; onClick: () => void }) {
+  const Icon = era.icon;
+  return (
+    <button
+      onClick={onClick}
+      className={`relative flex-1 min-w-[200px] rounded-xl overflow-hidden border-2 transition-all duration-300 text-left group ${
+        isActive
+          ? "border-current shadow-lg shadow-current/20 scale-[1.02]"
+          : "border-[hsl(43,60%,30%)]/30 hover:border-[hsl(43,60%,30%)]/60"
+      }`}
+      style={{ color: era.accent }}
+    >
+      <div className="absolute inset-0 z-0">
+        <img src={era.bgImage} alt="" className="w-full h-full object-cover" />
+        <div className={`absolute inset-0 ${
+          isActive ? "bg-black/50" : "bg-black/70 group-hover:bg-black/55"
+        } transition-all`} />
+      </div>
+      <div className="relative z-10 p-5">
+        <div className="flex items-center gap-2 mb-2">
+          <Icon className="w-5 h-5" />
+          <span className="font-heading text-xl tracking-wide">{era.name}</span>
+        </div>
+        <p className="text-xs text-[hsl(45,15%,70%)] font-body">{era.tagline}</p>
+      </div>
+    </button>
+  );
+}
+
+function EraSection({ era }: { era: typeof ERAS[number] }) {
+  const eraProducts = era.productIds
+    .map((id) => PORTAL_PRODUCTS.find((p) => p.id === id))
+    .filter(Boolean) as PortalProduct[];
+
+  return (
+    <section
+      id={era.key}
+      className="relative py-16 overflow-hidden border-t border-[hsl(43,60%,30%)]/20"
+    >
+      <div className="absolute inset-0 z-0">
+        <img src={era.bgImage} alt="" className="w-full h-full object-cover" />
+        <div className="absolute inset-0 bg-gradient-to-r from-[hsl(225,30%,6%)]/95 via-[hsl(225,30%,6%)]/85 to-[hsl(225,30%,6%)]/70" />
+      </div>
+      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex flex-col lg:flex-row lg:items-start gap-8">
+          <div className="lg:w-2/5">
+            <div className="flex items-center gap-3 mb-4">
+              <era.icon className="w-7 h-7" style={{ color: era.accent }} />
+              <h2 className="text-3xl font-heading" style={{ color: era.accent, WebkitTextFillColor: "unset" }}>
+                {era.name}
+              </h2>
+              <Badge className="border text-[10px] uppercase tracking-wide" style={{ borderColor: era.accentBorder, color: era.accent, background: `${era.accent}15` }}>
+                {era.key === "armada" ? "Coming Soon" : "Active"}
+              </Badge>
+            </div>
+            <p className="text-[hsl(45,15%,70%)] font-body leading-relaxed">
+              {era.description}
+            </p>
+            {era.key === "warlords" && (
+              <div className="flex gap-3 mt-6">
+                <img src="/assets/heroes/death_mage.png" alt="Death Mage" className="w-16 h-20 rounded-lg object-cover border border-[hsl(43,60%,30%)]/40" />
+                <img src="/assets/heroes/holy_paladin.png" alt="Holy Paladin" className="w-16 h-20 rounded-lg object-cover border border-[hsl(43,60%,30%)]/40" />
+                <img src="/assets/heroes/orc_shaman.png" alt="Orc Shaman" className="w-16 h-20 rounded-lg object-cover border border-[hsl(43,60%,30%)]/40" />
+                <img src="/assets/heroes/stone_guardian.png" alt="Stone Guardian" className="w-16 h-20 rounded-lg object-cover border border-[hsl(43,60%,30%)]/40" />
+              </div>
+            )}
+          </div>
+          <div className="lg:w-3/5">
+            {eraProducts.length > 0 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {eraProducts.map((product) => (
+                  <ProductCard key={product.id} product={product} />
+                ))}
+              </div>
+            ) : (
+              <div className="fantasy-panel p-8 text-center">
+                <era.icon className="w-10 h-10 mx-auto mb-3" style={{ color: era.accent }} />
+                <p className="text-[hsl(45,15%,70%)] font-body">Ships and fleet combat are being forged. Stay tuned for the Armada era launch.</p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
 
 function CompeteSection() {
   const topGamesQuery = useQuery<TopGame[]>({
@@ -217,6 +344,8 @@ function CompeteSection() {
 
 export default function Home() {
   const { open: openAuth } = useAuthModal();
+  const [activeEra, setActiveEra] = useState<EraKey>("warlords");
+
   return (
     <div className="min-h-screen relative">
       <div
@@ -225,94 +354,92 @@ export default function Home() {
       />
       <div className="fixed inset-0 z-0 bg-gradient-to-b from-[hsl(225,30%,6%)]/80 via-transparent to-[hsl(225,30%,6%)]/90 pointer-events-none" />
 
+      {/* Hero */}
       <section className="relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-b from-[hsl(225,35%,12%)] via-[hsl(225,30%,8%)] to-[hsl(225,30%,6%)]" />
         <div className="absolute inset-0 opacity-[0.03]" style={{ backgroundImage: "radial-gradient(circle at 25% 25%, hsl(43,85%,55%) 1px, transparent 1px)", backgroundSize: "40px 40px" }} />
 
-        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
-          <div className="max-w-4xl">
-            <div className="flex items-center gap-4 mb-6">
-              <img src={grudgeLogo} alt="Grudge Studio" className="w-16 h-16 rounded-full ring-2 ring-[hsl(43,85%,55%)]/30" />
-              <Badge className="gilded-button text-xs">Client Portal</Badge>
+        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+          <div className="flex items-center gap-4 mb-6">
+            <img src={grudgeLogo} alt="Grudge Studio" className="w-14 h-14 rounded-full ring-2 ring-[hsl(43,85%,55%)]/30" />
+            <div>
+              <h1 className="text-3xl md:text-5xl font-heading" style={{ WebkitTextFillColor: "unset" }}>
+                <span className="gold-text">Grudge Studio</span>
+              </h1>
+              <p className="text-sm text-[hsl(45,15%,60%)] font-body mt-1">Three eras. One portal. Choose your war.</p>
             </div>
+          </div>
 
-            <h1 className="text-4xl md:text-6xl font-heading mb-5" style={{ WebkitTextFillColor: "unset" }}>
-              Start in <span className="gold-text">Grudge Studio</span>
-            </h1>
-            <p className="text-lg md:text-xl text-[hsl(45,15%,60%)] max-w-3xl font-body leading-relaxed">
-              One portal for Warlords, launcher, dashboard, AI, assets, and studio tools. Sign in once, choose the product you want, and move through the ecosystem from a single client-first entry point.
-            </p>
+          {/* Era selector cards */}
+          <div className="flex flex-col sm:flex-row gap-4 mt-8">
+            {ERAS.map((era) => (
+              <EraCard
+                key={era.key}
+                era={era}
+                isActive={activeEra === era.key}
+                onClick={() => {
+                  setActiveEra(era.key);
+                  document.getElementById(era.key)?.scrollIntoView({ behavior: "smooth" });
+                }}
+              />
+            ))}
+          </div>
 
-            <div className="flex flex-wrap gap-3 mt-8">
-              <Button className="gilded-button" onClick={() => openAuth({ initialTab: 'signin', reason: 'Sign in to access all Grudge Studio products.' })}>
-                <Sparkles className="w-4 h-4 mr-2" /> Sign In with Grudge ID
+          <div className="flex flex-wrap gap-3 mt-8">
+            <Button className="gilded-button" onClick={() => openAuth({ initialTab: 'signin', reason: 'Sign in to access all Grudge Studio products.' })}>
+              <Sparkles className="w-4 h-4 mr-2" /> Sign In with Grudge ID
+            </Button>
+            <a href="#products">
+              <Button variant="outline" className="border-[hsl(43,60%,30%)] text-[hsl(45,30%,90%)] hover:bg-[hsl(225,25%,16%)]">
+                Browse All Products
               </Button>
-              <a href="https://grudgewarlords.com" target="_blank" rel="noopener noreferrer">
-                <Button variant="outline" className="border-[hsl(43,60%,30%)] text-[hsl(45,30%,90%)] hover:bg-[hsl(225,25%,16%)]">
-                  <Gamepad2 className="w-4 h-4 mr-2" /> Launch Warlords
-                </Button>
-              </a>
-              <a href="#products">
-                <Button variant="ghost" className="text-[hsl(45,30%,90%)] hover:text-[hsl(43,85%,55%)] hover:bg-[hsl(225,25%,16%)]">
-                  Browse Products
-                </Button>
-              </a>
-            </div>
+            </a>
           </div>
         </div>
       </section>
 
-      <section className="py-10 border-y border-[hsl(43,60%,30%)]/20 relative overflow-hidden" style={{ background: "hsl(225,30%,7%)" }}>
+      {/* Stats bar */}
+      <section className="py-8 border-y border-[hsl(43,60%,30%)]/20 relative overflow-hidden" style={{ background: "hsl(225,30%,7%)" }}>
         <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-6">
             {[
               { label: "Products", value: portalStats.totalProducts.toString(), icon: Layers3 },
               { label: "Live", value: portalStats.live.toString(), icon: Sparkles },
-              { label: "Planned", value: portalStats.planned.toString(), icon: Rocket },
+              { label: "Eras", value: "3", icon: Swords },
+              { label: "Multiplayer", value: portalStats.multiplayer.toString(), icon: Flame },
               { label: "Auth-linked", value: portalStats.authRequired.toString(), icon: LayoutDashboard },
             ].map((stat) => (
               <div key={stat.label} className="text-center group">
-                <div className="inline-flex items-center justify-center w-12 h-12 rounded-lg stone-panel mb-3 group-hover:animate-gem-glow transition-all">
-                  <stat.icon className="w-6 h-6 text-[hsl(43,85%,55%)]" />
+                <div className="inline-flex items-center justify-center w-10 h-10 rounded-lg stone-panel mb-2 group-hover:animate-gem-glow transition-all">
+                  <stat.icon className="w-5 h-5 text-[hsl(43,85%,55%)]" />
                 </div>
-                <div className="text-2xl font-heading gold-text font-bold">{stat.value}</div>
-                <div className="text-sm text-[hsl(45,15%,60%)] mt-1 font-body">{stat.label}</div>
+                <div className="text-xl font-heading gold-text font-bold">{stat.value}</div>
+                <div className="text-xs text-[hsl(45,15%,60%)] mt-1 font-body">{stat.label}</div>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      <section id="products" className="relative py-16">
+      {/* Era sections */}
+      {ERAS.map((era) => (
+        <EraSection key={era.key} era={era} />
+      ))}
+
+      <CompeteSection />
+
+      {/* Featured / all products */}
+      <section id="products" className="relative py-16 border-t border-[hsl(43,60%,30%)]/20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="mb-8">
-            <Badge className="mb-3 bg-[hsl(43,85%,55%)]/10 text-[hsl(43,85%,55%)] border border-[hsl(43,60%,30%)]/40">Featured Products</Badge>
-            <h2 className="text-3xl font-heading text-[hsl(45,30%,92%)]" style={{ WebkitTextFillColor: "unset" }}>Choose a live product or the next mission target</h2>
+            <Badge className="mb-3 bg-[hsl(43,85%,55%)]/10 text-[hsl(43,85%,55%)] border border-[hsl(43,60%,30%)]/40">All Products</Badge>
+            <h2 className="text-3xl font-heading text-[hsl(45,30%,92%)]" style={{ WebkitTextFillColor: "unset" }}>Everything in the ecosystem</h2>
             <p className="text-[hsl(45,15%,60%)] mt-2 font-body max-w-3xl">
-              The portal is the shell. Products are the destinations. Warlords, launcher, dashboard, and AI should all be discoverable from the same front door.
+              Launcher, dashboard, AI hub, and studio tools — all discoverable from the same front door.
             </p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
             {featuredProducts.map((product) => (
-              <ProductCard key={product.id} product={product} />
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <CompeteSection />
-
-      <section id="play" className="relative py-16 border-t border-[hsl(43,60%,30%)]/20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="mb-8">
-            <Badge className="mb-3 bg-[hsl(220,60%,55%)]/10 text-[hsl(220,70%,70%)] border border-[hsl(220,60%,55%)]/30">Play</Badge>
-            <h2 className="text-3xl font-heading text-[hsl(45,30%,92%)]" style={{ WebkitTextFillColor: "unset" }}>Live play surfaces</h2>
-            <p className="text-[hsl(45,15%,60%)] mt-2 font-body max-w-3xl">
-              Warlords stays the main live game. Other play surfaces remain available, and the retro library stays accessible without dominating the portal identity.
-            </p>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-            {[...playProducts, ...legacyProducts].map((product) => (
               <ProductCard key={product.id} product={product} />
             ))}
           </div>
@@ -367,17 +494,16 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="relative py-16 border-t border-[hsl(43,60%,30%)]/20">
+      <section className="relative py-12 border-t border-[hsl(43,60%,30%)]/20">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="fantasy-panel p-8 text-center">
-            <Badge className="mb-4 bg-[hsl(220,60%,55%)]/10 text-[hsl(220,70%,70%)] border border-[hsl(220,60%,55%)]/30">Legacy / Secondary</Badge>
-            <h2 className="text-2xl font-heading text-[hsl(45,30%,92%)]" style={{ WebkitTextFillColor: "unset" }}>Retro stays available — just not first</h2>
-            <p className="text-[hsl(45,15%,60%)] mt-3 font-body max-w-2xl mx-auto">
-              The emulator library remains part of the ecosystem, but the main landing experience is now the client portal for Grudge Studio products rather than the retro catalog itself.
-            </p>
+          <div className="fantasy-panel p-6 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div>
+              <div className="text-sm font-heading text-[hsl(45,15%,70%)] uppercase tracking-wider">Retro Library</div>
+              <p className="text-xs text-[hsl(45,15%,50%)] font-body mt-1">894 verified classic games still available inside the portal.</p>
+            </div>
             <Link href="/games">
-              <Button className="mt-6 gilded-button">
-                <Library className="w-4 h-4 mr-2" /> Enter Retro Library
+              <Button size="sm" variant="outline" className="border-[hsl(43,60%,30%)] text-[hsl(45,30%,90%)] whitespace-nowrap">
+                <Library className="w-4 h-4 mr-1" /> Enter Library
               </Button>
             </Link>
           </div>

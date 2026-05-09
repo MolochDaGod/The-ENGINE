@@ -45,21 +45,10 @@ const SERVICES: ServiceDef[] = [
   { id: 'cf-dashboard', name: 'grudge-dashboard', region: 'cloudflare', url: 'https://dash.grudge-studio.com/', timeoutMs: 5000, warnThresholdMs: 2000 },
   { id: 'cf-vercel-proxy', name: 'grudge-vercel-proxy', region: 'cloudflare', url: 'https://grudge-studio.com/avernus-3d', timeoutMs: 8000, warnThresholdMs: 3000 },
 
-  // Linux VPS Docker services
-  { id: 'vps-linux', name: 'Linux VPS (Coolify)', region: 'vps-linux', url: 'http://74.208.155.229:8000/', timeoutMs: 10000, warnThresholdMs: 3000 },
-  { id: 'svc-grudge-id', name: 'grudge-id', region: 'vps-linux', url: 'http://74.208.155.229:3001/health', timeoutMs: 8000, warnThresholdMs: 2000 },
-  { id: 'svc-game-api', name: 'game-api', region: 'vps-linux', url: 'http://74.208.155.229:3003/health', timeoutMs: 8000, warnThresholdMs: 2000 },
-  { id: 'svc-account-api', name: 'account-api', region: 'vps-linux', url: 'http://74.208.155.229:3005/health', timeoutMs: 8000, warnThresholdMs: 2000 },
-  { id: 'svc-launcher-api', name: 'launcher-api', region: 'vps-linux', url: 'http://74.208.155.229:3006/health', timeoutMs: 8000, warnThresholdMs: 2000 },
-  { id: 'svc-ws', name: 'ws-service', region: 'vps-linux', url: 'http://74.208.155.229:3007/health', timeoutMs: 8000, warnThresholdMs: 2000 },
-
-  // Windows VPS (Colyseus)
-  { id: 'colyseus', name: 'Colyseus', region: 'vps-windows', url: 'http://74.208.174.62:2568/api', timeoutMs: 10000, warnThresholdMs: 3000 },
-
   // Vercel frontends
-  { id: 'vc-grudgeplatform', name: 'GrudgePlatform', region: 'vercel', url: 'https://grudgeplatform.io/', timeoutMs: 8000, warnThresholdMs: 2000 },
   { id: 'vc-grudgewarlords', name: 'Grudge Warlords', region: 'vercel', url: 'https://grudgewarlords.com/', timeoutMs: 8000, warnThresholdMs: 2000 },
   { id: 'vc-dungeon', name: 'Dungeon Crawler', region: 'vercel', url: 'https://dungeon-crawler-quest.vercel.app/', timeoutMs: 8000, warnThresholdMs: 2000 },
+  { id: 'vc-grudgeplatform', name: 'GrudgePlatform', region: 'vercel', url: 'https://grudgeplatform.com/', timeoutMs: 8000, warnThresholdMs: 2000 },
 
   // Puter workers
   { id: 'puter-platform', name: 'Puter', region: 'puter', url: 'https://puter.com/', timeoutMs: 8000, warnThresholdMs: 2000 },
