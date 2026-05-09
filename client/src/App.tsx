@@ -47,6 +47,7 @@ import NotFound from "@/pages/not-found";
 import MageArena from "@/pages/mage-arena";
 import AnnihilateDemo from "@/pages/annihilate-demo";
 import WargusDefault from "@/pages/wargus-default";
+import AssetPipeline from "@/pages/asset-pipeline";
 import AdminGuard from "@/components/admin-guard";
 import AdminEntryButton from "@/components/admin-entry-button";
 
@@ -101,6 +102,7 @@ function Router() {
       <Route path="/chat" component={Chat} />
       <Route path="/mage-arena" component={MageArena} />
       <Route path="/annihilate-demo" component={AnnihilateDemo} />
+      <Route path="/asset-pipeline" component={withAdminGuard(AssetPipeline)} />
       <Route path="/admin-login" component={AdminLogin} />
       <Route component={NotFound} />
     </Switch>
