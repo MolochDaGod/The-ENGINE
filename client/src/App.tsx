@@ -46,6 +46,7 @@ import AdminLogin from "@/pages/admin-login";
 import NotFound from "@/pages/not-found";
 import MageArena from "@/pages/mage-arena";
 import AnnihilateDemo from "@/pages/annihilate-demo";
+import WargusDefault from "@/pages/wargus-default";
 import AdminGuard from "@/components/admin-guard";
 import AdminEntryButton from "@/components/admin-entry-button";
 
@@ -96,6 +97,7 @@ function Router() {
       <Route path="/overdrive-3d" component={Overdrive3D} />
       <Route path="/avernus-arena" component={AvernusArena} />
       <Route path="/wargus" component={Wargus} />
+      <Route path="/default" component={WargusDefault} />
       <Route path="/chat" component={Chat} />
       <Route path="/mage-arena" component={MageArena} />
       <Route path="/annihilate-demo" component={AnnihilateDemo} />
