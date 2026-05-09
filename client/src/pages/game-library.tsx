@@ -160,7 +160,7 @@ export default function GameLibrary() {
               <span className="font-body">All Platforms</span>
               <span className="text-xs opacity-60">{totalGames}</span>
             </button>
-            {platforms.filter(p => p.slug !== 'custom').map((p) => (
+            {platforms.filter(p => p.slug !== 'custom' && (p.gameCount || 0) > 0).map((p) => (
               <div key={p.id} className="flex items-center gap-1">
                 <button
                   onClick={() => handlePlatformChange(p.slug)}
