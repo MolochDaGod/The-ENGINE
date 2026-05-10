@@ -12,13 +12,17 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { type AnimatedUnit, createRTSAnimatedUnit, preloadRTS, RTS_MODEL_MAP } from '@/lib/grudge-assets';
+import { FACTIONS, getBuildingsForFaction, getUnitsForFaction, getUnit, getBuilding, ALL_BUILDINGS, ALL_UNITS, type FactionId, type BuildingDef, type UnitDef, type UnitRole, type BuildingRole } from '@shared/grudge-rts-data';
 
-type Faction = 'human' | 'orc';
-type UnitType = 'peasant' | 'footman' | 'archer' | 'knight' | 'ballista' | 'mage' | 'paladin';
-type BuildingType = 'townhall' | 'barracks' | 'farm' | 'tower' | 'blacksmith' | 'lumbermill' | 'stable' | 'church';
+type Faction = FactionId;
+type UnitType = string;
+type BuildingType = string;
 type ResourceType = 'gold' | 'lumber';
 type GameMode = 'menu' | 'pve' | 'pvp';
 type OrderType = 'move' | 'attack' | 'attackmove' | 'patrol' | 'stop' | 'hold' | 'gather' | 'build' | 'repair';
+
+/** PVE enemy mapping */
+const ENEMY_FACTION: Record<FactionId, FactionId> = { crusade: 'legion', fabled: 'legion', legion: 'crusade' };
 
 interface Position3D { x: number; y: number; z: number; }
 
@@ -84,26 +88,71 @@ interface FogCell {
   visible: boolean;
 }
 
-const UNIT_STATS: Record<UnitType, { name: string; icon: string; cost: { gold: number; lumber: number }; health: number; damage: number; armor: number; range: number; speed: number; buildTime: number; commands: string[] }> = {
-  peasant: { name: 'Peasant', icon: '👷', cost: { gold: 400, lumber: 0 }, health: 30, damage: 5, armor: 0, range: 1.5, speed: 3, buildTime: 45, commands: ['move', 'stop', 'attack', 'repair', 'gather', 'build'] },
-  footman: { name: 'Footman', icon: '⚔️', cost: { gold: 600, lumber: 0 }, health: 60, damage: 6, armor: 2, range: 1.5, speed: 2.5, buildTime: 60, commands: ['move', 'stop', 'attack', 'patrol', 'hold'] },
-  archer: { name: 'Elven Archer', icon: '🏹', cost: { gold: 500, lumber: 50 }, health: 40, damage: 3, armor: 0, range: 4, speed: 2.5, buildTime: 70, commands: ['move', 'stop', 'attack', 'patrol', 'hold'] },
-  knight: { name: 'Knight', icon: '🐴', cost: { gold: 800, lumber: 100 }, health: 90, damage: 8, armor: 4, range: 1.5, speed: 5, buildTime: 90, commands: ['move', 'stop', 'attack', 'patrol', 'hold'] },
-  ballista: { name: 'Ballista', icon: '🎯', cost: { gold: 900, lumber: 300 }, health: 110, damage: 80, armor: 0, range: 8, speed: 1.5, buildTime: 250, commands: ['move', 'stop', 'attack', 'patrol'] },
-  mage: { name: 'Mage', icon: '🧙', cost: { gold: 1200, lumber: 0 }, health: 60, damage: 9, armor: 0, range: 2, speed: 2, buildTime: 120, commands: ['move', 'stop', 'attack', 'patrol'] },
-  paladin: { name: 'Paladin', icon: '🛡️', cost: { gold: 800, lumber: 100 }, health: 90, damage: 8, armor: 4, range: 1.5, speed: 5, buildTime: 90, commands: ['move', 'stop', 'attack', 'patrol', 'hold'] }
-};
+// ── Data Bridge: shared data-layer → game-stat lookups ──
 
-const BUILDING_STATS: Record<BuildingType, { name: string; icon: string; cost: { gold: number; lumber: number }; health: number; buildTime: number; food: number; trains: UnitType[] }> = {
-  townhall: { name: 'Town Hall', icon: '🏰', cost: { gold: 1200, lumber: 800 }, health: 1200, buildTime: 255, food: 1, trains: ['peasant'] },
-  barracks: { name: 'Barracks', icon: '🏛️', cost: { gold: 700, lumber: 450 }, health: 800, buildTime: 200, food: 0, trains: ['footman', 'archer'] },
-  farm: { name: 'Farm', icon: '🌾', cost: { gold: 500, lumber: 250 }, health: 400, buildTime: 100, food: 4, trains: [] },
-  tower: { name: 'Scout Tower', icon: '🗼', cost: { gold: 550, lumber: 200 }, health: 100, buildTime: 60, food: 0, trains: [] },
-  blacksmith: { name: 'Blacksmith', icon: '⚒️', cost: { gold: 800, lumber: 450 }, health: 775, buildTime: 200, food: 0, trains: [] },
-  lumbermill: { name: 'Lumber Mill', icon: '🪓', cost: { gold: 600, lumber: 450 }, health: 600, buildTime: 150, food: 0, trains: [] },
-  stable: { name: 'Stables', icon: '🐎', cost: { gold: 1000, lumber: 300 }, health: 500, buildTime: 150, food: 0, trains: ['knight', 'paladin'] },
-  church: { name: 'Church', icon: '⛪', cost: { gold: 900, lumber: 500 }, health: 700, buildTime: 175, food: 0, trains: ['mage'] }
-};
+interface UnitStatsBridge {
+  name: string; icon: string;
+  cost: { gold: number; lumber: number };
+  health: number; damage: number; armor: number; range: number; speed: number;
+  buildTime: number; commands: string[]; pop: number; role: UnitRole;
+}
+
+interface BuildingStatsBridge {
+  name: string; icon: string;
+  cost: { gold: number; lumber: number };
+  health: number; buildTime: number; food: number;
+  trains: string[]; role: BuildingRole;
+}
+
+function commandsForRole(role: UnitRole): string[] {
+  switch (role) {
+    case 'worker': return ['move', 'stop', 'attack', 'repair', 'gather', 'build'];
+    case 'siege': return ['move', 'stop', 'attack', 'patrol'];
+    default: return ['move', 'stop', 'attack', 'patrol', 'hold'];
+  }
+}
+
+const _UNIT_MAP = new Map<string, UnitStatsBridge>();
+ALL_UNITS.forEach(d => _UNIT_MAP.set(d.id, {
+  name: d.name, icon: d.icon,
+  cost: { gold: d.cost.gold, lumber: d.cost.wood },
+  health: d.hp, damage: d.atk, armor: d.def,
+  range: d.rng, speed: d.spd / 15, buildTime: d.buildTime,
+  commands: commandsForRole(d.role), pop: d.pop, role: d.role,
+}));
+
+const _BLDG_MAP = new Map<string, BuildingStatsBridge>();
+ALL_BUILDINGS.forEach(d => _BLDG_MAP.set(d.id, {
+  name: d.name, icon: d.icon,
+  cost: { gold: d.cost.gold, lumber: d.cost.wood },
+  health: d.hp, buildTime: d.buildTime, food: d.food,
+  trains: d.trains, role: d.role,
+}));
+
+const _DFLT_U: UnitStatsBridge = { name: '?', icon: '❓', cost: { gold: 50, lumber: 0 }, health: 50, damage: 5, armor: 0, range: 1.5, speed: 2.5, buildTime: 15, commands: ['move', 'stop'], pop: 1, role: 'melee' };
+const _DFLT_B: BuildingStatsBridge = { name: '?', icon: '❓', cost: { gold: 200, lumber: 100 }, health: 500, buildTime: 20, food: 0, trains: [], role: 'economy' };
+
+function uStat(id: string): UnitStatsBridge { return _UNIT_MAP.get(id) || _DFLT_U; }
+function bStat(id: string): BuildingStatsBridge { return _BLDG_MAP.get(id) || _DFLT_B; }
+function isWorkerUnit(id: string) { return uStat(id).role === 'worker'; }
+function isTownHall(id: string) { return bStat(id).role === 'economy'; }
+function isTowerBldg(id: string) { return bStat(id).role === 'defense'; }
+function isRangedUnit(id: string) { const r = uStat(id).role; return r === 'ranged' || r === 'siege' || r === 'support' || r === 'air'; }
+function factionPrimary(f: FactionId): number { return FACTIONS[f].colors.primary; }
+function factionHex(f: FactionId): string { return '#' + factionPrimary(f).toString(16).padStart(6, '0'); }
+
+/** Get faction's starting entity IDs */
+function factionStart(f: FactionId) {
+  const bs = getBuildingsForFaction(f);
+  const us = getUnitsForFaction(f);
+  return {
+    townHall: bs.find(b => b.role === 'economy')!.id,
+    farm: bs.find(b => b.role === 'population')!.id,
+    barracks: bs.find(b => b.role === 'melee_production')!.id,
+    worker: us.find(u => u.role === 'worker')!.id,
+    melee: us.find(u => u.role === 'melee')!.id,
+  };
+}
 
 const COMMAND_ICONS: Record<string, { icon: string; name: string; hotkey: string }> = {
   move: { icon: '👆', name: 'Move', hotkey: 'M' },
@@ -117,9 +166,9 @@ const COMMAND_ICONS: Record<string, { icon: string; name: string; hotkey: string
   repair: { icon: '🔧', name: 'Repair', hotkey: 'R' }
 };
 
-const MAP_SIZE = 64;
-const FOG_GRID_SIZE = 64;
-const VISION_RANGE = 6;
+const MAP_SIZE = 128;
+const FOG_GRID_SIZE = 128;
+const VISION_RANGE = 8;
 
 interface FloatingText {
   sprite: THREE.Sprite;
@@ -200,7 +249,7 @@ export default function Wargus() {
   const placementPreviewRef = useRef<THREE.Mesh | null>(null);
   
   const [gameMode, setGameMode] = useState<GameMode>('menu');
-  const [playerFaction, setPlayerFaction] = useState<Faction>('human');
+  const [playerFaction, setPlayerFaction] = useState<Faction>('crusade');
   const [assetsLoaded, setAssetsLoaded] = useState(false);
   const [loadProgress, setLoadProgress] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
@@ -217,13 +266,15 @@ export default function Wargus() {
   const [selectedBuilding, setSelectedBuilding] = useState<string | null>(null);
   const [buildingToBuild, setBuildingToBuild] = useState<BuildingType | null>(null);
   const [currentCommand, setCurrentCommand] = useState<OrderType | null>(null);
-  const [resources, setResources] = useState<{ human: { gold: number; lumber: number }; orc: { gold: number; lumber: number } }>({
-    human: { gold: 2000, lumber: 1000 },
-    orc: { gold: 2000, lumber: 1000 }
+  const [resources, setResources] = useState<Record<FactionId, { gold: number; lumber: number }>>({
+    crusade: { gold: 2000, lumber: 1000 },
+    fabled: { gold: 2000, lumber: 1000 },
+    legion: { gold: 2000, lumber: 1000 },
   });
-  const [food, setFood] = useState<{ human: { used: number; max: number }; orc: { used: number; max: number } }>({
-    human: { used: 5, max: 9 },
-    orc: { used: 5, max: 9 }
+  const [food, setFood] = useState<Record<FactionId, { used: number; max: number }>>({
+    crusade: { used: 5, max: 9 },
+    fabled: { used: 5, max: 9 },
+    legion: { used: 5, max: 9 },
   });
   
   const [cameraPosition, setCameraPosition] = useState({ x: 10, z: 10 });
@@ -394,8 +445,8 @@ export default function Wargus() {
       const x = b.position.x * scale;
       const z = b.position.z * scale;
       if (b.faction === playerFaction || b.isVisible) {
-        ctx.fillStyle = b.faction === 'human' ? '#4169e1' : '#dc143c';
-        const size = b.type === 'townhall' ? 6 : 4;
+        ctx.fillStyle = factionHex(b.faction);
+        const size = isTownHall(b.type) ? 6 : 4;
         ctx.fillRect(x - size/2, z - size/2, size, size);
       }
     });
@@ -404,7 +455,7 @@ export default function Wargus() {
       if (u.faction === playerFaction || u.isVisible) {
         const x = u.position.x * scale;
         const z = u.position.z * scale;
-        ctx.fillStyle = u.faction === 'human' ? '#6495ed' : '#ff6347';
+        ctx.fillStyle = factionHex(u.faction);
         if (u.isSelected) {
           ctx.fillStyle = '#00ff00';
         }
@@ -424,7 +475,7 @@ export default function Wargus() {
   }, [cameraPosition, cameraZoom, playerFaction]);
 
   const createUnit = useCallback((type: UnitType, faction: Faction, x: number, z: number): GameUnit => {
-    const stats = UNIT_STATS[type];
+    const stats = uStat(type);
     const unit: GameUnit = {
       id: `unit-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       type,
@@ -452,25 +503,14 @@ export default function Wargus() {
     };
     
     if (sceneRef.current) {
-      const size = type === 'knight' || type === 'paladin' ? 0.6 : type === 'ballista' ? 0.8 : 0.45;
-      const factionColor = faction === 'human' ? 0x4169e1 : 0xdc143c;
+      const role = stats.role;
+      const size = role === 'cavalry' ? 0.6 : role === 'siege' ? 0.8 : 0.45;
+      const fColor = factionPrimary(faction);
+      const modelScale = role === 'siege' ? 0.8 : role === 'cavalry' ? 0.6 : 0.5;
 
-      // Map old unit types to RTS entity IDs for model lookup
-      const entityMap: Record<UnitType, string> = {
-        peasant: faction === 'human' ? 'sky_serf' : 'thrall_worker',
-        footman: faction === 'human' ? 'valor_guard' : 'chaos_grunt',
-        archer: faction === 'human' ? 'rune_marksman' : 'shadow_hunter',
-        knight: faction === 'human' ? 'thunder_charger' : 'warg_rider',
-        ballista: faction === 'human' ? 'cosmic_ram' : 'doom_catapult',
-        mage: faction === 'human' ? 'wisdom_seer' : 'hex_shaman',
-        paladin: faction === 'human' ? 'fate_lancer' : 'doom_berserker',
-      };
-      const entityId = entityMap[type];
-      const modelScale = type === 'ballista' ? 0.8 : type === 'knight' || type === 'paladin' ? 0.6 : 0.5;
-
-      // Try loading animated 3D model from CDN
-      if (entityId && RTS_MODEL_MAP[entityId]) {
-        createRTSAnimatedUnit(entityId, factionColor, modelScale).then(animUnit => {
+      // Try loading animated 3D model from CDN (type IS the data-layer entity ID)
+      if (RTS_MODEL_MAP[type]) {
+        createRTSAnimatedUnit(type, fColor, modelScale).then(animUnit => {
           if (animUnit && sceneRef.current) {
             animUnit.setPosition(x, 0, z);
             animUnit.root.userData = { unitId: unit.id };
@@ -484,7 +524,7 @@ export default function Wargus() {
       // Immediate fallback mesh (shown until GLB loads)
       if (!unit.mesh) {
         const geometry = new THREE.CapsuleGeometry(size * 0.4, size * 0.6, 8, 16);
-        const material = new THREE.MeshStandardMaterial({ color: factionColor, metalness: 0.4, roughness: 0.6 });
+        const material = new THREE.MeshStandardMaterial({ color: fColor, metalness: 0.4, roughness: 0.6 });
         const mesh = new THREE.Mesh(geometry, material);
         mesh.position.set(x, size * 0.5, z);
         mesh.castShadow = true;
@@ -497,7 +537,7 @@ export default function Wargus() {
       // Selection ring
       const ringGeometry = new THREE.RingGeometry(size * 0.6, size * 0.8, 32);
       const ringMaterial = new THREE.MeshBasicMaterial({ 
-        color: faction === 'human' ? 0x00ff00 : 0xff0000, 
+        color: 0x00ff00, 
         side: THREE.DoubleSide, 
         transparent: true, 
         opacity: 0 
@@ -530,7 +570,7 @@ export default function Wargus() {
   }, []);
 
   const createBuilding = useCallback((type: BuildingType, faction: Faction, x: number, z: number, isConstructing: boolean = false): GameBuilding => {
-    const stats = BUILDING_STATS[type];
+    const stats = bStat(type);
     const building: GameBuilding = {
       id: `building-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       type,
@@ -547,10 +587,11 @@ export default function Wargus() {
     };
     
     if (sceneRef.current) {
-      const size = type === 'townhall' ? 3 : type === 'farm' ? 2 : 2.5;
-      const height = type === 'tower' ? 4 : type === 'townhall' ? 3.5 : type === 'church' ? 4 : 2.5;
+      const bRole = stats.role;
+      const size = bRole === 'economy' ? 3 : bRole === 'population' ? 2 : 2.5;
+      const height = bRole === 'defense' ? 4 : bRole === 'economy' ? 3.5 : bRole === 'mage_production' ? 4 : 2.5;
       const geometry = new THREE.BoxGeometry(size, height, size);
-      const color = faction === 'human' ? 0x4a6fa5 : 0x8b4513;
+      const color = factionPrimary(faction);
       const material = new THREE.MeshStandardMaterial({ 
         color,
         metalness: 0.1,
@@ -567,7 +608,7 @@ export default function Wargus() {
       building.mesh = mesh;
       
       building.auxMeshes = [];
-      if (type === 'tower') {
+      if (isTowerBldg(type)) {
         const roofGeom = new THREE.ConeGeometry(size * 0.7, 1.5, 4);
         const roofMat = new THREE.MeshStandardMaterial({ color: 0x8b0000 });
         const roof = new THREE.Mesh(roofGeom, roofMat);
@@ -834,14 +875,14 @@ export default function Wargus() {
     if (!sceneRef.current || !physicsWorldRef.current) return;
     
     const debrisCount = 6 + Math.floor(Math.random() * 4);
-    const size = building.type === 'townhall' ? 3 : 2;
+    const size = isTownHall(building.type) ? 3 : 2;
     
     for (let i = 0; i < debrisCount; i++) {
       const debrisSize = 0.3 + Math.random() * 0.6;
       const geom = Math.random() > 0.5 
         ? new THREE.BoxGeometry(debrisSize, debrisSize, debrisSize)
         : new THREE.TetrahedronGeometry(debrisSize);
-      const color = building.faction === 'human' ? 0x4a6fa5 : 0x8b4513;
+      const color = factionPrimary(building.faction);
       const mat = new THREE.MeshStandardMaterial({ 
         color: color + Math.floor(Math.random() * 0x222222),
         roughness: 0.9 
@@ -1074,10 +1115,10 @@ export default function Wargus() {
     
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x1a1a2e);
-    scene.fog = new THREE.Fog(0x1a1a2e, 30, 100);
+    scene.fog = new THREE.Fog(0x1a1a2e, 50, 200);
     sceneRef.current = scene;
     
-    const camera = new THREE.PerspectiveCamera(50, containerRef.current.clientWidth / containerRef.current.clientHeight, 0.1, 200);
+    const camera = new THREE.PerspectiveCamera(50, containerRef.current.clientWidth / containerRef.current.clientHeight, 0.1, 400);
     camera.position.set(10, 25, 35);
     camera.lookAt(10, 0, 10);
     cameraRef.current = camera;
@@ -1292,45 +1333,55 @@ export default function Wargus() {
     const newBuildings: GameBuilding[] = [];
     const newResources: ResourceNode[] = [];
     
-    const playerStartX = faction === 'human' ? 8 : MAP_SIZE - 12;
-    const playerStartZ = faction === 'human' ? 8 : MAP_SIZE - 12;
-    const enemyStartX = faction === 'human' ? MAP_SIZE - 12 : 8;
-    const enemyStartZ = faction === 'human' ? MAP_SIZE - 12 : 8;
+    const start = factionStart(faction);
+    const playerStartX = 16;
+    const playerStartZ = 16;
+    const enemyStartX = MAP_SIZE - 24;
+    const enemyStartZ = MAP_SIZE - 24;
     
-    newBuildings.push(createBuilding('townhall', faction, playerStartX, playerStartZ, false));
-    newBuildings.push(createBuilding('farm', faction, playerStartX + 5, playerStartZ - 3, false));
+    newBuildings.push(createBuilding(start.townHall, faction, playerStartX, playerStartZ, false));
+    newBuildings.push(createBuilding(start.farm, faction, playerStartX + 5, playerStartZ - 3, false));
     for (let i = 0; i < 5; i++) {
-      newUnits.push(createUnit('peasant', faction, playerStartX + 4 + (i % 3) * 1.2, playerStartZ + Math.floor(i / 3) * 1.2));
+      newUnits.push(createUnit(start.worker, faction, playerStartX + 4 + (i % 3) * 1.2, playerStartZ + Math.floor(i / 3) * 1.2));
     }
     
     if (mode === 'pve' || mode === 'pvp') {
-      const enemyFaction: Faction = faction === 'human' ? 'orc' : 'human';
-      newBuildings.push(createBuilding('townhall', enemyFaction, enemyStartX, enemyStartZ, false));
-      newBuildings.push(createBuilding('barracks', enemyFaction, enemyStartX - 5, enemyStartZ, false));
-      newBuildings.push(createBuilding('farm', enemyFaction, enemyStartX + 5, enemyStartZ - 3, false));
+      const enemyFaction = ENEMY_FACTION[faction];
+      const eStart = factionStart(enemyFaction);
+      newBuildings.push(createBuilding(eStart.townHall, enemyFaction, enemyStartX, enemyStartZ, false));
+      newBuildings.push(createBuilding(eStart.barracks, enemyFaction, enemyStartX - 5, enemyStartZ, false));
+      newBuildings.push(createBuilding(eStart.farm, enemyFaction, enemyStartX + 5, enemyStartZ - 3, false));
       for (let i = 0; i < 5; i++) {
-        newUnits.push(createUnit('peasant', enemyFaction, enemyStartX + 4 + (i % 3) * 1.2, enemyStartZ + Math.floor(i / 3) * 1.2));
+        newUnits.push(createUnit(eStart.worker, enemyFaction, enemyStartX + 4 + (i % 3) * 1.2, enemyStartZ + Math.floor(i / 3) * 1.2));
       }
       for (let i = 0; i < 4; i++) {
-        newUnits.push(createUnit('footman', enemyFaction, enemyStartX - 3 + i * 1.2, enemyStartZ + 4));
+        newUnits.push(createUnit(eStart.melee, enemyFaction, enemyStartX - 3 + i * 1.2, enemyStartZ + 4));
       }
     }
     
-    newResources.push(createResourceNode('gold', playerStartX + 7, playerStartZ - 5, 10000));
-    newResources.push(createResourceNode('gold', enemyStartX + 7, enemyStartZ - 5, 10000));
-    newResources.push(createResourceNode('gold', MAP_SIZE / 2 + 8, MAP_SIZE / 2, 5000));
-    newResources.push(createResourceNode('gold', MAP_SIZE / 2 - 8, MAP_SIZE / 2, 5000));
+    // Gold mines — near bases and contested center
+    newResources.push(createResourceNode('gold', playerStartX + 10, playerStartZ - 6, 15000));
+    newResources.push(createResourceNode('gold', enemyStartX + 10, enemyStartZ - 6, 15000));
+    newResources.push(createResourceNode('gold', MAP_SIZE / 2 + 12, MAP_SIZE / 2, 8000));
+    newResources.push(createResourceNode('gold', MAP_SIZE / 2 - 12, MAP_SIZE / 2, 8000));
+    newResources.push(createResourceNode('gold', MAP_SIZE / 2, MAP_SIZE / 2 + 15, 6000));
+    newResources.push(createResourceNode('gold', MAP_SIZE / 2, MAP_SIZE / 2 - 15, 6000));
+    // Expansion gold mines
+    newResources.push(createResourceNode('gold', MAP_SIZE * 0.25, MAP_SIZE * 0.5, 5000));
+    newResources.push(createResourceNode('gold', MAP_SIZE * 0.75, MAP_SIZE * 0.5, 5000));
     
-    for (let i = 0; i < 8; i++) {
-      newResources.push(createResourceNode('lumber', playerStartX + 10 + (i % 4) * 2, playerStartZ + Math.floor(i / 4) * 2, 100));
-      newResources.push(createResourceNode('lumber', enemyStartX - 6 - (i % 4) * 2, enemyStartZ + Math.floor(i / 4) * 2, 100));
+    // Lumber — near bases
+    for (let i = 0; i < 12; i++) {
+      newResources.push(createResourceNode('lumber', playerStartX + 12 + (i % 4) * 2.5, playerStartZ + Math.floor(i / 4) * 2.5, 150));
+      newResources.push(createResourceNode('lumber', enemyStartX - 8 - (i % 4) * 2.5, enemyStartZ + Math.floor(i / 4) * 2.5, 150));
     }
     
-    for (let i = 0; i < 15; i++) {
-      const x = 12 + Math.random() * (MAP_SIZE - 24);
-      const z = 12 + Math.random() * (MAP_SIZE - 24);
-      if (Math.abs(x - MAP_SIZE / 2) > 8 || Math.abs(z - MAP_SIZE / 2) > 6) {
-        newResources.push(createResourceNode('lumber', x, z, 100));
+    // Scattered lumber across the larger map
+    for (let i = 0; i < 40; i++) {
+      const x = 20 + Math.random() * (MAP_SIZE - 40);
+      const z = 20 + Math.random() * (MAP_SIZE - 40);
+      if (Math.abs(x - MAP_SIZE / 2) > 12 || Math.abs(z - MAP_SIZE / 2) > 10) {
+        newResources.push(createResourceNode('lumber', x, z, 120));
       }
     }
     
@@ -1339,12 +1390,14 @@ export default function Wargus() {
     resourceNodesRef.current = newResources;
     
     setResources({
-      human: { gold: 2000, lumber: 1000 },
-      orc: { gold: 2000, lumber: 1000 }
+      crusade: { gold: 2000, lumber: 1000 },
+      fabled: { gold: 2000, lumber: 1000 },
+      legion: { gold: 2000, lumber: 1000 },
     });
     setFood({
-      human: { used: 5, max: 9 },
-      orc: { used: 5, max: 9 }
+      crusade: { used: 5, max: 9 },
+      fabled: { used: 5, max: 9 },
+      legion: { used: 5, max: 9 },
     });
     
     setCameraPosition({ x: playerStartX, z: playerStartZ });
@@ -1480,7 +1533,7 @@ export default function Wargus() {
               lastGatherTarget: null
             };
           case 'repair':
-            if (unit.type === 'peasant' && targetId) {
+            if (isWorkerUnit(unit.type) && targetId) {
               const targetBuilding = buildingsRef.current.find(b => b.id === targetId);
               if (targetBuilding && targetBuilding.faction === unit.faction) {
                 return {
@@ -1668,7 +1721,7 @@ export default function Wargus() {
           issueOrder(currentCommand, targetPos.x, targetPos.z);
         } else if (target?.type === 'enemy') {
           issueOrder('attack', targetPos.x, targetPos.z, target.id);
-        } else if (target?.type === 'resource' && unitsRef.current.some(u => selectedUnits.includes(u.id) && u.type === 'peasant')) {
+        } else if (target?.type === 'resource' && unitsRef.current.some(u => selectedUnits.includes(u.id) && isWorkerUnit(u.type))) {
           issueOrder('gather', targetPos.x, targetPos.z, target.id);
         } else {
           issueOrder('move', targetPos.x, targetPos.z);
@@ -1679,7 +1732,7 @@ export default function Wargus() {
     }
     
     if (buildingToBuild && targetPos) {
-      const stats = BUILDING_STATS[buildingToBuild];
+      const stats = bStat(buildingToBuild);
       if (resources[playerFaction].gold >= stats.cost.gold && resources[playerFaction].lumber >= stats.cost.lumber) {
         const newBuilding = createBuilding(buildingToBuild, playerFaction, targetPos.x, targetPos.z, true);
         buildingsRef.current.push(newBuilding);
@@ -1813,7 +1866,7 @@ export default function Wargus() {
     const building = buildingsRef.current.find(b => b.id === selectedBuilding);
     if (!building || building.faction !== playerFaction || building.isConstructing) return;
     
-    const stats = UNIT_STATS[unitType];
+    const stats = uStat(unitType);
     
     if (resources[playerFaction].gold >= stats.cost.gold && 
         resources[playerFaction].lumber >= stats.cost.lumber &&
@@ -1862,7 +1915,7 @@ export default function Wargus() {
                 }
               }
               
-              const townhall = buildingsRef.current.find(b => b.type === 'townhall' && b.faction === unit.faction);
+              const townhall = buildingsRef.current.find(b => isTownHall(b.type) && b.faction === unit.faction);
               if (townhall) {
                 unit.targetPosition = { x: townhall.position.x + 3, y: 0.5, z: townhall.position.z };
                 unit.gatherTarget = null;
@@ -1888,7 +1941,7 @@ export default function Wargus() {
             }
           } else if (unit.carryingResource) {
             const townhall = buildingsRef.current.find(b => 
-              b.type === 'townhall' && 
+              isTownHall(b.type) && 
               b.faction === unit.faction &&
               Math.abs(b.position.x - unit.position.x) < 5 &&
               Math.abs(b.position.z - unit.position.z) < 5
@@ -2008,7 +2061,7 @@ export default function Wargus() {
           const dist = Math.sqrt(dx * dx + dz * dz);
           
           if (dist <= unit.range) {
-            const isRanged = unit.type === 'archer' || unit.type === 'ballista' || unit.type === 'mage';
+            const isRanged = isRangedUnit(unit.type);
             
             // Face the target
             if (unit.animUnit) {
@@ -2021,7 +2074,7 @@ export default function Wargus() {
                 if (unit.animUnit && unit.animUnit.state !== 'attack2') {
                   unit.animUnit.play('attack2');
                 }
-                const projType = unit.type === 'ballista' ? 'ballista' : unit.type === 'mage' ? 'magic' : 'arrow';
+                const projType = uStat(unit.type).role === 'siege' ? 'ballista' : uStat(unit.type).role === 'support' ? 'magic' : 'arrow';
                 spawnPhysicsProjectile(
                   unit.position.x, unit.position.y + 1.2, unit.position.z,
                   target.position.x, target.position.z,
@@ -2163,7 +2216,7 @@ export default function Wargus() {
             (building.mesh.material as THREE.MeshStandardMaterial).opacity = 1;
           }
           
-          const stats = BUILDING_STATS[building.type];
+          const stats = bStat(building.type);
           if (stats.food > 0) {
             setFood(prev => ({
               ...prev,
@@ -2177,7 +2230,7 @@ export default function Wargus() {
       
       if (building.productionQueue.length > 0 && !building.isConstructing) {
         const unitType = building.productionQueue[0];
-        const unitStats = UNIT_STATS[unitType];
+        const unitStats = uStat(unitType);
         building.productionProgress += (deltaTime * 100 / unitStats.buildTime);
         
         if (building.productionProgress >= 100) {
@@ -2196,7 +2249,7 @@ export default function Wargus() {
         }
       }
       
-      if (building.type === 'tower' && !building.isConstructing) {
+      if (isTowerBldg(building.type) && !building.isConstructing) {
         const towerRange = 6;
         const nearbyEnemy = unitsRef.current.find(u =>
           u.faction !== building.faction && u.isVisible &&
@@ -2221,7 +2274,7 @@ export default function Wargus() {
         if (building.mesh) sceneRef.current?.remove(building.mesh);
         if (building.healthBar) sceneRef.current?.remove(building.healthBar);
         if (building.auxMeshes) building.auxMeshes.forEach(m => sceneRef.current?.remove(m));
-        const stats = BUILDING_STATS[building.type];
+        const stats = bStat(building.type);
         if (stats.food > 0) {
           setFood(prev => ({
             ...prev,
@@ -2241,14 +2294,14 @@ export default function Wargus() {
     });
     
     if (gameMode === 'pve') {
-      const enemyFaction: Faction = playerFaction === 'human' ? 'orc' : 'human';
+      const enemyFaction: Faction = ENEMY_FACTION[playerFaction];
       const enemyUnits = unitsRef.current.filter(u => u.faction === enemyFaction);
       const enemyBuildings = buildingsRef.current.filter(b => b.faction === enemyFaction);
       
       if (Math.random() < 0.03 * deltaTime && resources[enemyFaction].gold >= 600) {
-        const barracks = enemyBuildings.find(b => b.type === 'barracks' && !b.isConstructing && b.productionQueue.length < 5);
+        const barracks = enemyBuildings.find(b => bStat(b.type).role === 'melee_production' && !b.isConstructing && b.productionQueue.length < 5);
         if (barracks && food[enemyFaction].used < food[enemyFaction].max) {
-          barracks.productionQueue.push('footman');
+          barracks.productionQueue.push(factionStart(enemyFaction).melee);
           setResources(prev => ({
             ...prev,
             [enemyFaction]: { ...prev[enemyFaction], gold: prev[enemyFaction].gold - 600 }
@@ -2256,7 +2309,7 @@ export default function Wargus() {
         }
       }
       
-      const idleEnemyUnits = enemyUnits.filter(u => !u.targetPosition && !u.attackTarget && u.type !== 'peasant');
+      const idleEnemyUnits = enemyUnits.filter(u => !u.targetPosition && !u.attackTarget && !isWorkerUnit(u.type));
       if (idleEnemyUnits.length >= 6 && Math.random() < 0.015 * deltaTime) {
         const playerBuildings = buildingsRef.current.filter(b => b.faction === playerFaction);
         if (playerBuildings.length > 0) {
@@ -2397,7 +2450,7 @@ export default function Wargus() {
           issueOrder('hold');
           break;
         case 'b':
-          if (selectedUnits.some(id => unitsRef.current.find(u => u.id === id)?.type === 'peasant')) {
+          if (selectedUnits.some(id => { const found = unitsRef.current.find(u => u.id === id); return found && isWorkerUnit(found.type); })) {
             setShowBuildMenu(true);
           }
           break;
@@ -2490,39 +2543,53 @@ export default function Wargus() {
               WARGUS
             </h1>
           </div>
-          <p className="text-lg text-amber-200/80 mb-10 mt-8">3D Real-Time Strategy • Warcraft II Clone</p>
+          <p className="text-lg text-amber-200/80 mb-10 mt-8">3D Real-Time Strategy • {Object.keys(FACTIONS).length} Factions • {MAP_SIZE}×{MAP_SIZE} Map</p>
           
           <div className="bg-[#2d1a10] border-4 border-amber-700 rounded-lg p-8 max-w-md">
             <h2 className="text-center text-2xl text-amber-400 mb-6 border-b-2 border-amber-700 pb-2">
               ⚔️ SELECT FACTION ⚔️
             </h2>
             
-            <div className="space-y-4">
+            <div className="space-y-3">
               <button
-                onClick={() => startGame('pve', 'human')}
+                onClick={() => startGame('pve', 'crusade')}
                 className="w-full bg-gradient-to-r from-blue-900 via-blue-700 to-blue-900 border-2 border-blue-400 rounded p-4 hover:from-blue-800 hover:via-blue-600 hover:to-blue-800 transition-all"
-                data-testid="button-play-human"
+                data-testid="button-play-crusade"
               >
                 <div className="flex items-center justify-between">
                   <span className="text-3xl">👑</span>
                   <div className="text-center">
-                    <div className="text-xl font-bold text-blue-200">ALLIANCE</div>
-                    <div className="text-sm text-blue-300">Humans, Elves, Dwarves</div>
+                    <div className="text-xl font-bold text-blue-200">CRUSADE</div>
+                    <div className="text-sm text-blue-300">{FACTIONS.crusade.races.join(' + ')} • {FACTIONS.crusade.motto}</div>
                   </div>
                   <span className="text-3xl">🛡️</span>
                 </div>
               </button>
-              
+
               <button
-                onClick={() => startGame('pve', 'orc')}
+                onClick={() => startGame('pve', 'fabled')}
+                className="w-full bg-gradient-to-r from-green-900 via-green-700 to-green-900 border-2 border-green-400 rounded p-4 hover:from-green-800 hover:via-green-600 hover:to-green-800 transition-all"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-3xl">🌳</span>
+                  <div className="text-center">
+                    <div className="text-xl font-bold text-green-200">FABLED</div>
+                    <div className="text-sm text-green-300">{FACTIONS.fabled.races.join(' + ')} • {FACTIONS.fabled.motto}</div>
+                  </div>
+                  <span className="text-3xl">🧝</span>
+                </div>
+              </button>
+
+              <button
+                onClick={() => startGame('pve', 'legion')}
                 className="w-full bg-gradient-to-r from-red-900 via-red-700 to-red-900 border-2 border-red-400 rounded p-4 hover:from-red-800 hover:via-red-600 hover:to-red-800 transition-all"
-                data-testid="button-play-orc"
+                data-testid="button-play-legion"
               >
                 <div className="flex items-center justify-between">
                   <span className="text-3xl">💀</span>
                   <div className="text-center">
-                    <div className="text-xl font-bold text-red-200">HORDE</div>
-                    <div className="text-sm text-red-300">Orcs, Trolls, Ogres</div>
+                    <div className="text-xl font-bold text-red-200">LEGION</div>
+                    <div className="text-sm text-red-300">{FACTIONS.legion.races.join(' + ')} • {FACTIONS.legion.motto}</div>
                   </div>
                   <span className="text-3xl">⚔️</span>
                 </div>
@@ -2543,7 +2610,7 @@ export default function Wargus() {
   const selectedUnitData = selectedUnits.length > 0 ? unitsRef.current.filter(u => selectedUnits.includes(u.id)) : [];
   const selectedBuildingData = selectedBuilding ? buildingsRef.current.find(b => b.id === selectedBuilding) : null;
   const firstSelectedUnit = selectedUnitData[0];
-  const isPeasantSelected = selectedUnitData.some(u => u.type === 'peasant');
+  const isPeasantSelected = selectedUnitData.some(u => isWorkerUnit(u.type));
 
   if (webglError) {
     return (
@@ -2742,8 +2809,8 @@ export default function Wargus() {
         <div className="w-[220px] p-2 border-r-2 border-amber-800 flex flex-col items-center justify-center overflow-hidden">
           {selectedUnitData.length === 1 && firstSelectedUnit && (
             <>
-              <div className="text-4xl mb-1">{UNIT_STATS[firstSelectedUnit.type].icon}</div>
-              <div className="text-amber-300 font-bold text-sm">{UNIT_STATS[firstSelectedUnit.type].name}</div>
+              <div className="text-4xl mb-1">{uStat(firstSelectedUnit.type).icon}</div>
+              <div className="text-amber-300 font-bold text-sm">{uStat(firstSelectedUnit.type).name}</div>
               <div className="flex items-center gap-1 mt-1 w-full px-2">
                 <span className="text-xs text-red-400">♥</span>
                 <div className="flex-1 bg-gray-800 h-2 rounded">
@@ -2777,7 +2844,7 @@ export default function Wargus() {
                     onClick={() => { setSelectedUnits([u.id]); setSelectedBuilding(null); }}
                     className="flex flex-col items-center p-0.5 rounded border border-amber-800/50 hover:border-amber-400 bg-amber-900/20 transition-all"
                   >
-                    <span className="text-lg leading-none">{UNIT_STATS[u.type].icon}</span>
+                    <span className="text-lg leading-none">{uStat(u.type).icon}</span>
                     <div className="w-full bg-gray-800 h-1 rounded mt-0.5">
                       <div className="h-full rounded" style={{
                         width: `${(u.health / u.maxHealth) * 100}%`,
@@ -2794,8 +2861,8 @@ export default function Wargus() {
           )}
           {selectedBuildingData && (
             <>
-              <div className="text-4xl mb-1">{BUILDING_STATS[selectedBuildingData.type].icon}</div>
-              <div className="text-amber-300 font-bold text-sm">{BUILDING_STATS[selectedBuildingData.type].name}</div>
+              <div className="text-4xl mb-1">{bStat(selectedBuildingData.type).icon}</div>
+              <div className="text-amber-300 font-bold text-sm">{bStat(selectedBuildingData.type).name}</div>
               <div className="flex items-center gap-1 mt-1 w-full px-2">
                 <span className="text-xs text-red-400">♥</span>
                 <div className="flex-1 bg-gray-800 h-2 rounded">
@@ -2827,7 +2894,9 @@ export default function Wargus() {
         <div className="flex-1 p-2">
           {showBuildMenu && isPeasantSelected ? (
             <div className="grid grid-cols-4 gap-1 h-full">
-              {(Object.entries(BUILDING_STATS) as [BuildingType, typeof BUILDING_STATS[BuildingType]][]).map(([type, stats]) => {
+              {getBuildingsForFaction(playerFaction).filter(bd => bd.role !== 'economy').map(bd => {
+                const type = bd.id;
+                const stats = bStat(type);
                 const canAfford = resources[playerFaction].gold >= stats.cost.gold && resources[playerFaction].lumber >= stats.cost.lumber;
                 return (
                   <button
@@ -2847,11 +2916,11 @@ export default function Wargus() {
                 );
               })}
             </div>
-          ) : selectedBuildingData && BUILDING_STATS[selectedBuildingData.type].trains.length > 0 && !selectedBuildingData.isConstructing ? (
+          ) : selectedBuildingData && bStat(selectedBuildingData.type).trains.length > 0 && !selectedBuildingData.isConstructing ? (
             <div className="h-full">
               <div className="grid grid-cols-4 gap-1">
-                {BUILDING_STATS[selectedBuildingData.type].trains.map(unitType => {
-                  const stats = UNIT_STATS[unitType];
+                {bStat(selectedBuildingData.type).trains.map(unitType => {
+                  const stats = uStat(unitType);
                   const canAfford = resources[playerFaction].gold >= stats.cost.gold && 
                                    resources[playerFaction].lumber >= stats.cost.lumber &&
                                    food[playerFaction].used < food[playerFaction].max;
@@ -2876,7 +2945,7 @@ export default function Wargus() {
                 <div className="mt-2 flex items-center gap-2">
                   <span className="text-amber-500 text-xs">Queue:</span>
                   {selectedBuildingData.productionQueue.map((ut, i) => (
-                    <span key={i} className="text-lg">{UNIT_STATS[ut].icon}</span>
+                    <span key={i} className="text-lg">{uStat(ut).icon}</span>
                   ))}
                   <div className="flex-1 bg-gray-800 h-2 rounded ml-2">
                     <div className="bg-amber-500 h-full rounded transition-all" style={{ width: `${selectedBuildingData.productionProgress}%` }} />
@@ -2886,7 +2955,7 @@ export default function Wargus() {
             </div>
           ) : selectedUnitData.length > 0 ? (
             <div className="grid grid-cols-6 gap-1 h-full">
-              {firstSelectedUnit && UNIT_STATS[firstSelectedUnit.type].commands.map(cmd => {
+              {firstSelectedUnit && uStat(firstSelectedUnit.type).commands.map(cmd => {
                 const cmdInfo = COMMAND_ICONS[cmd];
                 if (!cmdInfo) return null;
                 return (
@@ -2968,7 +3037,7 @@ export default function Wargus() {
       
       {buildingToBuild && (
         <div className="absolute bottom-[150px] left-1/2 -translate-x-1/2 bg-amber-900/90 border-2 border-amber-500 px-4 py-2 rounded text-amber-200 z-10">
-          🔨 Place {BUILDING_STATS[buildingToBuild].name} - Click to build or ESC to cancel
+          🔨 Place {bStat(buildingToBuild).name} - Click to build or ESC to cancel
         </div>
       )}
     </div>
