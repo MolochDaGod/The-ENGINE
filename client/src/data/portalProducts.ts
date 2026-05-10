@@ -234,10 +234,11 @@ export const PORTAL_PRODUCTS: PortalProduct[] = [
   {
     id: "match-3-grudge",
     name: "Grudge Match-3",
-    href: "/match-3",
+    href: "https://molochdagod.github.io/grudge-match-webgl/",
     description: "Unity-powered match-3 puzzle game with Warlords lore, seasonal events, and crafting material drops.",
     status: "live",
     section: "play",
+    external: true,
     note: "Unity WebGL",
     tags: ["solo"],
   },
