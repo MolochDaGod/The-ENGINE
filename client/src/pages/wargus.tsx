@@ -1707,6 +1707,15 @@ export default function Wargus() {
     const targetPos = groundIntersect?.point;
     
     if (e.button === 2 || currentCommand) {
+      // RMB on ground while a building is selected → set rally point
+      if (e.button === 2 && selectedBuilding && selectedUnits.length === 0 && targetPos) {
+        const building = buildingsRef.current.find(b => b.id === selectedBuilding);
+        if (building && building.faction === playerFaction) {
+          building.rallyPoint = { x: targetPos.x, y: 0.5, z: targetPos.z };
+          spawnFloatingText('🚩 Rally', targetPos.x, 2, targetPos.z, '#00FF88');
+        }
+        return;
+      }
       if (selectedUnits.length > 0 && targetPos) {
         const target = getTargetAtPosition(e.clientX, e.clientY);
         if (currentCommand === 'attack' && target?.type === 'enemy') {
