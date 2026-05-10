@@ -2203,7 +2203,7 @@ export default function Wargus() {
     
     buildingsRef.current = buildingsRef.current.map(building => {
       if (building.isConstructing) {
-        const newProgress = building.constructionProgress + deltaTime * 0.5;
+        const newProgress = building.constructionProgress + deltaTime * 1.5;
         building.health = building.maxHealth * (newProgress / 100);
         
         if (newProgress >= 100) {

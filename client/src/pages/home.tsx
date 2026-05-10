@@ -3,7 +3,7 @@ import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Anchor, ArrowUpRight, Bot, Crown, Flame, Layers3, LayoutDashboard, Library, Loader2, Rocket, Sparkles, Swords, Trophy } from "lucide-react";
+import { Anchor, ArrowUpRight, Bot, ChevronLeft, ChevronRight, Crown, Flame, Layers3, LayoutDashboard, Library, Loader2, Rocket, Sparkles, Swords, Trophy } from "lucide-react";
 import { useAuthModal } from "@/components/auth-modal";
 import grudgeLogo from "@assets/uXpJmRe_1773828784729.png";
 import homeBg from "@assets/2kljxaj_1773841543581.png";
@@ -123,29 +123,29 @@ const ERAS: { key: EraKey; name: string; tagline: string; description: string; i
     bgImage: "/assets/store/dark_fantasy_scenes.png",
     accent: "hsl(43,85%,55%)",
     accentBorder: "hsl(43,60%,30%)",
-    productIds: ["warlords", "grudge-crafting", "mage-arena", "avernus-arena", "tower-defense"],
+    productIds: ["warlords", "grudge-crafting", "grudge-angler", "match-3-grudge", "mage-arena", "avernus-arena", "tower-defense"],
   },
   {
     key: "nexus",
     name: "Nexus",
     tagline: "Competitive Arena",
-    description: "The competitive era. MOBA-style battlegrounds, RTS strategy, multiplayer racing, and wave-survival arenas with GBUX wagers and ranked ladders.",
+    description: "The competitive era. MOBA-style battlegrounds, RTS strategy, multiplayer racing, card duels, and wave-survival arenas with GBUX wagers and ranked ladders.",
     icon: Flame,
     bgImage: "/assets/store/mmo_development.png",
     accent: "hsl(0,70%,55%)",
     accentBorder: "hsl(0,60%,35%)",
-    productIds: ["wargus", "multiplayer-racing", "annihilate-demo"],
+    productIds: ["betta-warlords", "nemesis-tcg", "wargus", "multiplayer-racing", "annihilate-demo"],
   },
   {
     key: "armada",
     name: "Armada",
     tagline: "Fleet & Space Combat",
-    description: "The fleet era. Dogfight gameplay, ship building, fleet command, and space exploration — the next frontier for Grudge Studio.",
+    description: "The fleet era. Dogfight gameplay, ship building, fleet command, deep-space survival, and strategic warfare — the next frontier for Grudge Studio.",
     icon: Anchor,
     bgImage: "/assets/store/scifi_environment.png",
     accent: "hsl(200,70%,55%)",
     accentBorder: "hsl(200,60%,30%)",
-    productIds: [],
+    productIds: ["star-rts", "survival-game"],
   },
 ];
 
@@ -175,6 +175,68 @@ function EraCard({ era, isActive, onClick }: { era: typeof ERAS[number]; isActiv
         <p className="text-xs text-[hsl(45,15%,70%)] font-body">{era.tagline}</p>
       </div>
     </button>
+  );
+}
+
+// ── Featured Live Games carousel ──
+const CAROUSEL_GAMES = ["grudge-studio-app", "betta-warlords", "grudge-angler"] as const;
+
+function FeaturedCarousel() {
+  const [idx, setIdx] = useState(0);
+  const items = CAROUSEL_GAMES.map(id => PORTAL_PRODUCTS.find(p => p.id === id)!).filter(Boolean);
+  const current = items[idx];
+  if (!current) return null;
+
+  const prev = () => setIdx(i => (i - 1 + items.length) % items.length);
+  const next = () => setIdx(i => (i + 1) % items.length);
+
+  const gradients: Record<string, string> = {
+    "grudge-studio-app": "from-amber-900/80 via-amber-800/60 to-transparent",
+    "betta-warlords": "from-red-900/80 via-red-800/60 to-transparent",
+    "grudge-angler": "from-cyan-900/80 via-cyan-800/60 to-transparent",
+  };
+  const icons: Record<string, string> = {
+    "grudge-studio-app": "🏰",
+    "betta-warlords": "⚔️",
+    "grudge-angler": "🎣",
+  };
+
+  return (
+    <div className="relative rounded-xl overflow-hidden border-2 border-[hsl(43,60%,30%)]/40 mt-8">
+      <div className={`bg-gradient-to-r ${gradients[current.id] || 'from-gray-900/80 to-transparent'} p-6 sm:p-8 min-h-[160px] flex flex-col justify-between`}>
+        <div>
+          <div className="flex items-center gap-3 mb-2">
+            <span className="text-3xl">{icons[current.id] || '🎮'}</span>
+            <div>
+              <h3 className="text-xl font-heading gold-text" style={{ WebkitTextFillColor: "unset" }}>{current.name}</h3>
+              {current.note && <Badge variant="outline" className="text-[10px] border-[hsl(43,60%,30%)]/40 text-[hsl(43,85%,55%)]">{current.note}</Badge>}
+            </div>
+            <Badge className={`ml-auto border text-[10px] uppercase tracking-wide ${statusClasses[current.status]}`}>{current.status}</Badge>
+          </div>
+          <p className="text-sm text-[hsl(45,15%,70%)] font-body max-w-xl">{current.description}</p>
+        </div>
+        <div className="flex items-center justify-between mt-4">
+          <a href={current.href} target="_blank" rel="noopener noreferrer">
+            <Button size="sm" className="gilded-button">
+              <ArrowUpRight className="w-4 h-4 mr-1" /> Play Now
+            </Button>
+          </a>
+          <div className="flex items-center gap-3">
+            <div className="flex gap-1.5">
+              {items.map((_, i) => (
+                <button key={i} onClick={() => setIdx(i)} className={`w-2 h-2 rounded-full transition-all ${i === idx ? 'bg-[hsl(43,85%,55%)] w-5' : 'bg-[hsl(45,15%,40%)]'}`} />
+              ))}
+            </div>
+            <button onClick={prev} className="w-8 h-8 rounded-full border border-[hsl(43,60%,30%)]/40 flex items-center justify-center text-[hsl(45,15%,70%)] hover:text-white hover:border-[hsl(43,85%,55%)] transition-all">
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <button onClick={next} className="w-8 h-8 rounded-full border border-[hsl(43,60%,30%)]/40 flex items-center justify-center text-[hsl(45,15%,70%)] hover:text-white hover:border-[hsl(43,85%,55%)] transition-all">
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -395,6 +457,9 @@ export default function Home() {
               </Button>
             </a>
           </div>
+
+          {/* Featured live games carousel */}
+          <FeaturedCarousel />
         </div>
       </section>
 
