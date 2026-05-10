@@ -195,6 +195,11 @@ function FeaturedCarousel() {
     "betta-warlords": "from-red-900/80 via-red-800/60 to-transparent",
     "grudge-angler": "from-cyan-900/80 via-cyan-800/60 to-transparent",
   };
+  const bgImages: Record<string, string> = {
+    "grudge-studio-app": "/assets/carousel/grudge-studio-bg.png",
+    "betta-warlords": "/assets/carousel/betta-warlords-bg.png",
+    "grudge-angler": "/assets/carousel/grudge-angler-bg.png",
+  };
   const icons: Record<string, string> = {
     "grudge-studio-app": "🏰",
     "betta-warlords": "⚔️",
@@ -203,7 +208,14 @@ function FeaturedCarousel() {
 
   return (
     <div className="relative rounded-xl overflow-hidden border-2 border-[hsl(43,60%,30%)]/40 mt-8">
-      <div className={`bg-gradient-to-r ${gradients[current.id] || 'from-gray-900/80 to-transparent'} p-6 sm:p-8 min-h-[160px] flex flex-col justify-between`}>
+      {/* Background image */}
+      {bgImages[current.id] && (
+        <div className="absolute inset-0 z-0 transition-all duration-500">
+          <img src={bgImages[current.id]} alt="" className="w-full h-full object-cover" />
+          <div className="absolute inset-0 bg-black/60" />
+        </div>
+      )}
+      <div className={`relative z-10 bg-gradient-to-r ${gradients[current.id] || 'from-gray-900/80 to-transparent'} p-6 sm:p-8 min-h-[160px] flex flex-col justify-between`}>
         <div>
           <div className="flex items-center gap-3 mb-2">
             <span className="text-3xl">{icons[current.id] || '🎮'}</span>
