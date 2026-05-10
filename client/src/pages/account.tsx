@@ -21,12 +21,13 @@
 import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Coins, Gamepad2, Loader2, LogOut, Settings, Swords, Users, Wallet } from "lucide-react";
+import { Coins, Gamepad2, Loader2, LogOut, Settings, Swords, Users, UserCircle, Wallet } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
 import { useAuthModal } from "@/components/auth-modal";
 import AccountOverview from "@/components/account/AccountOverview";
 import AccountWallet from "@/components/account/AccountWallet";
 import AccountSettings from "@/components/account/AccountSettings";
+import AccountCharacters from "@/components/account/AccountCharacters";
 
 export default function AccountPage() {
   const { player, loading, logout } = useAuth();
@@ -73,6 +74,9 @@ export default function AccountPage() {
             <TabsTrigger value="wallet" className="data-[state=active]:bg-[hsl(43,85%,55%)]/15 data-[state=active]:text-[hsl(43,85%,55%)] text-[hsl(45,15%,55%)] text-xs font-heading">
               <Wallet className="w-3.5 h-3.5 mr-1.5" /> Wallet & Web3
             </TabsTrigger>
+            <TabsTrigger value="characters" className="data-[state=active]:bg-[hsl(43,85%,55%)]/15 data-[state=active]:text-[hsl(43,85%,55%)] text-[hsl(45,15%,55%)] text-xs font-heading">
+              <UserCircle className="w-3.5 h-3.5 mr-1.5" /> Characters
+            </TabsTrigger>
             <TabsTrigger value="pvp" className="data-[state=active]:bg-[hsl(43,85%,55%)]/15 data-[state=active]:text-[hsl(43,85%,55%)] text-[hsl(45,15%,55%)] text-xs font-heading">
               <Swords className="w-3.5 h-3.5 mr-1.5" /> PvP
             </TabsTrigger>
@@ -90,6 +94,10 @@ export default function AccountPage() {
 
           <TabsContent value="wallet" className="mt-6">
             <AccountWallet player={player} />
+          </TabsContent>
+
+          <TabsContent value="characters" className="mt-6">
+            <AccountCharacters player={player} />
           </TabsContent>
 
           <TabsContent value="pvp" className="mt-6">

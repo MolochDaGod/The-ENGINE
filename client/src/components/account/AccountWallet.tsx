@@ -102,6 +102,52 @@ export default function AccountWallet({ player }: { player: PlayerProfile }) {
         )}
       </section>
 
+      {/* GBUX Purchase Packages */}
+      <section className="fantasy-panel p-5">
+        <h3 className="font-heading text-base text-[hsl(45,30%,92%)] mb-4" style={{ WebkitTextFillColor: "unset" }}>
+          <Coins className="w-4 h-4 inline mr-2 text-[hsl(43,85%,55%)]" />
+          Purchase GBUX
+        </h3>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {[
+            { amount: 100, price: "$0.99", bonus: null, popular: false },
+            { amount: 500, price: "$4.49", bonus: "+50 bonus", popular: false },
+            { amount: 1200, price: "$9.99", bonus: "+200 bonus", popular: true },
+            { amount: 5000, price: "$39.99", bonus: "+1000 bonus", popular: false },
+          ].map(pkg => (
+            <button key={pkg.amount}
+              onClick={() => alert(`Purchase ${pkg.amount} GBUX for ${pkg.price} — payment integration coming soon.`)}
+              className={`relative p-4 rounded-lg border-2 transition-all text-center hover:scale-[1.02] ${
+                pkg.popular
+                  ? "border-[hsl(43,85%,55%)] bg-[hsl(43,85%,55%)]/10 shadow-lg shadow-[hsl(43,85%,55%)]/10"
+                  : "border-[hsl(43,60%,30%)]/30 bg-black/20 hover:border-[hsl(43,60%,30%)]/60"
+              }`}
+            >
+              {pkg.popular && (
+                <div className="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-[hsl(43,85%,55%)] text-[hsl(225,30%,8%)] text-[9px] font-heading px-2 py-0.5 rounded-full uppercase tracking-wider">
+                  Best Value
+                </div>
+              )}
+              <div className="text-2xl font-heading gold-text">{pkg.amount.toLocaleString()}</div>
+              <div className="text-xs text-[hsl(45,15%,55%)] font-body">GBUX</div>
+              {pkg.bonus && <div className="text-[10px] text-[hsl(120,60%,60%)] font-body mt-0.5">{pkg.bonus}</div>}
+              <div className="text-sm font-heading text-[hsl(45,30%,92%)] mt-2">{pkg.price}</div>
+            </button>
+          ))}
+        </div>
+        <div className="flex flex-wrap gap-2 mt-3">
+          <Badge variant="outline" className="text-[9px] border-[hsl(270,50%,40%)]/30 text-[hsl(270,60%,70%)]">
+            Solana Pay
+          </Badge>
+          <Badge variant="outline" className="text-[9px] border-[hsl(43,60%,30%)]/30 text-[hsl(45,15%,55%)]">
+            Stripe
+          </Badge>
+          <Badge variant="outline" className="text-[9px] border-[hsl(43,60%,30%)]/30 text-[hsl(45,15%,55%)]">
+            Coming Soon
+          </Badge>
+        </div>
+      </section>
+
       {/* Connected Wallets — from wallet_connections table */}
       <section className="fantasy-panel p-5">
         <div className="flex items-center justify-between mb-4">
