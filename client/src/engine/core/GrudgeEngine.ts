@@ -18,7 +18,7 @@
 
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
-import { MAX_DT } from './collisionGroups';
+import { MAX_DT, GROUP_SCENE, GROUP_ROLE, GROUP_ENEMY, GROUP_ROLE_ATTACKER, GROUP_ENEMY_ATTACKER } from './collisionGroups';
 
 // ─── Updatable interface ───────────────────────────────────────────────────────
 export interface Updatable {
@@ -263,8 +263,13 @@ export class GrudgeEngine {
     mesh.receiveShadow = true;
     this.scene.add(mesh);
 
-    // Physics
-    const body = new CANNON.Body({ mass: 0 });
+    // Physics — MUST set collisionFilterGroup to GROUP_SCENE so character
+    // capsule bodies (mask includes GROUP_SCENE) and raycasts detect it.
+    const body = new CANNON.Body({
+      mass: 0,
+      collisionFilterGroup: GROUP_SCENE,
+      collisionFilterMask: GROUP_ROLE | GROUP_ENEMY | GROUP_ROLE_ATTACKER | GROUP_ENEMY_ATTACKER,
+    });
     body.addShape(new CANNON.Plane());
     body.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
     (body as any).belongTo = { isScene: true, isGround: true };
