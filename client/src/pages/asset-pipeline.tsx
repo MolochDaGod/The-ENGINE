@@ -18,9 +18,13 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   Box, Database, Download, ExternalLink, Eye, FileText, Folder,
-  Image, Layers, Loader2, Package, RefreshCw, Search, Upload, Zap,
+  Image, Layers, Loader2, Package, RefreshCw, Search, Shield, Swords, Upload, Users, Zap,
 } from "lucide-react";
 import { Link } from "wouter";
+import {
+  CHARACTER_PREFABS, getEquipmentMeshNames, getPrefabsByFaction, getPrefabsByClass,
+  type CharacterPrefab, type RaceId, type ClassId, PREFAB_STATS,
+} from "@shared/character-prefabs";
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -202,6 +206,9 @@ export default function AssetPipeline() {
             </TabsTrigger>
             <TabsTrigger value="cdn" className="data-[state=active]:bg-[hsl(43,85%,55%)]/15 data-[state=active]:text-[hsl(43,85%,55%)] text-[hsl(45,15%,55%)] text-xs font-heading">
               <Package className="w-3.5 h-3.5 mr-1.5" /> R2 CDN
+            </TabsTrigger>
+            <TabsTrigger value="characters" className="data-[state=active]:bg-[hsl(43,85%,55%)]/15 data-[state=active]:text-[hsl(43,85%,55%)] text-[hsl(45,15%,55%)] text-xs font-heading">
+              <Users className="w-3.5 h-3.5 mr-1.5" /> Characters ({PREFAB_STATS.total})
             </TabsTrigger>
           </TabsList>
 
@@ -534,7 +541,255 @@ export default function AssetPipeline() {
               </div>
             </div>
           </TabsContent>
+          {/* ── Character Prefabs ─────────────────────────────── */}
+          <TabsContent value="characters" className="mt-4">
+            <CharacterPrefabsTab />
+          </TabsContent>
         </Tabs>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// CHARACTER PREFABS TAB
+// ═══════════════════════════════════════════════════════════════════
+
+const RACE_ICONS: Record<RaceId, string> = { human: "👑", barbarian: "🪓", elf: "🧝", dwarf: "⛏️", orc: "👹", undead: "💀" };
+const CLASS_ICONS: Record<ClassId, string> = { warrior: "⚔️", mage: "🔮", ranger: "🏹", worge: "🐺" };
+const FACTION_COLORS: Record<string, string> = { crusade: "hsl(43,85%,55%)", fabled: "hsl(160,60%,45%)", legion: "hsl(0,70%,50%)" };
+
+function CharacterPrefabsTab() {
+  const [selectedPrefab, setSelectedPrefab] = useState<CharacterPrefab | null>(null);
+  const [filterRace, setFilterRace] = useState<RaceId | "">("" );
+  const [filterClass, setFilterClass] = useState<ClassId | "">("" );
+
+  const filtered = CHARACTER_PREFABS.filter(p =>
+    (!filterRace || p.race === filterRace) &&
+    (!filterClass || p.classId === filterClass)
+  );
+
+  return (
+    <div>
+      {/* Filters */}
+      <div className="flex flex-wrap gap-2 mb-4">
+        <div className="flex gap-1 items-center">
+          <span className="text-[10px] text-[hsl(45,15%,50%)] uppercase mr-1">Race:</span>
+          <button onClick={() => setFilterRace("")} className={`px-2 py-1 rounded text-xs transition ${!filterRace ? "bg-[hsl(43,85%,55%)]/20 text-[hsl(43,85%,55%)]" : "text-[hsl(45,15%,55%)] hover:bg-[hsl(225,25%,15%)]"}`}>All</button>
+          {(["human","barbarian","elf","dwarf","orc","undead"] as RaceId[]).map(r => (
+            <button key={r} onClick={() => setFilterRace(r)} className={`px-2 py-1 rounded text-xs transition ${filterRace === r ? "bg-[hsl(43,85%,55%)]/20 text-[hsl(43,85%,55%)]" : "text-[hsl(45,15%,55%)] hover:bg-[hsl(225,25%,15%)]"}`}>
+              {RACE_ICONS[r]} {r.charAt(0).toUpperCase() + r.slice(1)}
+            </button>
+          ))}
+        </div>
+        <div className="flex gap-1 items-center ml-4">
+          <span className="text-[10px] text-[hsl(45,15%,50%)] uppercase mr-1">Class:</span>
+          <button onClick={() => setFilterClass("")} className={`px-2 py-1 rounded text-xs transition ${!filterClass ? "bg-[hsl(43,85%,55%)]/20 text-[hsl(43,85%,55%)]" : "text-[hsl(45,15%,55%)] hover:bg-[hsl(225,25%,15%)]"}`}>All</button>
+          {(["warrior","mage","ranger","worge"] as ClassId[]).map(c => (
+            <button key={c} onClick={() => setFilterClass(c)} className={`px-2 py-1 rounded text-xs transition ${filterClass === c ? "bg-[hsl(43,85%,55%)]/20 text-[hsl(43,85%,55%)]" : "text-[hsl(45,15%,55%)] hover:bg-[hsl(225,25%,15%)]"}`}>
+              {CLASS_ICONS[c]} {c.charAt(0).toUpperCase() + c.slice(1)}
+            </button>
+          ))}
+        </div>
+        <Badge className="ml-auto border text-[10px] bg-[hsl(43,85%,55%)]/15 text-[hsl(43,85%,55%)] border-[hsl(43,60%,30%)]/30">
+          {filtered.length} / {PREFAB_STATS.total} prefabs
+        </Badge>
+      </div>
+
+      {/* Grid */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
+        {filtered.map(prefab => (
+          <button
+            key={prefab.id}
+            onClick={() => setSelectedPrefab(prefab)}
+            className={`fantasy-panel p-3 text-left hover:rune-glow transition relative overflow-hidden ${
+              selectedPrefab?.id === prefab.id ? "ring-2 ring-[hsl(43,85%,55%)]" : ""
+            }`}
+          >
+            {/* Faction color bar */}
+            <div className="absolute top-0 left-0 right-0 h-1" style={{ background: FACTION_COLORS[prefab.faction] }} />
+
+            <div className="text-center mt-1">
+              <div className="text-3xl mb-1">{RACE_ICONS[prefab.race]}</div>
+              <div className="text-sm font-medium">{prefab.name}</div>
+              <div className="flex items-center justify-center gap-1 mt-1">
+                <span className="text-lg">{CLASS_ICONS[prefab.classId]}</span>
+                <span className="text-[10px] uppercase tracking-wider" style={{ color: prefab.classColor }}>
+                  {prefab.classId}
+                </span>
+              </div>
+              <div className="text-[9px] text-[hsl(45,15%,45%)] mt-1 capitalize">{prefab.faction}</div>
+            </div>
+
+            {/* Mini stat bars */}
+            <div className="mt-2 space-y-0.5">
+              {(["STR","DEX","INT","VIT"] as const).map(attr => (
+                <div key={attr} className="flex items-center gap-1">
+                  <span className="text-[8px] text-[hsl(45,15%,45%)] w-6">{attr}</span>
+                  <div className="flex-1 h-1 bg-[hsl(225,25%,15%)] rounded">
+                    <div className="h-full rounded" style={{
+                      width: `${(prefab.baseStats[attr] / 7) * 100}%`,
+                      background: prefab.classColor,
+                      opacity: 0.7,
+                    }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </button>
+        ))}
+      </div>
+
+      {/* Detail Panel */}
+      {selectedPrefab && (
+        <div className="fantasy-panel p-5 mt-4">
+          <div className="flex items-start justify-between mb-4">
+            <div className="flex items-center gap-4">
+              <div className="w-16 h-16 rounded-xl flex items-center justify-center text-4xl" style={{ background: `${selectedPrefab.classColor}15`, border: `2px solid ${selectedPrefab.classColor}40` }}>
+                {RACE_ICONS[selectedPrefab.race]}
+              </div>
+              <div>
+                <h3 className="font-heading text-xl" style={{ color: selectedPrefab.classColor, WebkitTextFillColor: "unset" }}>
+                  {selectedPrefab.name}
+                </h3>
+                <div className="flex items-center gap-2 mt-1">
+                  <Badge className="border text-[10px]" style={{ borderColor: `${selectedPrefab.classColor}50`, color: selectedPrefab.classColor, background: `${selectedPrefab.classColor}15` }}>
+                    {CLASS_ICONS[selectedPrefab.classId]} {selectedPrefab.classId}
+                  </Badge>
+                  <Badge className="border text-[10px]" style={{ borderColor: `${FACTION_COLORS[selectedPrefab.faction]}50`, color: FACTION_COLORS[selectedPrefab.faction], background: `${FACTION_COLORS[selectedPrefab.faction]}15` }}>
+                    {selectedPrefab.faction}
+                  </Badge>
+                  <span className="text-[10px] text-[hsl(45,15%,50%)] font-mono">{selectedPrefab.id}</span>
+                </div>
+                <p className="text-xs text-[hsl(45,15%,55%)] mt-2 italic max-w-lg">{selectedPrefab.lore}</p>
+              </div>
+            </div>
+            <Button variant="ghost" size="sm" onClick={() => setSelectedPrefab(null)} className="text-[hsl(45,15%,55%)]">✕</Button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Column 1: Equipment */}
+            <div className="fantasy-panel p-4">
+              <div className="text-xs uppercase tracking-wider text-[hsl(43,85%,55%)] font-heading mb-3">Starting Equipment</div>
+              <div className="space-y-2">
+                <EquipRow label="Body Armor" value={`${selectedPrefab.prefix}Units_Body_${selectedPrefab.equipment.body}`} variant={selectedPrefab.equipment.body} />
+                <EquipRow label="Arms" value={`${selectedPrefab.prefix}Units_Arms_${selectedPrefab.equipment.arms}`} variant={selectedPrefab.equipment.arms} />
+                <EquipRow label="Legs" value={`${selectedPrefab.prefix}Units_Legs_${selectedPrefab.equipment.legs}`} variant={selectedPrefab.equipment.legs} />
+                {selectedPrefab.equipment.head && <EquipRow label="Helmet" value={`${selectedPrefab.prefix}Units_head_${selectedPrefab.equipment.head}`} variant={selectedPrefab.equipment.head} />}
+                {selectedPrefab.equipment.rightHand && <EquipRow label={`Weapon (${selectedPrefab.equipment.rightHandType})`} value={`${selectedPrefab.prefix}Units_${selectedPrefab.equipment.rightHandType}_${selectedPrefab.equipment.rightHand}`} variant={selectedPrefab.equipment.rightHand} />}
+                {selectedPrefab.equipment.leftHandType === "bow" && <EquipRow label="Bow" value={`${selectedPrefab.prefix}Units_Bow`} variant="" />}
+                {selectedPrefab.equipment.leftHandType === "staff" && <EquipRow label="Staff" value={`${selectedPrefab.prefix}Units_staff_${selectedPrefab.equipment.leftHand}`} variant={selectedPrefab.equipment.leftHand!} />}
+                {selectedPrefab.equipment.shield && <EquipRow label="Shield" value={`${selectedPrefab.prefix}Units_shield_${selectedPrefab.equipment.shield}`} variant={selectedPrefab.equipment.shield} />}
+                {selectedPrefab.equipment.utility.map(u => <EquipRow key={u} label={u} value={`${selectedPrefab.prefix}Xtra_${u}`} variant="" />)}
+              </div>
+              <div className="mt-3 pt-2 border-t border-[hsl(43,60%,30%)]/15">
+                <div className="text-[10px] text-[hsl(45,15%,45%)]">
+                  Animation: <span className="text-[hsl(43,85%,55%)]">{selectedPrefab.animationPack}</span>
+                </div>
+                <div className="text-[10px] text-[hsl(45,15%,45%)]">
+                  Model: <span className="text-[hsl(45,15%,60%)] font-mono">{selectedPrefab.prefix}Characters_customizable.FBX</span>
+                </div>
+                <div className="text-[10px] text-[hsl(45,15%,45%)]">
+                  CDN: <span className="text-[hsl(43,85%,55%)]">{selectedPrefab.cdnModelKey || "—"}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Column 2: Stats */}
+            <div className="fantasy-panel p-4">
+              <div className="text-xs uppercase tracking-wider text-[hsl(43,85%,55%)] font-heading mb-3">Base Attributes (20 pts)</div>
+              <div className="space-y-2">
+                {(["STR","DEX","INT","VIT","WIS","LCK","CHA","END"] as const).map(attr => {
+                  const val = selectedPrefab.baseStats[attr];
+                  const colors: Record<string, string> = {
+                    STR: "#ef4444", DEX: "#f97316", INT: "#8b5cf6", VIT: "#22c55e",
+                    WIS: "#3b82f6", LCK: "#eab308", CHA: "#ec4899", END: "#14b8a6",
+                  };
+                  const names: Record<string, string> = {
+                    STR: "Strength", DEX: "Dexterity", INT: "Intelligence", VIT: "Vitality",
+                    WIS: "Wisdom", LCK: "Luck", CHA: "Charisma", END: "Endurance",
+                  };
+                  return (
+                    <div key={attr} className="flex items-center gap-2">
+                      <span className="text-xs w-8 font-bold" style={{ color: colors[attr] }}>{attr}</span>
+                      <div className="flex-1 h-2.5 bg-[hsl(225,25%,12%)] rounded overflow-hidden">
+                        <div className="h-full rounded transition-all" style={{
+                          width: `${(val / 10) * 100}%`,
+                          background: colors[attr],
+                          opacity: 0.8,
+                        }} />
+                      </div>
+                      <span className="text-xs w-5 text-right" style={{ color: colors[attr] }}>{val}</span>
+                      <span className="text-[9px] text-[hsl(45,15%,40%)] w-16 truncate">{names[attr]}</span>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="mt-3 pt-2 border-t border-[hsl(43,60%,30%)]/15 text-[10px] text-[hsl(45,15%,50%)]">
+                Total: {Object.values(selectedPrefab.baseStats).reduce((a, b) => a + b, 0)} / 20 starting points
+              </div>
+            </div>
+
+            {/* Column 3: Skill Tree */}
+            <div className="fantasy-panel p-4">
+              <div className="text-xs uppercase tracking-wider text-[hsl(43,85%,55%)] font-heading mb-3">Skill Tree ({selectedPrefab.skills.length} skills)</div>
+              <div className="space-y-2">
+                {selectedPrefab.skills.map(skill => (
+                  <div key={skill.id} className="p-2 rounded bg-black/20 border border-[hsl(43,60%,30%)]/10">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="text-lg">{skill.icon}</span>
+                        <div>
+                          <div className="text-xs font-medium">{skill.name}</div>
+                          <div className="text-[9px] text-[hsl(45,15%,45%)]">
+                            Tier {skill.tier} · Max rank {skill.maxRank}
+                          </div>
+                        </div>
+                      </div>
+                      <Badge variant="outline" className="text-[8px] border-[hsl(43,60%,30%)]/30 text-[hsl(45,15%,55%)]">
+                        T{skill.tier}
+                      </Badge>
+                    </div>
+                    <p className="text-[10px] text-[hsl(45,15%,55%)] mt-1">{skill.description}</p>
+                    {skill.statBonus && (
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {Object.entries(skill.statBonus).map(([k, v]) => (
+                          <span key={k} className="text-[8px] px-1 py-0.5 rounded bg-[hsl(225,25%,15%)] text-[hsl(43,85%,55%)]">
+                            +{v} {k}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Full mesh list */}
+          <div className="mt-4 pt-3 border-t border-[hsl(43,60%,30%)]/15">
+            <div className="text-xs uppercase tracking-wider text-[hsl(43,85%,55%)] font-heading mb-2">Visible Mesh Names (for EquipmentManager)</div>
+            <div className="flex flex-wrap gap-1">
+              {getEquipmentMeshNames(selectedPrefab).map(mesh => (
+                <code key={mesh} className="text-[10px] px-2 py-1 rounded bg-black/30 text-[hsl(45,15%,60%)] border border-[hsl(43,60%,30%)]/10">
+                  {mesh}
+                </code>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function EquipRow({ label, value, variant }: { label: string; value: string; variant: string }) {
+  return (
+    <div className="flex items-center justify-between gap-2 py-1 border-b border-[hsl(43,60%,30%)]/8 last:border-0">
+      <span className="text-xs text-[hsl(45,15%,60%)]">{label}</span>
+      <div className="flex items-center gap-1">
+        {variant && <Badge variant="outline" className="text-[8px] border-[hsl(43,60%,30%)]/30 text-[hsl(43,85%,55%)] h-4 px-1">{variant}</Badge>}
+        <code className="text-[9px] text-[hsl(45,15%,45%)] font-mono truncate max-w-[140px]">{value}</code>
       </div>
     </div>
   );
