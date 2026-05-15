@@ -63,9 +63,9 @@ export default function Header() {
   }, [location]);
 
   const navLinks = [
-    { name: "Warlords", href: "/#warlords", icon: Swords },
-    { name: "Nexus", href: "/#nexus", icon: Flame },
-    { name: "Armada", href: "/#armada", icon: Anchor },
+    { name: "Warlords", href: "https://grudgewarlords.com", icon: Swords, external: true },
+    { name: "Nexus", href: "/#products", icon: Layers3 },
+    { name: "Armada", href: "/#play", icon: Flame },
     { name: "Compete", href: "/leaderboards", icon: Trophy },
     { name: "Games", href: "/games", icon: Library },
     { name: "Studio", href: "/#studio", icon: Wrench },
@@ -97,15 +97,25 @@ export default function Header() {
 
             <nav className="hidden md:flex items-center gap-6">
               {navLinks.map((link) => {
+                const isExternal = "external" in link && link.external;
                 const active =
-                  link.href === "/games"
-                    ? location.startsWith("/games")
-                    : link.href === "/leaderboards"
-                      ? location.startsWith("/leaderboards")
-                      : link.href.startsWith("/#")
-                        ? isHome
-                        : location === link.href;
+                  isExternal
+                    ? false
+                    : link.href === "/games"
+                      ? location.startsWith("/games")
+                      : link.href === "/leaderboards"
+                        ? location.startsWith("/leaderboards")
+                        : link.href.startsWith("/#")
+                          ? isHome
+                          : location === link.href;
                 const className = `transition-colors font-body text-sm ${active ? "text-[hsl(43,85%,55%)]" : "text-[hsl(45,30%,90%)] hover:text-[hsl(43,85%,55%)]"}`;
+                if (isExternal) {
+                  return (
+                    <a key={link.name} href={link.href} target="_blank" rel="noopener noreferrer" className={className}>
+                      {link.name}
+                    </a>
+                  );
+                }
                 if (link.href.startsWith("/#")) {
                   return (
                     <a key={link.name} href={link.href} className={className}>

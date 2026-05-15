@@ -13,6 +13,8 @@ export interface PortalProduct {
   authRequired?: boolean;
   note?: string;
   tags?: PortalProductTag[];
+  /** Background image URL for the product card (R2 CDN or local asset) */
+  image?: string;
 }
 
 export const PORTAL_PRODUCTS: PortalProduct[] = [
@@ -26,16 +28,19 @@ export const PORTAL_PRODUCTS: PortalProduct[] = [
     external: true,
     authRequired: true,
     tags: ["mmo", "pvp", "pvpve", "coop"],
+    image: "https://assets.grudge-studio.com/portal/warlords-card.jpg",
   },
   {
     id: "launcher",
     name: "Grudge Launcher",
-    href: "/login?redirect=/",
+    href: "https://grudgedot-launcher.vercel.app",
     description: "Single entry launcher for Grudge products, entitlements, updates, and client handoff.",
     status: "planned",
     section: "featured",
+    external: true,
     authRequired: true,
-    note: "Mission-phase target — launcher route pending",
+    note: "Mission-phase target — launcher build in progress",
+    image: "https://assets.grudge-studio.com/portal/launcher-card.jpg",
   },
   {
     id: "dashboard",
@@ -46,6 +51,7 @@ export const PORTAL_PRODUCTS: PortalProduct[] = [
     section: "featured",
     external: true,
     authRequired: true,
+    image: "https://assets.grudge-studio.com/portal/dashboard-card.jpg",
   },
   {
     id: "ai-hub",
@@ -56,6 +62,7 @@ export const PORTAL_PRODUCTS: PortalProduct[] = [
     section: "featured",
     external: true,
     authRequired: true,
+    image: "https://assets.grudge-studio.com/portal/ai-hub-card.jpg",
   },
   {
     id: "wargus",
@@ -65,6 +72,7 @@ export const PORTAL_PRODUCTS: PortalProduct[] = [
     status: "beta",
     section: "play",
     tags: ["rts", "pvp", "coop"],
+    image: "https://assets.grudge-studio.com/portal/wargus-card.jpg",
   },
   {
     id: "tower-defense",
@@ -74,6 +82,7 @@ export const PORTAL_PRODUCTS: PortalProduct[] = [
     status: "beta",
     section: "play",
     tags: ["solo", "coop"],
+    image: "https://assets.grudge-studio.com/portal/tower-defense-card.jpg",
   },
   {
     id: "mage-arena",
@@ -83,6 +92,7 @@ export const PORTAL_PRODUCTS: PortalProduct[] = [
     status: "beta",
     section: "play",
     tags: ["pvp", "arena"],
+    image: "https://assets.grudge-studio.com/portal/mage-arena-card.jpg",
   },
   {
     id: "avernus-arena",
@@ -92,6 +102,7 @@ export const PORTAL_PRODUCTS: PortalProduct[] = [
     status: "beta",
     section: "play",
     tags: ["pvp", "pvpve", "arena"],
+    image: "https://assets.grudge-studio.com/portal/avernus-card.jpg",
   },
   {
     id: "multiplayer-racing",
@@ -101,6 +112,7 @@ export const PORTAL_PRODUCTS: PortalProduct[] = [
     status: "beta",
     section: "play",
     tags: ["pvp", "arena"],
+    image: "https://assets.grudge-studio.com/portal/overdrive-card.jpg",
   },
   {
     id: "annihilate-demo",
@@ -110,6 +122,7 @@ export const PORTAL_PRODUCTS: PortalProduct[] = [
     status: "beta",
     section: "play",
     tags: ["coop", "pvpve"],
+    image: "https://assets.grudge-studio.com/portal/annihilate-card.jpg",
   },
   {
     id: "grudge-crafting",
@@ -120,8 +133,20 @@ export const PORTAL_PRODUCTS: PortalProduct[] = [
     section: "featured",
     external: true,
     authRequired: true,
-    note: "Puter",
     tags: ["coop"],
+    image: "https://assets.grudge-studio.com/portal/crafting-card.jpg",
+  },
+  {
+    id: "grudge-studio-puter",
+    name: "Grudge Studio",
+    href: "https://grudgewarlords.com",
+    description: "The Grudge Studio hub on Puter — gateway to grudgewarlords.com with character creation and crafting.",
+    status: "live",
+    section: "featured",
+    external: true,
+    authRequired: true,
+    tags: ["mmo"],
+    image: "https://assets.grudge-studio.com/portal/studio-card.jpg",
   },
   {
     id: "catalog",
