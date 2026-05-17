@@ -51,7 +51,7 @@ const GAMES: GameCard[] = [
     name: 'Grudge Warlords RTS',
     description: 'Full 3D real-time strategy with base building, unit production, hero mech, biome zones, AI squads, and wave-based combat. The flagship Grudge game.',
     type: 'RTS',
-    engine: 'R3F + Rapier + Express',
+    engine: 'Grudge Studio Forge',
     route: 'https://rts-grudge.vercel.app',
     emoji: '⚔️',
     color: 'from-red-900/60 to-red-800/30',
@@ -66,7 +66,7 @@ const GAMES: GameCard[] = [
     name: 'Grudges — Survival ARPG',
     description: 'Sci-fi survival action RPG. Bind a grudge, bear it forward. Crafting, combat, exploration in a hostile world.',
     type: 'Survival ARPG',
-    engine: 'R3F + Three.js',
+    engine: 'Grudge Studio Forge',
     route: 'https://survival.vercel.app',
     emoji: '🔥',
     color: 'from-orange-900/60 to-orange-800/30',
@@ -81,7 +81,7 @@ const GAMES: GameCard[] = [
     name: 'Grudge Arena — PvP Combat',
     description: '3D PvP combat arena with 6 playable races, WoW-style targeting, Socket.IO multiplayer, and Grudge ID authentication.',
     type: 'Arena PvP',
-    engine: 'Three.js + Socket.IO',
+    engine: 'Grudge Studio Forge',
     route: 'https://grudge-arena.vercel.app',
     emoji: '🗡️',
     color: 'from-purple-900/60 to-purple-800/30',
@@ -96,7 +96,7 @@ const GAMES: GameCard[] = [
     name: 'Grudge Drive — Vehicular Combat',
     description: 'High-speed vehicular combat arena brawler. BabylonJS + Havok physics, destructible environments, boost pads.',
     type: 'Racing / Combat',
-    engine: 'BabylonJS + Havok',
+    engine: 'Grudge Studio Forge',
     route: 'https://grudge-drive.vercel.app',
     emoji: '🏎️',
     color: 'from-blue-900/60 to-blue-800/30',
@@ -111,7 +111,7 @@ const GAMES: GameCard[] = [
     name: 'Grudge Fishing',
     description: '3D fishing game with procedural island, animated water shaders, 35 fish species, 5 tiered rods, and tension minigame. Cloudflare D1/R2 backend.',
     type: 'Fishing / Casual',
-    engine: 'Three.js + D1/R2',
+    engine: 'Grudge Studio Forge',
     route: 'https://grudge-fishing-game.vercel.app',
     emoji: '🎣',
     color: 'from-cyan-900/60 to-cyan-800/30',
@@ -125,7 +125,7 @@ const GAMES: GameCard[] = [
     name: 'Dungeon Crawler Quest',
     description: 'Voxel MOBA and dungeon crawler with procedural generation, AI enemies, loot system, and map editor.',
     type: 'Dungeon Crawler',
-    engine: 'Three.js Voxel',
+    engine: 'Grudge Studio Forge',
     route: 'https://dungeon-crawler-quest.vercel.app',
     emoji: '🐉',
     color: 'from-green-900/60 to-green-800/30',
@@ -140,7 +140,7 @@ const GAMES: GameCard[] = [
     name: 'Final Fighter',
     description: '3D fighting game with GLTF characters, Box3 hitbox/hurtbox collision, combo system, and AI opponent.',
     type: '3D Fighting',
-    engine: 'Three.js + Hitbox',
+    engine: 'Grudge Studio Forge',
     route: 'https://final-fighter.vercel.app',
     emoji: '🥊',
     color: 'from-amber-900/60 to-amber-800/30',
@@ -155,7 +155,7 @@ const GAMES: GameCard[] = [
     name: 'Betta Warlords — RPG',
     description: 'Modular RPG with character creation, skill trees, crafting, and faction warfare. The original Grudge Warlords experience.',
     type: 'RPG / MMO',
-    engine: 'Custom RPG Engine',
+    engine: 'Grudge Studio Forge',
     route: 'https://rpg-modular.vercel.app',
     emoji: '🗡️',
     color: 'from-indigo-900/60 to-indigo-800/30',
@@ -170,7 +170,7 @@ const GAMES: GameCard[] = [
     name: 'Grim Armada',
     description: 'SWG-inspired tactical combat web game. Three.js + React with Grudge Backend integration. Space fleet battles and ground combat.',
     type: 'Tactical Combat',
-    engine: 'Three.js + React',
+    engine: 'Grudge Studio Forge',
     route: 'https://grim-armada-web.vercel.app',
     emoji: '🚀',
     color: 'from-slate-900/60 to-slate-800/30',
@@ -184,7 +184,7 @@ const GAMES: GameCard[] = [
     name: 'Grudge Engine Core',
     description: 'Three.js + Cannon-ES + CharacterFSM. Full combo FSM, capsule physics, animation blending, and RoleControls. The engine core powering all Grudge 3D games.',
     type: '3D Engine Demo',
-    engine: 'GrudgeEngine v1',
+    engine: 'Grudge Studio Forge',
     route: '/annihilate-demo',
     emoji: '⚙️',
     color: 'from-violet-900/60 to-purple-800/30',
@@ -401,7 +401,7 @@ export default function SuperEngine() {
           </Link>
           <div className="flex items-center gap-3">
             <FPSCounter />
-            <Badge className="bg-gradient-to-r from-orange-500 to-red-500 text-white px-3 py-1">Super Engine</Badge>
+            <Badge className="bg-gradient-to-r from-orange-500 to-red-500 text-white px-3 py-1">Grudge Studio Forge</Badge>
             <Badge className="bg-green-500/20 text-green-400 border-green-500/30">{GAMES.length} Games</Badge>
           </div>
         </div>
@@ -410,11 +410,11 @@ export default function SuperEngine() {
           <div className="flex items-center justify-center gap-3 mb-4">
             <Cpu className="w-10 h-10 text-orange-400" />
             <h1 className="text-4xl md:text-5xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-orange-400 via-red-400 to-purple-400">
-              Super Engine Arcade
+              Grudge Studio Forge
             </h1>
           </div>
           <p className="text-gray-400 text-lg max-w-2xl mx-auto">
-            Play games built with the Grudge Studio Super Engine — combining Construct3, Three.js, Stratagus, and more into one unified platform.
+            Play games built with Grudge Studio Forge — the unified game engine powering all Grudge Studio titles.
           </p>
           <div className="flex justify-center items-center gap-6 mt-8">
             <div className="w-24 h-24 rounded-xl border border-orange-500/30 overflow-hidden bg-black/40 backdrop-blur-sm hover:scale-105 transition-transform">
@@ -733,9 +733,9 @@ export default function SuperEngine() {
           <div className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-gray-800/50 border border-gray-700">
             <Cpu className="w-5 h-5 text-orange-400" />
             <span className="text-gray-300">Powered by</span>
-            <span className="text-orange-400 font-bold">Grudge Studio Super Engine</span>
+            <span className="text-orange-400 font-bold">Grudge Studio Forge</span>
             <span className="text-gray-500">—</span>
-            <span className="text-gray-400 text-sm">Three.js · R3F · BabylonJS · Rapier · Cannon-ES · Havok · Socket.IO</span>
+            <span className="text-gray-400 text-sm">Three.js · R3F · BabylonJS · Rapier · Cannon-ES · Havok · Cloudflare R2/D1</span>
           </div>
         </div>
       </div>
