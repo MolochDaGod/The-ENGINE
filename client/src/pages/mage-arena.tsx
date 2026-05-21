@@ -40,6 +40,7 @@ interface Enemy {
   speed: number;
   attackCooldown: number;
   stunTimer: number;
+  kbx: number; kby: number; // knockback velocity
 }
 
 interface RemotePlayer extends ArenaPlayer {
@@ -227,10 +228,86 @@ export default function MageArena() {
       speed: type === "boss" ? 1.2 : type === "elite" ? 2.2 : 2,
       attackCooldown: 0,
       stunTimer: 0,
+      kbx: 0, kby: 0,
     });
   }, []);
 
-  // ── Ability casting ───────────────────────────────────────────────────────
+  // ── Knockback helper — apply to any enemy on hit ───────────────────────────
+  const applyKnockback = useCallback((e: Enemy, fromX: number, fromY: number, force: number) => {
+    const dx = e.x - fromX, dy = e.y - fromY;
+    const d = Math.hypot(dx, dy) || 1;
+    const kbMult = e.type === "boss" ? 0.3 : e.type === "elite" ? 0.6 : 1;
+    e.kbx += (dx / d) * force * kbMult;
+    e.kby += (dy / d) * force * kbMult;
+    // Hitstun: brief stagger (boss resists more)
+    const stunFrames = e.type === "boss" ? 6 : e.type === "elite" ? 10 : 14;
+    e.stunTimer = Math.max(e.stunTimer, stunFrames);
+  }, []);
+
+  // ── Defensive action (RMB) — hero-specific ────────────────────────────────
+  const defCDRef = useRef(0);
+  const defensiveAction = useCallback(() => {
+    const g = gs.current;
+    const p = g.player;
+    if (!p.alive) return;
+    const now = Date.now();
+    if (now - defCDRef.current < 1200) return; // 1.2s shared cooldown
+    defCDRef.current = now;
+
+    const facing = p.angle;
+    const pid = uid();
+
+    if (g.heroId === "death_mage") {
+      // Spectral Dodge — short backward blink + brief i-frames
+      const backX = -Math.cos(facing) * 120;
+      const backY = -Math.sin(facing) * 120;
+      p.x += backX; p.y += backY;
+      p.shielded = true; p.shieldTimer = 15; // ~0.25s i-frames
+      g.effects.push({ id: pid, x: p.x, y: p.y, radius: 0, maxRadius: 50, color: "#e8c3f8", life: 14, maxLife: 14, type: "flash" });
+    } else if (g.heroId === "holy_paladin") {
+      // Shield Bash — cone push + stun nearby enemies
+      g.enemies.forEach(e => {
+        const dx = e.x - p.x, dy = e.y - p.y;
+        const d = Math.hypot(dx, dy);
+        if (d > 120) return;
+        const angToE = Math.atan2(dy, dx);
+        let diff = angToE - facing;
+        while (diff > Math.PI) diff -= Math.PI * 2;
+        while (diff < -Math.PI) diff += Math.PI * 2;
+        if (Math.abs(diff) < 1.0) {
+          applyKnockback(e, p.x, p.y, 18);
+          e.stunTimer = Math.max(e.stunTimer, 30);
+          e.health -= 10;
+        }
+      });
+      g.effects.push({ id: pid, x: p.x + Math.cos(facing) * 50, y: p.y + Math.sin(facing) * 50, radius: 0, maxRadius: 70, color: "#fff176", life: 12, maxLife: 12, type: "flash" });
+    } else if (g.heroId === "orc_shaman") {
+      // Spirit Ward — AoE push all nearby + brief damage reduction
+      g.enemies.forEach(e => {
+        const d = Math.hypot(e.x - p.x, e.y - p.y);
+        if (d < 140) applyKnockback(e, p.x, p.y, 14);
+      });
+      p.stoneHardened = true; p.hardSkinTimer = 60; // ~1s 70% DR
+      g.effects.push({ id: pid, x: p.x, y: p.y, radius: 0, maxRadius: 140, color: "#82e0aa", life: 16, maxLife: 16, type: "ring" });
+    } else if (g.heroId === "stone_guardian") {
+      // Ground Pound — massive AoE knockback
+      g.enemies.forEach(e => {
+        const d = Math.hypot(e.x - p.x, e.y - p.y);
+        if (d < 180) {
+          applyKnockback(e, p.x, p.y, 22);
+          e.health -= 15;
+        }
+      });
+      g.effects.push({ id: pid, x: p.x, y: p.y, radius: 0, maxRadius: 180, color: "#a04000", life: 18, maxLife: 18, type: "ring" });
+    }
+
+    // Broadcast as cast index 5
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ t: "cast", qi: 5, tx: g.mouseX, ty: g.mouseY }));
+    }
+  }, [applyKnockback]);
+
+  // ── Ability casting (LMB = basic, Q/E/R = keys) ───────────────────────────
   const castAbility = useCallback((abilityKey: "basic" | "q" | "e" | "r") => {
     const g = gs.current;
     const hero = HEROES[g.heroId];
@@ -456,6 +533,17 @@ export default function MageArena() {
         // Tick enemies
         for (let i = g.enemies.length - 1; i >= 0; i--) {
           const e = g.enemies[i];
+
+          // ── Knockback physics ──
+          if (Math.abs(e.kbx) > 0.1 || Math.abs(e.kby) > 0.1) {
+            e.x += e.kbx;
+            e.y += e.kby;
+            e.kbx *= 0.82; // friction decay
+            e.kby *= 0.82;
+          } else {
+            e.kbx = 0; e.kby = 0;
+          }
+
           if (e.stunTimer > 0) { e.stunTimer--; }
           else {
             const dx = p.x - e.x, dy = p.y - e.y;
@@ -540,6 +628,14 @@ export default function MageArena() {
             const e = g.enemies[j];
             if (Math.hypot(proj.x - e.x, proj.y - e.y) < proj.radius + 20) {
               e.health -= proj.damage;
+              // Knockback + hitstun on projectile hit
+              const kbForce = proj.radius > 12 ? 12 : 8; // heavier projectiles push more
+              const pdx = e.x - proj.x, pdy = e.y - proj.y;
+              const pd = Math.hypot(pdx, pdy) || 1;
+              const kbMult = e.type === "boss" ? 0.3 : e.type === "elite" ? 0.6 : 1;
+              e.kbx += (pdx / pd) * kbForce * kbMult;
+              e.kby += (pdy / pd) * kbForce * kbMult;
+              e.stunTimer = Math.max(e.stunTimer, e.type === "boss" ? 4 : e.type === "elite" ? 8 : 12);
               g.projectiles.splice(i, 1);
               if (e.health <= 0) { p.kills++; g.enemies.splice(j, 1); }
               break;
@@ -753,19 +849,22 @@ export default function MageArena() {
       g.mouseX = e.clientX - rect.left;
       g.mouseY = e.clientY - rect.top;
     };
-    const onClick = () => castAbility("basic");
+    const onLMB = () => castAbility("basic");
+    const onRMB = (e: MouseEvent) => { e.preventDefault(); defensiveAction(); };
 
     window.addEventListener("keydown", onKeyDown);
     window.addEventListener("keyup", onKeyUp);
     window.addEventListener("mousemove", onMouseMove);
-    window.addEventListener("click", onClick);
+    window.addEventListener("click", onLMB);
+    window.addEventListener("contextmenu", onRMB);
     return () => {
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
       window.removeEventListener("mousemove", onMouseMove);
-      window.removeEventListener("click", onClick);
+      window.removeEventListener("click", onLMB);
+      window.removeEventListener("contextmenu", onRMB);
     };
-  }, [screen, castAbility]);
+  }, [screen, castAbility, defensiveAction]);
 
   // ── Cleanup ───────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -1061,7 +1160,7 @@ export default function MageArena() {
       <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2 z-10">
         {(["basic", "q", "e", "r"] as const).map((key, i) => {
           const ab = hero[key];
-          const labels = ["Click", "Q", "E", "R"];
+          const labels = ["LMB", "Q", "E", "R"];
           const cds = [0, hud.qcd, hud.ecd, hud.rcd];
           const cdMax = [0, hero.q.cooldown * 60, hero.e.cooldown * 60, hero.r.cooldown * 60];
           const pct = cdMax[i] > 0 ? cds[i] / cdMax[i] : 0;
@@ -1079,11 +1178,17 @@ export default function MageArena() {
             </div>
           );
         })}
+        {/* RMB Defend indicator */}
+        <div className="relative w-14 h-14 rounded-lg border-2 flex flex-col items-center justify-center text-white text-xs font-bold bg-gray-900/80"
+          style={{ borderColor: "#66aaff" }}>
+          <span className="text-blue-300">RMB</span>
+          <span className="text-gray-400" style={{ fontSize: "9px" }}>Defend</span>
+        </div>
       </div>
 
       {/* Controls hint */}
       <div className="absolute bottom-4 left-4 text-gray-600 text-xs z-10">
-        WASD Move · Mouse Aim · Click/Q/E/R Abilities
+        WASD Move · Mouse Aim · LMB Attack · RMB Defend · Q/E/R Skills
       </div>
 
       {/* Remote players scoreboard */}

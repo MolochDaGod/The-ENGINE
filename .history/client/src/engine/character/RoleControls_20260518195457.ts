@@ -1,0 +1,255 @@
+/**
+ * Grudge Engine — RoleControls
+ *
+ * Grudge-standard control scheme (shared across all Grudge Studio playable
+ * characters; ported from gonnavis/annihilate/src/RoleControls.js with the
+ * keymap remapped from J/K/I/U/L/O to mouse + WASD + Space/Shift + 1-4).
+ *
+ * Controls:
+ *   WASD / Arrows           — movement direction
+ *   LMB  (Mouse0)           — light attack       (FSM: attack / keyJUp)
+ *   RMB  (Mouse2)           — heavy attack/bash  (FSM: bash   / keyUUp)
+ *   Space                   — jump               (FSM: jump)
+ *   Shift (L/R)             — dash               (FSM: dash)
+ *   1                       — block  (hold)      (FSM: block  / keyLUp)
+ *   2                       — launch (uppercut)  (FSM: launch / keyOUp)
+ *   3                       — bash (kbd-only)    (FSM: bash   / keyUUp)
+ *   4                       — pop / special      (calls role.pop.pop())
+ *
+ * Combo detection (only while in 'block' state, 150ms window):
+ *   ↓→LMB   → hadouken
+ *   →↓→LMB  → shoryuken
+ *   ↓←Space → ajejebloken
+ *
+ * Movement uses position-based approach (body.position += direction)
+ * which avoids the issues with velocity-based movement noted in Annihilate.
+ */
+
+import * as THREE from 'three';
+import { BaseCharacter } from './BaseCharacter';
+import { GrudgeEngine, Updatable } from '../core/GrudgeEngine';
+
+// Synthetic event codes used to unify mouse + keyboard in holdKey/tickKey/seqKey.
+const CODE_LMB = 'Mouse0';
+const CODE_RMB = 'Mouse2';
+
+export class RoleControls implements Updatable {
+  role: BaseCharacter;
+
+  holdKey: Record<string, boolean> = {};
+  tickKey: Record<string, boolean> = {};
+  seqKey:  string[] = [];
+
+  /** When true, mouse listeners suppress the browser context menu on the canvas. */
+  suppressContextMenu = true;
+
+  private _seqKeyTimeout: ReturnType<typeof setTimeout> | null = null;
+  private _prevTime = 0;
+  private _engine: GrudgeEngine;
+  private _onKeyDown: (e: KeyboardEvent) => void;
+  private _onKeyUp: (e: KeyboardEvent) => void;
+  private _onMouseDown: (e: MouseEvent) => void;
+  private _onMouseUp: (e: MouseEvent) => void;
+  private _onContextMenu: (e: MouseEvent) => void;
+
+  constructor(role: BaseCharacter) {
+    this.role    = role;
+    this._engine = GrudgeEngine.getInstance();
+
+    this._onKeyDown = this._handleKeyDown.bind(this);
+    this._onKeyUp = this._handleKeyUp.bind(this);
+    this._onMouseDown = this._handleMouseDown.bind(this);
+    this._onMouseUp = this._handleMouseUp.bind(this);
+    this._onContextMenu = (e) => { if (this.suppressContextMenu) e.preventDefault(); };
+
+    window.addEventListener('keydown', this._onKeyDown);
+    window.addEventListener('keyup', this._onKeyUp);
+    window.addEventListener('mousedown', this._onMouseDown);
+    window.addEventListener('mouseup', this._onMouseUp);
+    window.addEventListener('contextmenu', this._onContextMenu);
+
+    this._engine.addToUpdate(this);
+  }
+
+  setRole(role: BaseCharacter): void {
+    this.role = role;
+    // Reset held keys when switching characters
+    this.holdKey = {};
+    this.tickKey = {};
+    this.seqKey  = [];
+  }
+
+  // ── Input handlers ─────────────────────────────────────────────────────────
+
+  private _handleKeyDown(event: KeyboardEvent): void {
+    // Prevent double-fire on held keys (mirrors annihilate guard)
+    if (this.holdKey[event.code]) return;
+    this.holdKey[event.code] = true;
+    this.tickKey[event.code] = true;
+    this._processCombo(event.code);
+  }
+
+  private _handleKeyUp(event: KeyboardEvent): void {
+    this.holdKey[event.code] = false;
+
+    switch (event.code) {
+      case 'Digit1': case 'Numpad1':
+        // block release
+        this.role.service.send('keyLUp');
+        this.seqKey.length = 0; break;
+      case 'Digit2': case 'Numpad2':
+        // launch release
+        this.role.service.send('keyOUp');
+        this.seqKey.length = 0; break;
+      case 'Digit3': case 'Numpad3':
+        // bash (kbd-only) release — mirrors RMB release
+        this.role.service.send('keyUUp'); break;
+    }
+  }
+
+  // ── Mouse handlers ─────────────────────────────────────────────────────────
+
+  private _handleMouseDown(event: MouseEvent): void {
+    const code = event.button === 0 ? CODE_LMB : event.button === 2 ? CODE_RMB : null;
+    if (!code) return;
+    if (this.holdKey[code]) return;
+    this.holdKey[code] = true;
+    this.tickKey[code] = true;
+    this._processCombo(code);
+  }
+
+  private _handleMouseUp(event: MouseEvent): void {
+    if (event.button === 0) {
+      this.holdKey[CODE_LMB] = false;
+      // LMB release maps to keyJUp (charge-attack release in Maria's FSM)
+      this.role.service.send('keyJUp');
+    } else if (event.button === 2) {
+      this.holdKey[CODE_RMB] = false;
+      // RMB release maps to keyUUp (whirlwind exit in Maria's FSM)
+      this.role.service.send('keyUUp');
+    }
+  }
+
+  // ── Block-state combo sequence (shared between keyboard & mouse) ───────────
+
+  private _processCombo(code: string): void {
+    if (this._seqKeyTimeout) clearTimeout(this._seqKeyTimeout);
+    if (!this.role.service.matches('block')) return;
+
+    this._prevTime = performance.now();
+
+    if (code === CODE_LMB) {
+      // ↓→LMB = hadouken
+      if (
+        this.seqKey.length === 2 &&
+        (this.seqKey[0] === 'KeyS' || this.seqKey[0] === 'ArrowDown') &&
+        (this.seqKey[1] === 'KeyD' || this.seqKey[1] === 'ArrowRight')
+      ) {
+        this.role.service.send('hadouken');
+      }
+      // →↓→LMB = shoryuken
+      else if (
+        this.seqKey.length === 3 &&
+        (this.seqKey[0] === 'KeyD' || this.seqKey[0] === 'ArrowRight') &&
+        (this.seqKey[1] === 'KeyS' || this.seqKey[1] === 'ArrowDown') &&
+        (this.seqKey[2] === 'KeyD' || this.seqKey[2] === 'ArrowRight')
+      ) {
+        this.role.service.send('shoryuken');
+      }
+      this.seqKey.length = 0;
+    } else if (code === 'Space') {
+      // ↓←Space = ajejebloken
+      if (
+        this.seqKey.length === 2 &&
+        (this.seqKey[0] === 'KeyS' || this.seqKey[0] === 'ArrowDown') &&
+        (this.seqKey[1] === 'KeyA' || this.seqKey[1] === 'ArrowLeft')
+      ) {
+        this.role.service.send('ajejebloken');
+      }
+      this.seqKey.length = 0;
+    } else {
+      this.seqKey.push(code);
+    }
+
+    this._seqKeyTimeout = setTimeout(() => {
+      this.seqKey.length = 0;
+    }, 150);
+  }
+
+  // ── Per-frame update ───────────────────────────────────────────────────────
+
+  update(dt: number): void {
+    if (!this.role) return;
+
+    // Action key processing (tickKey = pressed this frame)
+    const jk = this.tickKey['KeyJ']     || this.tickKey['Numpad4'];
+    const kk = this.tickKey['KeyK']     || this.tickKey['Numpad5'];
+    const uk = this.tickKey['KeyU']     || this.tickKey['Numpad7'];
+    const ik = this.tickKey['KeyI']     || this.tickKey['Numpad8'];
+    const lk = this.tickKey['KeyL']     || this.tickKey['Numpad6'];
+    const ok = this.tickKey['KeyO']     || this.tickKey['Numpad9'];
+
+    // JKL / JKL simultaneously → pop special
+    if (jk && kk && lk) {
+      (this.role as any).pop?.pop?.();
+    } else {
+      // Priority: first key in tickKey wins
+      if (jk) this.role.service.send('attack');
+      else if (kk) this.role.service.send('jump');
+      else if (ik) this.role.service.send('dash');
+      else if (uk) this.role.service.send('bash');
+      else if (lk) this.role.service.send('block');
+      else if (ok) this.role.service.send('launch');
+    }
+
+    // Clear tick keys — they only fire once per press
+    this.tickKey = {};
+
+    // ── Movement direction from WASD (mirrors annihilate exactly) ──────────
+    this.role.direction.set(0, 0);
+    if (this.holdKey['KeyW'] || this.holdKey['ArrowUp'])
+      this.role.direction.add(new THREE.Vector2(0, -1));
+    if (this.holdKey['KeyS'] || this.holdKey['ArrowDown'])
+      this.role.direction.add(new THREE.Vector2(0, 1));
+    if (this.holdKey['KeyA'] || this.holdKey['ArrowLeft'])
+      this.role.direction.add(new THREE.Vector2(-1, 0));
+    if (this.holdKey['KeyD'] || this.holdKey['ArrowRight'])
+      this.role.direction.add(new THREE.Vector2(1, 0));
+
+    this.role.direction.normalize().multiplyScalar(this.role.speed * dt * 60);
+    const dirLenSq = this.role.direction.lengthSq();
+
+    if (this.role.service.hasTag('canMove')) {
+      if (dirLenSq > 0) {
+        // Update facing from movement direction
+        this.role.facing.copy(this.role.direction);
+      }
+      // Always update mesh rotation from facing (even when standing still)
+      this.role.mesh?.rotation.set(
+        0,
+        -this.role.facing.angle() + Math.PI / 2,
+        0
+      );
+
+      // Position-based movement (annihilate move strategy 1)
+      this.role.body.position.x += this.role.direction.x;
+      this.role.body.position.z += this.role.direction.y;
+
+      // Send run/stop to FSM
+      if (dirLenSq > 0) {
+        this.role.service.send('run');
+      } else {
+        this.role.service.send('stop');
+      }
+    }
+  }
+
+  // ── Cleanup ────────────────────────────────────────────────────────────────
+
+  destroy(): void {
+    window.removeEventListener('keydown', this._onKeyDown);
+    window.removeEventListener('keyup',   this._onKeyUp);
+    this._engine.removeFromUpdate(this);
+    if (this._seqKeyTimeout) clearTimeout(this._seqKeyTimeout);
+  }
+}

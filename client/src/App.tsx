@@ -20,6 +20,7 @@ import CloudPage from "@/pages/cloud";
 import Scraping from "@/pages/scraping";
 import Store from "@/pages/store";
 import TowerDefense from "@/pages/tower-defense";
+import TowerDefensePvP from "@/pages/tower-defense-pvp";
 import Avernus3D from "@/pages/avernus-3d";
 import RPGMakerStudio from "@/pages/rpg-maker-studio";
 import Yahaha3DWorld from "@/pages/yahaha-3d-world";
@@ -79,6 +80,7 @@ function Router() {
       <Route path="/scraping" component={withAdminGuard(Scraping)} />
       <Route path="/store" component={Store} />
       <Route path="/tower-defense" component={TowerDefense} />
+      <Route path="/tower-defense-pvp" component={TowerDefensePvP} />
       <Route path="/avernus-3d" component={Avernus3D} />
       <Route path="/rpg-maker-studio" component={RPGMakerStudio} />
       <Route path="/yahaha-3d-world" component={Yahaha3DWorld} />

@@ -1,0 +1,275 @@
+#!/usr/bin/env node
+// fuzzy-match-thumbnails.mjs
+//
+// Phase 2 of asset normalization. For every libretro-thumbnails URL in
+// api/_games.json that still lacks a No-Intro region suffix (i.e. probe-thumbnails
+// couldn't resolve it), fetch the full Named_Boxarts file list from the matching
+// libretro-thumbnails GitHub repo and try to match against title variants:
+//   - en-dash / em-dash -> hyphen
+//   - curly quotes -> straight
+//   - "and" <-> "&"
+//   - article inversion: "The X" -> "X, The" (also A/An)
+//   - colon -> " -"
+//   - case-insensitive compare, punctuation/whitespace stripped for the key.
+// Picks the first 200-bound region in preference order (USA > USA,Europe > Europe
+// > World > Japan,USA > Japan).
+
+import { readFile, writeFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
+import { dirname, resolve } from "node:path";
+
+const __filename = fileURLToPath(import.meta.url);
+const ROOT = resolve(dirname(__filename), "..");
+const GAMES_JSON = resolve(ROOT, "api/_games.json");
+const REGION_PRIORITY = [
+  /^\(USA\)$/i,
+  /^\(USA, Europe\)$/i,
+  /^\(Europe\)$/i,
+  /^\(World\)$/i,
+  /^\(Japan, USA\)$/i,
+  /^\(USA, Japan\)$/i,
+  /^\(Japan\)$/i,
+  /^\(.*\)$/,
+];
+
+function normKey(s) {
+  return s
+    .toLowerCase()
+    .replace(/[\u2013\u2014]/g, "-")
+    .replace(/[\u2018\u2019\u02bc\u02bb]/g, "'")
+    .replace(/[\u201c\u201d]/g, '"')
+    .replace(/\s*&\s*/g, " and ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+const STUDIO_PREFIXES = [
+  /^Disney's\s+/i,
+  /^Disney\s+/i,
+  /^Walt Disney's\s+/i,
+  /^Bram Stoker's\s+/i,
+  /^Tom Clancy's\s+/i,
+  /^Sid Meier's\s+/i,
+  /^Jim Henson's\s+/i,
+  /^Garry Kitchen's\s+/i,
+];
+
+function titleVariants(title) {
+  const base = title
+    .replace(/[\u2013\u2014]/g, "-")
+    .replace(/[\u2018\u2019\u02bc\u02bb]/g, "'")
+    .replace(/[\u201c\u201d]/g, '"');
+  const variants = new Set([base]);
+  const enqueue = (v) => {
+    if (v && !variants.has(v)) variants.add(v);
+  };
+  // article inversion
+  const am = base.match(/^(The|A|An)\s+(.+)$/);
+  if (am) enqueue(`${am[2]}, ${am[1]}`);
+  // and <-> &
+  if (/ and /i.test(base)) enqueue(base.replace(/ and /gi, " & "));
+  if (/ & /.test(base)) enqueue(base.replace(/ & /g, " and "));
+  // colon -> " -"
+  if (base.includes(":")) enqueue(base.replace(/:\s*/g, " - "));
+  // studio prefix strip
+  for (const re of STUDIO_PREFIXES)
+    if (re.test(base)) enqueue(base.replace(re, ""));
+  // recursive combos across what we just enqueued
+  for (const v of [...variants]) {
+    const m = v.match(/^(The|A|An)\s+(.+)$/);
+    if (m) enqueue(`${m[2]}, ${m[1]}`);
+    if (/ and /i.test(v)) enqueue(v.replace(/ and /gi, " & "));
+    if (/ & /.test(v)) enqueue(v.replace(/ & /g, " and "));
+    for (const re of STUDIO_PREFIXES)
+      if (re.test(v)) enqueue(v.replace(re, ""));
+  }
+  return [...variants];
+}
+
+// Compact key drops all whitespace (handles "ClayFighter" <-> "Clay Fighter").
+function compactKey(s) {
+  return normKey(s).replace(/\s+/g, "");
+}
+
+const GH_HEADERS = {
+  "User-Agent": "thumb-fuzzy-match",
+  Accept: "application/vnd.github+json",
+};
+
+async function fetchTree(repo) {
+  // 1) Try a recursive root tree on master/main. If not truncated, filter to Named_Boxarts.
+  for (const ref of ["master", "main"]) {
+    const r = await fetch(
+      `https://api.github.com/repos/libretro-thumbnails/${repo}/git/trees/${ref}?recursive=1`,
+      { headers: GH_HEADERS },
+    );
+    if (!r.ok) continue;
+    const j = await r.json();
+    if (!Array.isArray(j.tree)) continue;
+    const files = j.tree
+      .filter(
+        (t) =>
+          t.type === "blob" &&
+          t.path.startsWith("Named_Boxarts/") &&
+          t.path.endsWith(".png"),
+      )
+      .map((t) => t.path.slice("Named_Boxarts/".length));
+    // If truncated AND we recovered zero boxarts (PSX-style overflow), fall through.
+    if (j.truncated && files.length === 0) break;
+    return { ref, files, truncated: !!j.truncated };
+  }
+  // 2) Fallback: locate Named_Boxarts dir SHA via non-recursive root tree, then fetch its tree.
+  for (const ref of ["master", "main"]) {
+    const r = await fetch(
+      `https://api.github.com/repos/libretro-thumbnails/${repo}/git/trees/${ref}`,
+      { headers: GH_HEADERS },
+    );
+    if (!r.ok) continue;
+    const j = await r.json();
+    if (!Array.isArray(j.tree)) continue;
+    const dir = j.tree.find(
+      (t) => t.type === "tree" && t.path === "Named_Boxarts",
+    );
+    if (!dir) continue;
+    const r2 = await fetch(
+      `https://api.github.com/repos/libretro-thumbnails/${repo}/git/trees/${dir.sha}`,
+      { headers: GH_HEADERS },
+    );
+    if (!r2.ok) continue;
+    const j2 = await r2.json();
+    if (!Array.isArray(j2.tree)) continue;
+    const files = j2.tree
+      .filter((t) => t.type === "blob" && t.path.endsWith(".png"))
+      .map((t) => t.path);
+    return { ref, files, truncated: !!j2.truncated };
+  }
+  return null;
+}
+
+function stripTrailingParens(s) {
+  // Pulls every trailing "(...)" group off the end; returns { base, parens: ["(USA)", "(En,Es)"] }.
+  const parens = [];
+  let cur = s;
+  while (true) {
+    const m = cur.match(/\s*\(([^()]+)\)\s*$/);
+    if (!m) break;
+    parens.unshift(`(${m[1]})`);
+    cur = cur.slice(0, m.index).trimEnd();
+  }
+  return { base: cur, parens };
+}
+
+function buildIndex(files) {
+  // exact: normKey -> entries; compact: compactKey -> entries; sortedKeys for prefix scan.
+  const exact = new Map();
+  const compact = new Map();
+  for (const f of files) {
+    const noExt = f.replace(/\.png$/i, "");
+    const { base, parens } = stripTrailingParens(noExt);
+    const entry = { full: f, parens, base };
+    const k = normKey(base);
+    if (!exact.has(k)) exact.set(k, []);
+    exact.get(k).push(entry);
+    const ck = compactKey(base);
+    if (!compact.has(ck)) compact.set(ck, []);
+    compact.get(ck).push(entry);
+  }
+  const sortedKeys = [...exact.keys()].sort();
+  return { exact, compact, sortedKeys, size: exact.size };
+}
+
+function findPrefixMatch(sortedKeys, exact, prefix) {
+  // Binary search for the first key starting with `prefix + " "`.
+  const needle = prefix + " ";
+  let lo = 0,
+    hi = sortedKeys.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1;
+    if (sortedKeys[mid] < needle) lo = mid + 1;
+    else hi = mid;
+  }
+  if (lo >= sortedKeys.length) return null;
+  if (!sortedKeys[lo].startsWith(needle)) return null;
+  return exact.get(sortedKeys[lo]) || null;
+}
+
+function pickBest(entries) {
+  for (const pat of REGION_PRIORITY) {
+    const hit = entries.find((e) => e.parens.some((p) => pat.test(p)));
+    if (hit) return hit;
+  }
+  return entries[0];
+}
+
+async function main() {
+  const raw = await readFile(GAMES_JSON, "utf8");
+  const games = JSON.parse(raw);
+  const repoRe =
+    /libretro-thumbnails\/([^/@]+)@master\/Named_Boxarts\/(.+?)\.png(?:\?|$)/;
+  const targets = [];
+  for (const g of games) {
+    if (typeof g.thumbnailUrl !== "string") continue;
+    const m = g.thumbnailUrl.match(repoRe);
+    if (!m) continue;
+    const fname = decodeURIComponent(m[2]);
+    if (/\([^)]+\)\s*$/.test(fname)) continue; // already suffixed
+    targets.push({ game: g, repo: m[1], current: fname });
+  }
+  const repos = [...new Set(targets.map((t) => t.repo))];
+  console.log(
+    `Unresolved targets: ${targets.length} across ${repos.length} repos`,
+  );
+
+  const indexes = new Map();
+  for (const repo of repos) {
+    process.stdout.write(`  fetching tree: ${repo} ... `);
+    const tree = await fetchTree(repo);
+    if (!tree) {
+      console.log("FAILED");
+      continue;
+    }
+    const idx = buildIndex(tree.files);
+    indexes.set(repo, idx);
+    console.log(`${tree.files.length} files, ${idx.size} unique titles`);
+  }
+
+  let fixed = 0,
+    missed = 0;
+  const misses = [];
+  for (const { game, repo, current } of targets) {
+    const idx = indexes.get(repo);
+    if (!idx) {
+      missed++;
+      continue;
+    }
+    const variants = titleVariants(current);
+    let hit = null;
+    for (const v of variants) {
+      const entries = idx.get(normKey(v));
+      if (entries && entries.length) {
+        hit = pickBest(entries);
+        break;
+      }
+    }
+    if (!hit) {
+      missed++;
+      misses.push(`${game.platform}/${current}`);
+      continue;
+    }
+    game.thumbnailUrl = `https://cdn.jsdelivr.net/gh/libretro-thumbnails/${repo}@master/Named_Boxarts/${encodeURIComponent(hit.full)}`;
+    fixed++;
+  }
+
+  await writeFile(GAMES_JSON, JSON.stringify(games));
+  console.log(`\nFixed: ${fixed}  Missed: ${missed}`);
+  if (misses.length) {
+    console.log(`\nStill unresolved (sample):`);
+    for (const m of misses.slice(0, 40)) console.log(`  - ${m}`);
+    if (misses.length > 40) console.log(`  ... and ${misses.length - 40} more`);
+  }
+}
+
+main().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});

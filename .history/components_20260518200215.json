@@ -1,0 +1,551 @@
+export type PortalProductStatus = "live" | "planned" | "beta" | "admin";
+export type PortalProductSection = "featured" | "play" | "studio" | "legacy";
+export type PortalProductTag = "pvp" | "pvpve" | "coop" | "solo" | "retro" | "arena" | "mmo" | "rts";
+
+export interface PortalProduct {
+  id: string;
+  name: string;
+  href: string;
+  description: string;
+  status: PortalProductStatus;
+  section: PortalProductSection;
+  external?: boolean;
+  authRequired?: boolean;
+  note?: string;
+  tags?: PortalProductTag[];
+  /** Background image URL for the product card (R2 CDN or local asset) */
+  image?: string;
+}
+
+export const PORTAL_PRODUCTS: PortalProduct[] = [
+  {
+    id: "warlords",
+    name: "Grudge Warlords",
+    href: "https://grudgewarlords.com",
+    description: "The main live product: character creation, combat, islands, professions, and Warlords progression.",
+    status: "live",
+    section: "featured",
+    external: true,
+    authRequired: true,
+    tags: ["mmo", "pvp", "pvpve", "coop"],
+    image: "https://assets.grudge-studio.com/portal/warlords-card.jpg",
+  },
+  {
+    id: "launcher",
+    name: "Grudge Launcher",
+    href: "https://grudgedot-launcher.vercel.app",
+    description: "Single entry launcher for Grudge products, entitlements, updates, and client handoff.",
+    status: "planned",
+    section: "featured",
+    external: true,
+    authRequired: true,
+    note: "Mission-phase target — launcher build in progress",
+    image: "https://assets.grudge-studio.com/portal/launcher-card.jpg",
+  },
+  {
+    id: "dashboard",
+    name: "Studio Dashboard",
+    href: "https://dash.grudge-studio.com",
+    description: "Operations hub for accounts, systems, economy, moderation, and studio administration.",
+    status: "live",
+    section: "featured",
+    external: true,
+    authRequired: true,
+    image: "https://assets.grudge-studio.com/portal/dashboard-card.jpg",
+  },
+  {
+    id: "ai-hub",
+    name: "AI Hub",
+    href: "https://ai.grudge-studio.com",
+    description: "Gruda Legion AI tools, workflows, and automation surfaces for the Grudge ecosystem.",
+    status: "live",
+    section: "featured",
+    external: true,
+    authRequired: true,
+    image: "https://assets.grudge-studio.com/portal/ai-hub-card.jpg",
+  },
+  {
+    id: "wargus",
+    name: "Wargus RTS",
+    href: "/wargus",
+    description: "Realtime strategy gameplay inside the Grudge universe.",
+    status: "beta",
+    section: "play",
+    tags: ["rts", "pvp", "coop"],
+    image: "https://assets.grudge-studio.com/portal/wargus-card.jpg",
+  },
+  {
+    id: "tower-defense",
+    name: "Tower Defense",
+    href: "/tower-defense",
+    description: "Hold lanes, build defenses, and iterate on tactical encounters.",
+    status: "beta",
+    section: "play",
+    tags: ["solo", "coop"],
+    image: "https://assets.grudge-studio.com/portal/tower-defense-card.jpg",
+  },
+  {
+    id: "mage-arena",
+    name: "Mage Arena",
+    href: "/mage-arena",
+    description: "Fast PvP skirmishes in the mage arena playtest surface.",
+    status: "beta",
+    section: "play",
+    tags: ["pvp", "arena"],
+    image: "https://assets.grudge-studio.com/portal/mage-arena-card.jpg",
+  },
+  {
+    id: "avernus-arena",
+    name: "Avernus Arena",
+    href: "/avernus-arena",
+    description: "Dark-fantasy arena combat with PvP and PvPvE rotations.",
+    status: "beta",
+    section: "play",
+    tags: ["pvp", "pvpve", "arena"],
+    image: "https://assets.grudge-studio.com/portal/avernus-card.jpg",
+  },
+  {
+    id: "multiplayer-racing",
+    name: "Overdrive Racing",
+    href: "/overdrive-racing",
+    description: "Multiplayer arcade racing across Grudge tracks.",
+    status: "beta",
+    section: "play",
+    tags: ["pvp", "arena"],
+    image: "https://assets.grudge-studio.com/portal/overdrive-card.jpg",
+  },
+  {
+    id: "annihilate-demo",
+    name: "Annihilate Demo",
+    href: "/annihilate-demo",
+    description: "Co-op wave survival demo inside the Grudge universe.",
+    status: "beta",
+    section: "play",
+    tags: ["coop", "pvpve"],
+    image: "https://assets.grudge-studio.com/portal/annihilate-card.jpg",
+  },
+  {
+    id: "grudge-crafting",
+    name: "Crafting & Professions",
+    href: "https://grudge-crafting.puter.site",
+    description: "Canonical crafting suite — Miner, Forester, Mystic, Chef, Engineer. Auto-harvest, recipes, inventory. Runs on Puter with full cloud sync.",
+    status: "live",
+    section: "featured",
+    external: true,
+    authRequired: true,
+    tags: ["coop"],
+    image: "https://assets.grudge-studio.com/portal/crafting-card.jpg",
+  },
+  {
+    id: "grudge-studio-puter",
+    name: "Grudge Studio",
+    href: "https://grudgewarlords.com",
+    description: "The Grudge Studio hub on Puter — gateway to grudgewarlords.com with character creation and crafting.",
+    status: "live",
+    section: "featured",
+    external: true,
+    authRequired: true,
+    tags: ["mmo"],
+    image: "https://assets.grudge-studio.com/portal/studio-card.jpg",
+  },
+  {
+    id: "catalog",
+    name: "Item Catalog",
+    href: "/catalog",
+    description: "Live item database for all Grudge products — tiers, rarities, crafting workstations, NFT items. Sourced from the launcher on Puter.",
+    status: "live",
+    section: "studio",
+    note: "Live feed",
+  },
+  {
+    id: "my-cloud",
+    name: "My Grudge Cloud",
+    href: "/cloud",
+    description: "Your personal Puter cloud, stylized for Grudge Studio — scenes, games, characters, wallet visuals, and saves across every Grudge tool.",
+    status: "beta",
+    section: "studio",
+    authRequired: true,
+    note: "Puter · Phase 1 shell live",
+  },
+  {
+    id: "asset-store",
+    name: "Asset Store",
+    href: "/asset-store",
+    description: "Browse studio assets, packs, and product-ready content surfaces.",
+    status: "live",
+    section: "studio",
+  },
+  {
+    id: "objectstore",
+    name: "ObjectStore",
+    href: "https://browse.grudge-studio.com",
+    description: "Structured storage, metadata, search, and asset delivery for the whole studio.",
+    status: "live",
+    section: "studio",
+    external: true,
+    note: "API: objectstore.grudge-studio.com",
+  },
+  {
+    id: "retro-library",
+    name: "Retro Game Library",
+    href: "/games",
+    description: "Classic emulator library and retro catalog. Still available, but no longer the primary identity of the portal.",
+    status: "live",
+    section: "legacy",
+    tags: ["retro", "solo"],
+  },
+  // ── Puter / External games ──
+  {
+    id: "betta-warlords",
+    name: "Betta Warlords",
+    href: "https://betta-grudgedev.replit.app/",
+    description: "Completed Nexus-era competitive game with Discord & Puter login. Full PvP gameplay loop.",
+    status: "live",
+    section: "play",
+    external: true,
+    authRequired: true,
+    note: "Replit",
+    tags: ["pvp", "arena"],
+  },
+  {
+    id: "grudge-angler",
+    name: "Grudge Angler",
+    href: "https://puter.com/app/grudge-angler",
+    description: "Warlords-era fishing game with daily Discord tournaments, leaderboards, and seasonal catches.",
+    status: "live",
+    section: "play",
+    external: true,
+    note: "Puter",
+    tags: ["solo", "coop"],
+  },
+  {
+    id: "grudge-studio-app",
+    name: "Grudge Studio",
+    href: "https://puter.com/app/gs",
+    description: "The Grudge Studio hub on Puter — gateway to grudgewarlords.com with character creation and crafting.",
+    status: "live",
+    section: "featured",
+    external: true,
+    authRequired: true,
+    note: "Puter",
+  },
+  {
+    id: "star-rts",
+    name: "Star RTS",
+    href: "/star-rts",
+    description: "Fleet-scale real-time strategy in the Armada universe. Command capital ships and orbital stations.",
+    status: "planned",
+    section: "play",
+    tags: ["rts", "pvp"],
+    image: "/assets/armada/star-rts-card.png",
+  },
+  {
+    id: "survival-game",
+    name: "Survival: Deep Space",
+    href: "/survival",
+    description: "Open-world survival in the Armada era. Scavenge, craft, build outposts, and survive hostile space.",
+    status: "planned",
+    section: "play",
+    tags: ["solo", "coop", "pvpve"],
+    image: "/assets/armada/survival-card.png",
+  },
+  // ── Armada era ──
+  {
+    id: "starway-gruda",
+    name: "Starway Gruda",
+    href: "/starway-gruda",
+    description: "Arcade-style space dogfighter set in the Gruda starways. Ace-style flight, squadron wingmates, and capital-ship strafing runs.",
+    status: "planned",
+    section: "play",
+    tags: ["solo", "coop", "arena"],
+    image: "/assets/armada/starway-gruda-card.png",
+  },
+  {
+    id: "rts-star-armada",
+    name: "RTS Star Armada",
+    href: "/rts-star-armada",
+    description: "Grand-scale fleet RTS in the Armada era. Build shipyards, command armadas across star systems, and dominate the void with strategy.",
+    status: "planned",
+    section: "play",
+    tags: ["rts", "pvp", "coop"],
+    image: "/assets/armada/rts-star-armada-card.png",
+  },
+  {
+    id: "mech-armada",
+    name: "Mech Armada",
+    href: "/mech-armada",
+    description: "Pilot custom war-mechs across deep-space colonies. Loadouts, salvage, third-person action combat with arena and co-op modes.",
+    status: "planned",
+    section: "play",
+    tags: ["solo", "coop", "pvp", "arena"],
+    image: "/assets/armada/mech-armada-card.png",
+  },
+  {
+    id: "nemesis-tcg",
+    name: "Nexus Nemesis TCG",
+    href: "/nemesis-tcg",
+    description: "Trading card game set in the Nexus era. Collect, build decks, and duel in ranked or casual matches.",
+    status: "beta",
+    section: "play",
+    tags: ["pvp", "solo"],
+  },
+  {
+    id: "grudge-forge",
+    name: "Grudge Studio Forge",
+    href: "https://grudge-studio-forge.pages.dev",
+    description: "Game-making IDE for the Grudge ecosystem. Build scenes, edit assets, and deploy games directly from the browser.",
+    status: "live",
+    section: "studio",
+    external: true,
+    authRequired: true,
+    note: "IDE",
+  },
+  {
+    id: "grudge-coder",
+    name: "Grudge Coder",
+    href: "https://coder.grudge-studio.com",
+    description: "Cloud development environment for Grudge services. Code, test, and deploy backend and frontend from anywhere.",
+    status: "live",
+    section: "studio",
+    external: true,
+    authRequired: true,
+    note: "Cloud IDE",
+  },
+  {
+    id: "match-3-grudge",
+    name: "Grudge Match-3",
+    href: "https://molochdagod.github.io/grudge-match-webgl/",
+    description: "Unity-powered match-3 puzzle game with Warlords lore, seasonal events, and crafting material drops.",
+    status: "live",
+    section: "play",
+    external: true,
+    note: "Unity WebGL",
+    tags: ["solo"],
+  },
+];
+
+export const featuredProducts = PORTAL_PRODUCTS.filter((product) => product.section === "featured");
+export const playProducts = PORTAL_PRODUCTS.filter((product) => product.section === "play");
+export const studioProducts = PORTAL_PRODUCTS.filter((product) => product.section === "studio");
+export const legacyProducts = PORTAL_PRODUCTS.filter((product) => product.section === "legacy");
+
+export function productsByTag(tag: PortalProductTag): PortalProduct[] {
+  return PORTAL_PRODUCTS.filter((product) => product.tags?.includes(tag));
+}
+
+export const pvpProducts = PORTAL_PRODUCTS.filter((product) =>
+  product.tags?.some((tag) => tag === "pvp" || tag === "pvpve" || tag === "coop" || tag === "arena"),
+);
+
+export const portalStats = {
+  totalProducts: PORTAL_PRODUCTS.length,
+  live: PORTAL_PRODUCTS.filter((product) => product.status === "live").length,
+  planned: PORTAL_PRODUCTS.filter((product) => product.status === "planned").length,
+  authRequired: PORTAL_PRODUCTS.filter((product) => product.authRequired).length,
+  multiplayer: PORTAL_PRODUCTS.filter((product) => product.tags?.some((tag) => tag === "pvp" || tag === "pvpve" || tag === "coop")).length,
+};
+            }, 150);
+          },
+          playLaunch:           () => { if (this._timeoutLaunch) clearTimeout(this._timeoutLaunch); },
+          playDash:             () => {
+            if (this.oaction['dash']) this.oaction['dash'].timeScale = 2;
+            this.fadeToAction('dash');
+            if (this.direction.lengthSq() > 0) this.facing.copy(this.direction);
+            this.mesh.rotation.y = -this.facing.angle() + Math.PI / 2;
+            this.tmpVec3.set(this.facing.x, 0, this.facing.y).normalize().multiplyScalar(15);
+            this.body.velocity.x = this.tmpVec3.x;
+            this.body.velocity.z = this.tmpVec3.z;
+          },
+          playDashAttack:       () => { if (this.oaction['dashAttack']) { this.oaction['dashAttack'].timeScale = this.attackSpeed; this.fadeToAction('dashAttack'); } },
+          playAirDash:          () => {
+            this.fadeToAction('fall', 0);
+            this.tmpVec3.set(this.facing.x, 0, this.facing.y).normalize().multiplyScalar(11);
+            this.body.velocity.x = this.tmpVec3.x;
+            this.body.velocity.y = 0;
+            this.body.velocity.z = this.tmpVec3.z;
+            this._timeoutAirDash = setTimeout(() => this.service.send('finish'), 500);
+          },
+          exitAirDash:          () => { if (this._timeoutAirDash) clearTimeout(this._timeoutAirDash); this.body.velocity.set(0, 0, 0); },
+          playJump:             () => { this.fadeToAction('jump'); this.body.velocity.set(0, 0, 0); },
+          jump:                 () => { this.body.velocity.y = 5.2; },
+          playAirAttack:        () => { this.oaction['punch'].timeScale = this.attackSpeed; this.fadeToAction('punch', 0); this.body.velocity.y = this.airLiftVelocity; },
+          playAirFist:          () => { this.oaction['fist'].timeScale = this.attackSpeed; this.fadeToAction('fist', 0); this.body.velocity.y = this.airLiftVelocity; },
+          playAirStrike:        () => { this.oaction['strike'].timeScale = this.attackSpeed; this.fadeToAction('strike', 0); this.body.velocity.y = this.airLiftVelocity; },
+          playAirBashStart:     () => { if (this.oaction['jumpAttackStart']) { this.oaction['jumpAttackStart'].timeScale = this.attackSpeed; this.fadeToAction('jumpAttackStart'); } this.body.velocity.y = 20; },
+          playAirBash:          () => { if (this.oaction['jumpAttack']) { this.oaction['jumpAttack'].timeScale = this.attackSpeed * 5; this.fadeToAction('jumpAttack'); } this.body.velocity.y = -this.body.position.y * 3.5; },
+          playHit:              () => { if (this.oaction['hit']) { this.oaction['hit'].timeScale = 3; this.fadeToAction('hit'); } },
+          playWhirlwind:        () => {
+            this.fadeToAction('whirlwind', 0);
+            let t = { v: 0 };
+            const start = Date.now();
+            const dur = this.whirlwindOneTurnDuration * 1000;
+            const base = this.mesh.rotation.y;
+            const step = () => {
+              if (!this.service.matches('whirlwind')) return;
+              const elapsed = (Date.now() - start) % dur;
+              this.mesh.rotation.y = base + (elapsed / dur) * Math.PI * 2;
+              this._tweenWhirlwind = requestAnimationFrame(step);
+            };
+            this._tweenWhirlwind = requestAnimationFrame(step);
+          },
+          exitWhirlwind:        () => { if (this._tweenWhirlwind) cancelAnimationFrame(this._tweenWhirlwind); },
+          playClimb:            () => { this.fadeToAction('idle'); this.body.mass = 0; this.body.velocity.set(0, 0, 0); },
+          exitClimb:            () => { this.body.mass = this.mass; },
+          playAjejebloken:      () => { this.fadeToAction('whirlwind', 0); },
+          exitAjejebloken:      () => { this.setFacing(this.facing.x, this.facing.y); },
+          setMassZero:          () => { this.body.mass = 0; },
+          restoreMass:          () => { this.body.mass = this.mass; },
+        },
+        guards: {
+          notAir: () => !this.isAir,
+        },
+      }
+    );
+  }
+
+  // ── GLTF load ──────────────────────────────────────────────────────────────
+  async load(callback?: () => void): Promise<void> {
+    const engine = this._engine;
+    const gltf   = await this._loadGltf('/models/maria/all.gltf');
+
+    this.gltf = gltf;
+    this.mesh = gltf.scene;
+
+    this.mesh.traverse((child: any) => {
+      if (child.isMesh) {
+        child.castShadow    = true;
+        child.receiveShadow = true;
+        const mat = new THREE.MeshStandardMaterial();
+        const loader = new THREE.TextureLoader();
+        mat.map = loader.load('/models/maria/maria_diffuse.jpg');
+        mat.map.flipY = false;
+        mat.map.colorSpace = THREE.SRGBColorSpace;
+        child.material = mat;
+      }
+    });
+
+    engine.scene.add(this.mesh);
+
+    this.mixer = new THREE.AnimationMixer(this.mesh);
+    gltf.animations.forEach((clip: THREE.AnimationClip) => {
+      this.oaction[clip.name] = this.mixer.clipAction(clip);
+    });
+
+    this._onLoaded('idle');
+    this.setFacing(0, -1);
+    callback?.();
+  }
+}
+
+// ─── React Page ───────────────────────────────────────────────────────────────
+
+export default function AnnihilateDemo() {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [fsmState, setFsmState] = useState('loading');
+  const [loaded,   setLoaded]   = useState(false);
+  const [info,     setInfo]     = useState('Loading GLTF…');
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    // Size canvas to full container before init
+    canvas.style.width  = '100%';
+    canvas.style.height = '100%';
+    canvas.width  = canvas.clientWidth  || window.innerWidth;
+    canvas.height = canvas.clientHeight || window.innerHeight;
+
+    const engine = GrudgeEngine.getInstance();
+    engine.init(canvas);
+    engine.addGround(0x1e1030, 60);
+
+    const maria = new Maria({ position: new THREE.Vector3(-2, 2, 0) });
+    maria.load(() => {
+      const controls = new RoleControls(maria);
+      engine.setRole(maria);
+      engine.start();
+      setLoaded(true);
+      setInfo('Ready');
+
+      maria.service.onTransition((state: string) => {
+        setFsmState(state);
+      });
+
+      // Cleanup stored on maria for teardown
+      (maria as any)._controls = controls;
+    });
+
+    return () => {
+      ((maria as any)._controls as RoleControls | undefined)?.destroy?.();
+      maria.destroy();
+      engine.destroy();
+    };
+  }, []);
+
+  return (
+    <div className="relative w-full h-screen overflow-hidden bg-gray-950">
+      <canvas
+        ref={canvasRef}
+        className="absolute inset-0 w-full h-full"
+      />
+
+      {/* Back button */}
+      <Link href="/super-engine">
+        <Button
+          variant="outline"
+          className="absolute top-4 left-4 z-20 border-purple-500/50 text-purple-300 hover:bg-purple-900/30 bg-black/60"
+        >
+          <ArrowLeft className="w-4 h-4 mr-2" /> Back
+        </Button>
+      </Link>
+
+      {/* Loading overlay */}
+      {!loaded && (
+        <div className="absolute inset-0 z-30 flex items-center justify-center bg-gray-950/90">
+          <div className="text-center">
+            <div className="text-4xl font-black text-purple-400 mb-3 animate-pulse">
+              GRUDGE ENGINE
+            </div>
+            <div className="text-gray-400">Loading Maria GLTF…</div>
+          </div>
+        </div>
+      )}
+
+      {/* HUD */}
+      <div className="absolute top-4 right-4 z-20 space-y-2 text-right">
+        <div className="bg-black/70 px-3 py-1.5 rounded text-xs font-mono text-green-400">
+          State: <span className="text-white">{fsmState}</span>
+        </div>
+        <div className="bg-black/70 px-3 py-1.5 rounded text-xs text-gray-400">
+          {info}
+        </div>
+      </div>
+
+      {/* Controls legend — Grudge standard keymap */}
+      <div className="absolute bottom-4 left-4 z-20 bg-black/70 rounded-lg px-4 py-3 text-xs text-gray-400 space-y-0.5">
+        <div className="text-purple-300 font-bold mb-1">GRUDGE ENGINE — Annihilate Core</div>
+        <ControlRow keys="WASD" label="Move" />
+        <ControlRow keys="LMB" label="Attack (light)" />
+        <ControlRow keys="RMB" label="Attack (heavy) / Bash / Whirlwind" />
+        <ControlRow keys="Space" label="Jump" />
+        <ControlRow keys="Shift" label="Dash" />
+        <ControlRow keys="1" label="Block (hold for combos)" />
+        <ControlRow keys="2" label="Launch (uppercut)" />
+        <ControlRow keys="3" label="Bash (keyboard alt)" />
+        <ControlRow keys="4" label="Pop / Special" />
+        <ControlRow keys="Block + ↓→LMB" label="Hadouken" />
+        <ControlRow keys="Block + →↓→LMB" label="Shoryuken" />
+        <ControlRow keys="Block + ↓←Space" label="Ajejebloken" />
+      </div>
+
+      {/* Feature badges */}
+      {loaded && (
+        <div className="absolute bottom-4 right-4 z-20 flex flex-col gap-1 items-end">
+          {['Three.js WebGL', 'Cannon-ES Physics', 'CharacterFSM', 'GLTF AnimationMixer', 'RoleControls', 'Capsule Body'].map(f => (
+            <Badge key={f} className="bg-purple-900/80 text-purple-200 text-xs">{f}</Badge>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}

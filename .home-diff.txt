@@ -1,0 +1,144 @@
+﻿diff --git a/client/src/pages/home.tsx b/client/src/pages/home.tsx
+index 1e7251b..f3164b7 100644
+--- a/client/src/pages/home.tsx
++++ b/client/src/pages/home.tsx
+@@ -1,4 +1,4 @@
+-import { useState } from "react";
++import React, { useState } from "react";
+ import { Link } from "wouter";
+ import { useQuery } from "@tanstack/react-query";
+ import { Badge } from "@/components/ui/badge";
+@@ -17,6 +17,8 @@ import {
+   type PortalProduct,
+ } from "@/data/portalProducts";
+ import type { Game } from "@shared/schema";
++import { GameCover } from "@/components/game-cover";
++import { EraCarousel } from "@/components/era-carousel";
+ 
+ interface TopGame extends Game {
+   playerCount: number;
+@@ -48,8 +50,31 @@ const statusClasses: Record<string, string> = {
+ 
+ function ProductCard({ product }: { product: PortalProduct }) {
+   const body = (
+-    <div className="h-full fantasy-panel p-5 hover:rune-glow transition-all flex flex-col justify-between">
+-      <div>
++    <div
++      className= "h-full fantasy-panel p-5 hover:rune-glow transition-all flex flex-col justify-between relative overflow-hidden group"
++  style = {
++    product.image ? {
++      backgroundImage: `linear-gradient(to bottom, hsla(225,30%,8%,0.55), hsla(225,30%,6%,0.92)), url(${product.image})`,
++      backgroundSize: "cover",
++      backgroundPosition: "center",
++    } : undefined
++  }
++    >
++    {/* subtle hover brighten on the bg image */ }
++  {
++    product.image && (
++      <div
++          className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
++    style = {{
++      backgroundImage: `linear-gradient(to bottom, hsla(225,30%,8%,0.35), hsla(225,30%,6%,0.85)), url(${product.image})`,
++        backgroundSize: "cover",
++          backgroundPosition: "center",
++          }
++  }
++        />
++      )
++}
++<div className="relative z-10" >
+         <div className="flex items-center justify-between gap-3 mb-3">
+           <h3 className="font-heading text-lg text-[hsl(45,30%,92%)]" style={{ WebkitTextFillColor: "unset" }}>
+             {product.name}
+@@ -72,7 +97,7 @@ function ProductCard({ product }: { product: PortalProduct }) {
+           </div>
+         )}
+       </div>
+-      <div className="mt-5 flex items-center text-sm text-[hsl(43,85%,55%)] font-medium">
++  < div className = "relative z-10 mt-5 flex items-center text-sm text-[hsl(43,85%,55%)] font-medium" >
+         Open product <ArrowUpRight className="w-4 h-4 ml-1" />
+       </div>
+     </div>
+@@ -145,39 +170,10 @@ const ERAS: { key: EraKey; name: string; tagline: string; description: string; i
+     bgImage: "/assets/store/scifi_environment.png",
+     accent: "hsl(200,70%,55%)",
+     accentBorder: "hsl(200,60%,30%)",
+-    productIds: ["star-rts", "survival-game"],
++    productIds: ["starway-gruda", "rts-star-armada", "mech-armada", "star-rts", "survival-game"],
+   },
+ ];
+ 
+-function EraCard({ era, isActive, onClick }: { era: typeof ERAS[number]; isActive: boolean; onClick: () => void }) {
+-  const Icon = era.icon;
+-  return (
+-    <button
+-      onClick={onClick}
+-      className={`relative flex-1 min-w-[200px] rounded-xl overflow-hidden border-2 transition-all duration-300 text-left group ${
+-        isActive
+-          ? "border-current shadow-lg shadow-current/20 scale-[1.02]"
+-          : "border-[hsl(43,60%,30%)]/30 hover:border-[hsl(43,60%,30%)]/60"
+-      }`}
+-      style={{ color: era.accent }}
+-    >
+-      <div className="absolute inset-0 z-0">
+-        <img src={era.bgImage} alt="" className="w-full h-full object-cover" />
+-        <div className={`absolute inset-0 ${
+-          isActive ? "bg-black/50" : "bg-black/70 group-hover:bg-black/55"
+-        } transition-all`} />
+-      </div>
+-      <div className="relative z-10 p-5">
+-        <div className="flex items-center gap-2 mb-2">
+-          <Icon className="w-5 h-5" />
+-          <span className="font-heading text-xl tracking-wide">{era.name}</span>
+-        </div>
+-        <p className="text-xs text-[hsl(45,15%,70%)] font-body">{era.tagline}</p>
+-      </div>
+-    </button>
+-  );
+-}
+-
+ // ΓöÇΓöÇ Featured Live Games carousel ΓöÇΓöÇ
+ const CAROUSEL_GAMES = ["grudge-studio-app", "betta-warlords", "grudge-angler"] as const;
+ 
+@@ -361,14 +357,11 @@ function CompeteSection() {
+                   <Link key={game.id} href={`/play/${game.id}`}>
+                     <div className="fantasy-panel overflow-hidden hover:rune-glow transition cursor-pointer">
+                       <div className="aspect-[3/4] bg-[hsl(225,25%,12%)] relative">
+-                        {game.thumbnailUrl && (
+-                          <img
+-                            src={game.thumbnailUrl}
+-                            alt={game.title}
+-                            className="absolute inset-0 w-full h-full object-cover"
+-                            onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+-                          />
+-                        )}
++    <GameCover
++                          src={ game.thumbnailUrl }
++  alt = { game.title }
++  className = "absolute inset-0 w-full h-full object-cover"
++    />
+                         <div className="absolute top-1 left-1 w-6 h-6 rounded-full bg-[hsl(43,85%,55%)] text-[hsl(225,30%,8%)] font-heading text-xs flex items-center justify-center">
+                           {idx + 1}
+                         </div>
+@@ -445,19 +438,7 @@ export default function Home() {
+           </div>
+ 
+           {/* Era selector cards */}
+-          <div className="flex flex-col sm:flex-row gap-4 mt-8">
+-            {ERAS.map((era) => (
+-              <EraCard
+-                key={era.key}
+-                era={era}
+-                isActive={activeEra === era.key}
+-                onClick={() => {
+-                  setActiveEra(era.key);
+-                  document.getElementById(era.key)?.scrollIntoView({ behavior: "smooth" });
+-                }}
+-              />
+-            ))}
+-          </div>
++<div className="mt-8" > { React.createElement(EraCarousel, { eras: ERAS, activeKey: activeEra, setActiveKey: (k: string) => setActiveEra(k as EraKey) }) } </div>
+ 
+           <div className="flex flex-wrap gap-3 mt-8">
+             <Button className="gilded-button" onClick={() => openAuth({ initialTab: 'signin', reason: 'Sign in to access all Grudge Studio products.' })}>
