@@ -237,13 +237,16 @@ export class RoleControls implements Updatable {
       // Position-based movement (annihilate move strategy 1)
       this.role.body.position.x += this.role.direction.x;
       this.role.body.position.z += this.role.direction.y;
+    }
 
-      // Send run/stop to FSM
-      if (dirLenSq > 0) {
-        this.role.service.send('run');
-      } else {
-        this.role.service.send('stop');
-      }
+    // Send run/stop to FSM — MUST be outside the canMove guard.
+    // idle has no canMove tag; if run is gated behind canMove the
+    // character can never transition idle → run.  (Matches original
+    // annihilate RoleControls.js lines 203-209.)
+    if (dirLenSq > 0) {
+      this.role.service.send('run');
+    } else {
+      this.role.service.send('stop');
     }
   }
 
