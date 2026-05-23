@@ -1,5 +1,6 @@
 import { CharacterStateBase } from './CharacterStateBase';
 import type { BaseCharacter } from '../BaseCharacter';
+import { Idle } from './Idle';
 
 /**
  * Base class for debuff/effect states.
@@ -29,7 +30,6 @@ export class Debuffed extends CharacterStateBase {
   public update(dt: number): void {
     super.update(dt);
     if (this.timer >= this.duration) {
-      const { Idle } = require('./Idle');
       this.character.setState(new Idle(this.character));
     }
   }

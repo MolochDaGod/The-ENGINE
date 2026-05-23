@@ -1,5 +1,7 @@
 import { Debuffed } from './Debuffed';
 import type { BaseCharacter } from '../BaseCharacter';
+import { Blocking } from './Blocking';
+import { MeleeAttack } from './MeleeAttack';
 
 export class Rooted extends Debuffed {
   public tags = ['debuffed', 'rooted', 'combat'];
@@ -13,11 +15,9 @@ export class Rooted extends Debuffed {
   public onInputChange(): void {
     // Can attack/block but NOT move
     if (this.character.inputJustPressed?.('attack')) {
-      const { MeleeAttack } = require('./MeleeAttack');
       this.character.setState(new MeleeAttack(this.character, 0));
     }
     if (this.character.inputJustPressed?.('block')) {
-      const { Blocking } = require('./Blocking');
       this.character.setState(new Blocking(this.character));
     }
   }

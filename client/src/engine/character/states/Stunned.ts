@@ -1,5 +1,6 @@
 import { CharacterStateBase } from './CharacterStateBase';
 import type { BaseCharacter } from '../BaseCharacter';
+import { Idle } from './Idle';
 
 export class Stunned extends CharacterStateBase {
   public tags = ['disabled', 'stunned'];
@@ -16,7 +17,6 @@ export class Stunned extends CharacterStateBase {
   public update(dt: number): void {
     super.update(dt);
     if (this.timer >= this.duration) {
-      const { Idle } = require('./Idle');
       this.character.setState(new Idle(this.character));
     }
   }

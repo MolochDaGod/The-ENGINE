@@ -1,5 +1,8 @@
 import { CharacterStateBase } from './CharacterStateBase';
 import type { BaseCharacter } from '../BaseCharacter';
+import { EndWalk } from './EndWalk';
+import { JumpRunning } from './JumpRunning';
+import { Walk } from './Walk';
 
 export class Sprint extends CharacterStateBase {
   public tags = ['canMove', 'grounded', 'moving', 'sprinting'];
@@ -19,19 +22,16 @@ export class Sprint extends CharacterStateBase {
     super.onInputChange();
 
     if (!this.character.inputIsPressed?.('sprint')) {
-      const { Walk } = require('./Walk');
       this.character.setState(new Walk(this.character));
       return;
     }
 
     if (this.character.inputJustPressed?.('jump')) {
-      const { JumpRunning } = require('./JumpRunning');
       this.character.setState(new JumpRunning(this.character));
       return;
     }
 
     if (this.noDirection()) {
-      const { EndWalk } = require('./EndWalk');
       this.character.setState(new EndWalk(this.character));
     }
   }

@@ -1,5 +1,11 @@
 import { CharacterStateBase } from './CharacterStateBase';
 import type { BaseCharacter } from '../BaseCharacter';
+import { Blocking } from './Blocking';
+import { Dodging } from './Dodging';
+import { Idle } from './Idle';
+import { JumpIdle } from './JumpIdle';
+import { MeleeAttack } from './MeleeAttack';
+import { Sprint } from './Sprint';
 
 /**
  * Combat stance — player faces target, can attack/block/dodge/parry.
@@ -22,7 +28,6 @@ export class CombatIdle extends CharacterStateBase {
 
     // Return to Idle if no combat input for a while
     if (this.timer > this.combatTimeout && this.noDirection()) {
-      const { Idle } = require('./Idle');
       this.character.setState(new Idle(this.character));
     }
   }
@@ -32,28 +37,23 @@ export class CombatIdle extends CharacterStateBase {
     this.timer = 0; // reset timeout on any input
 
     if (this.character.inputJustPressed?.('attack')) {
-      const { MeleeAttack } = require('./MeleeAttack');
       this.character.setState(new MeleeAttack(this.character, 0));
       return;
     }
     if (this.character.inputJustPressed?.('block')) {
-      const { Blocking } = require('./Blocking');
       this.character.setState(new Blocking(this.character));
       return;
     }
     if (this.character.inputJustPressed?.('dash')) {
-      const { Dodging } = require('./Dodging');
       this.character.setState(new Dodging(this.character));
       return;
     }
     if (this.character.inputJustPressed?.('jump')) {
-      const { JumpIdle } = require('./JumpIdle');
       this.character.setState(new JumpIdle(this.character));
       return;
     }
     // Exit combat mode
     if (this.anyDirection() && this.character.inputIsPressed?.('sprint')) {
-      const { Sprint } = require('./Sprint');
       this.character.setState(new Sprint(this.character));
     }
   }

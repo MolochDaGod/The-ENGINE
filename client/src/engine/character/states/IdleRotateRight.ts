@@ -1,5 +1,7 @@
 import { CharacterStateBase } from './CharacterStateBase';
 import type { BaseCharacter } from '../BaseCharacter';
+import { Idle } from './Idle';
+import { Walk } from './Walk';
 
 export class IdleRotateRight extends CharacterStateBase {
   public tags = ['canMove', 'grounded'];
@@ -13,7 +15,6 @@ export class IdleRotateRight extends CharacterStateBase {
   public update(dt: number): void {
     super.update(dt);
     if (this.animationEnded(dt)) {
-      const { Idle } = require('./Idle');
       this.character.setState(new Idle(this.character));
     }
   }
@@ -21,7 +22,6 @@ export class IdleRotateRight extends CharacterStateBase {
   public onInputChange(): void {
     super.onInputChange();
     if (this.anyDirection()) {
-      const { Walk } = require('./Walk');
       this.character.setState(new Walk(this.character));
     }
   }

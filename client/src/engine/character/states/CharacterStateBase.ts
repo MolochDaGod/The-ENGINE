@@ -11,6 +11,17 @@
 import * as THREE from 'three';
 import type { ICharacterState } from './ICharacterState';
 import type { BaseRaceCharacter } from '../BaseCharacter';
+import { DropIdle } from './DropIdle';
+import { DropRolling } from './DropRolling';
+import { DropRunning } from './DropRunning';
+import { Falling } from './Falling';
+import { Sprint } from './Sprint';
+import { StartWalkBackLeft } from './StartWalkBackLeft';
+import { StartWalkBackRight } from './StartWalkBackRight';
+import { StartWalkForward } from './StartWalkForward';
+import { StartWalkLeft } from './StartWalkLeft';
+import { StartWalkRight } from './StartWalkRight';
+import { Walk } from './Walk';
 
 // States accept BaseRaceCharacter (aliased as BaseCharacter for compat)
 type BaseCharacter = BaseRaceCharacter;
@@ -59,7 +70,6 @@ export abstract class CharacterStateBase implements ICharacterState {
   public fallInAir(): void {
     if (this.character.isAir) {
       // Lazy import to avoid circular deps
-      const { Falling } = require('./Falling');
       this.character.setState(new Falling(this.character));
     }
   }
@@ -76,11 +86,6 @@ export abstract class CharacterStateBase implements ICharacterState {
    */
   public setAppropriateDropState(): void {
     const vy = this.character.body.velocity.y;
-    const { DropRolling } = require('./DropRolling');
-    const { DropRunning } = require('./DropRunning');
-    const { DropIdle }    = require('./DropIdle');
-    const { Sprint }      = require('./Sprint');
-    const { Walk }        = require('./Walk');
 
     if (vy < -6) {
       this.character.setState(new DropRolling(this.character));
@@ -111,11 +116,6 @@ export abstract class CharacterStateBase implements ICharacterState {
     );
 
     const range = Math.PI;
-    const { StartWalkBackLeft }  = require('./StartWalkBackLeft');
-    const { StartWalkBackRight } = require('./StartWalkBackRight');
-    const { StartWalkLeft }      = require('./StartWalkLeft');
-    const { StartWalkRight }     = require('./StartWalkRight');
-    const { StartWalkForward }   = require('./StartWalkForward');
 
     if (angle > range * 0.8) {
       this.character.setState(new StartWalkBackLeft(this.character));

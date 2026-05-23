@@ -1,5 +1,7 @@
 import { CharacterStateBase } from './CharacterStateBase';
 import type { BaseCharacter } from '../BaseCharacter';
+import { CombatIdle } from './CombatIdle';
+import { Dodging } from './Dodging';
 
 const COMBO_ANIMS = ['attack_1', 'attack_2', 'attack_3'];
 const COMBO_WINDOW = 0.35; // seconds after anim ends to chain next hit
@@ -34,7 +36,6 @@ export class MeleeAttack extends CharacterStateBase {
         // Brief window to queue next attack
         return;
       } else {
-        const { CombatIdle } = require('./CombatIdle');
         this.character.setState(new CombatIdle(this.character));
       }
     }
@@ -47,7 +48,6 @@ export class MeleeAttack extends CharacterStateBase {
     }
     // Dodge cancel
     if (this.character.inputJustPressed?.('dash')) {
-      const { Dodging } = require('./Dodging');
       this.character.setState(new Dodging(this.character));
     }
   }

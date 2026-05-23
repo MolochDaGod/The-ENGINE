@@ -1,5 +1,8 @@
 import { CharacterStateBase } from './CharacterStateBase';
 import type { BaseCharacter } from '../BaseCharacter';
+import { Idle } from './Idle';
+import { JumpIdle } from './JumpIdle';
+import { StartWalkForward } from './StartWalkForward';
 
 export class DropIdle extends CharacterStateBase {
   public tags = ['grounded'];
@@ -13,7 +16,6 @@ export class DropIdle extends CharacterStateBase {
   public update(dt: number): void {
     super.update(dt);
     if (this.animationEnded(dt)) {
-      const { Idle } = require('./Idle');
       this.character.setState(new Idle(this.character));
     }
     this.fallInAir();
@@ -22,12 +24,10 @@ export class DropIdle extends CharacterStateBase {
   public onInputChange(): void {
     super.onInputChange();
     if (this.character.inputJustPressed?.('jump')) {
-      const { JumpIdle } = require('./JumpIdle');
       this.character.setState(new JumpIdle(this.character));
       return;
     }
     if (this.anyDirection()) {
-      const { StartWalkForward } = require('./StartWalkForward');
       this.character.setState(new StartWalkForward(this.character));
     }
   }

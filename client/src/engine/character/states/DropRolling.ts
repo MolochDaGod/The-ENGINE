@@ -1,5 +1,7 @@
 import { CharacterStateBase } from './CharacterStateBase';
 import type { BaseCharacter } from '../BaseCharacter';
+import { EndWalk } from './EndWalk';
+import { Walk } from './Walk';
 
 export class DropRolling extends CharacterStateBase {
   public tags = ['grounded'];
@@ -14,10 +16,8 @@ export class DropRolling extends CharacterStateBase {
     super.update(dt);
     if (this.animationEnded(dt)) {
       if (this.anyDirection()) {
-        const { Walk } = require('./Walk');
         this.character.setState(new Walk(this.character));
       } else {
-        const { EndWalk } = require('./EndWalk');
         this.character.setState(new EndWalk(this.character));
       }
     }

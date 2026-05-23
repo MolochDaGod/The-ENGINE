@@ -1,5 +1,7 @@
 import { CharacterStateBase } from './CharacterStateBase';
 import type { BaseCharacter } from '../BaseCharacter';
+import { CombatIdle } from './CombatIdle';
+import { Dodging } from './Dodging';
 
 export class RangedAttack extends CharacterStateBase {
   public tags = ['combat', 'canDamage', 'attacking', 'ranged'];
@@ -22,7 +24,6 @@ export class RangedAttack extends CharacterStateBase {
     }
 
     if (this.animationEnded(dt)) {
-      const { CombatIdle } = require('./CombatIdle');
       this.character.setState(new CombatIdle(this.character));
     }
   }
@@ -30,7 +31,6 @@ export class RangedAttack extends CharacterStateBase {
   public onInputChange(): void {
     super.onInputChange();
     if (this.character.inputJustPressed?.('dash')) {
-      const { Dodging } = require('./Dodging');
       this.character.setState(new Dodging(this.character));
     }
   }

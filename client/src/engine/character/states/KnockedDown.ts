@@ -1,5 +1,6 @@
 import { CharacterStateBase } from './CharacterStateBase';
 import type { BaseCharacter } from '../BaseCharacter';
+import { Idle } from './Idle';
 
 export class KnockedDown extends CharacterStateBase {
   public tags = ['disabled', 'knockedDown'];
@@ -24,7 +25,6 @@ export class KnockedDown extends CharacterStateBase {
 
     // After getup anim, return to idle
     if (this.getupStarted && this.animationEnded(dt)) {
-      const { Idle } = require('./Idle');
       this.character.setState(new Idle(this.character));
     }
   }

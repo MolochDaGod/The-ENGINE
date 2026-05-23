@@ -1,5 +1,6 @@
 import { CharacterStateBase } from './CharacterStateBase';
 import type { BaseCharacter } from '../BaseCharacter';
+import { Idle } from './Idle';
 
 export class Mounting extends CharacterStateBase {
   public tags = ['mounting'];
@@ -16,7 +17,6 @@ export class Mounting extends CharacterStateBase {
     if (this.animationEnded(dt)) {
       // Mounted state would be handled by the vehicle/mount system
       // For now, go back to idle (mount system overrides this)
-      const { Idle } = require('./Idle');
       this.character.setState(new Idle(this.character));
     }
   }

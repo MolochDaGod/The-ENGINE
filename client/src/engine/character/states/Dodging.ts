@@ -1,5 +1,6 @@
 import { CharacterStateBase } from './CharacterStateBase';
 import type { BaseCharacter } from '../BaseCharacter';
+import { CombatIdle } from './CombatIdle';
 
 const IFRAMES_DURATION = 0.3; // seconds of invulnerability
 
@@ -28,7 +29,6 @@ export class Dodging extends CharacterStateBase {
     }
 
     if (this.animationEnded(dt)) {
-      const { CombatIdle } = require('./CombatIdle');
       this.character.setState(new CombatIdle(this.character));
     }
 

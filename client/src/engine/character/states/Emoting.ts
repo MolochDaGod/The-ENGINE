@@ -1,5 +1,6 @@
 import { CharacterStateBase } from './CharacterStateBase';
 import type { BaseCharacter } from '../BaseCharacter';
+import { Idle } from './Idle';
 
 export class Emoting extends CharacterStateBase {
   public tags = ['emoting', 'grounded'];
@@ -16,7 +17,6 @@ export class Emoting extends CharacterStateBase {
   public update(dt: number): void {
     super.update(dt);
     if (this.animationEnded(dt)) {
-      const { Idle } = require('./Idle');
       this.character.setState(new Idle(this.character));
     }
   }
@@ -25,7 +25,6 @@ export class Emoting extends CharacterStateBase {
     // Any movement or combat input cancels emote
     if (this.anyDirection() || this.character.inputJustPressed?.('jump') ||
         this.character.inputJustPressed?.('attack')) {
-      const { Idle } = require('./Idle');
       this.character.setState(new Idle(this.character));
     }
   }

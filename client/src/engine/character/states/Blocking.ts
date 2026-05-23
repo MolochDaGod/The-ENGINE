@@ -1,5 +1,8 @@
 import { CharacterStateBase } from './CharacterStateBase';
 import type { BaseCharacter } from '../BaseCharacter';
+import { CombatIdle } from './CombatIdle';
+import { Dodging } from './Dodging';
+import { Parrying } from './Parrying';
 
 export class Blocking extends CharacterStateBase {
   public tags = ['combat', 'blocking', 'grounded'];
@@ -23,20 +26,17 @@ export class Blocking extends CharacterStateBase {
 
     // Release block
     if (!this.character.inputIsPressed?.('block')) {
-      const { CombatIdle } = require('./CombatIdle');
       this.character.setState(new CombatIdle(this.character));
       return;
     }
 
     // Perfect parry attempt
     if (this.character.inputJustPressed?.('attack')) {
-      const { Parrying } = require('./Parrying');
       this.character.setState(new Parrying(this.character));
       return;
     }
 
     if (this.character.inputJustPressed?.('dash')) {
-      const { Dodging } = require('./Dodging');
       this.character.setState(new Dodging(this.character));
     }
   }

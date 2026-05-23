@@ -1,5 +1,6 @@
 import { Debuffed } from './Debuffed';
 import type { BaseCharacter } from '../BaseCharacter';
+import { Walk } from './Walk';
 
 export class Silenced extends Debuffed {
   public tags = ['debuffed', 'silenced', 'canMove'];
@@ -13,7 +14,6 @@ export class Silenced extends Debuffed {
   public onInputChange(): void {
     // Can move but cannot use abilities/spells
     if (this.anyDirection()) {
-      const { Walk } = require('./Walk');
       this.character.setState(new Walk(this.character));
     }
     // Attack/block/dash are blocked — silence prevents all abilities

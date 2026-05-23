@@ -1,5 +1,6 @@
 import { CharacterStateBase } from './CharacterStateBase';
 import type { BaseCharacter } from '../BaseCharacter';
+import { Falling } from './Falling';
 
 export class JumpIdle extends CharacterStateBase {
   public tags = ['airborne'];
@@ -26,7 +27,6 @@ export class JumpIdle extends CharacterStateBase {
     } else if (this.timer > 0.3 && !this.character.isAir) {
       this.setAppropriateDropState();
     } else if (this.animationEnded(dt)) {
-      const { Falling } = require('./Falling');
       this.character.setState(new Falling(this.character));
     }
   }

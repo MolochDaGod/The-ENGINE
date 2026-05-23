@@ -1,5 +1,9 @@
 import { CharacterStateBase } from './CharacterStateBase';
 import type { BaseCharacter } from '../BaseCharacter';
+import { Idle } from './Idle';
+import { JumpIdle } from './JumpIdle';
+import { Sprint } from './Sprint';
+import { Walk } from './Walk';
 
 export class EndWalk extends CharacterStateBase {
   public tags = ['canMove', 'grounded'];
@@ -14,7 +18,6 @@ export class EndWalk extends CharacterStateBase {
     super.update(dt);
 
     if (this.animationEnded(dt)) {
-      const { Idle } = require('./Idle');
       this.character.setState(new Idle(this.character));
     }
 
@@ -25,17 +28,14 @@ export class EndWalk extends CharacterStateBase {
     super.onInputChange();
 
     if (this.character.inputJustPressed?.('jump')) {
-      const { JumpIdle } = require('./JumpIdle');
       this.character.setState(new JumpIdle(this.character));
       return;
     }
 
     if (this.anyDirection()) {
       if (this.character.inputIsPressed?.('sprint')) {
-        const { Sprint } = require('./Sprint');
         this.character.setState(new Sprint(this.character));
       } else {
-        const { Walk } = require('./Walk');
         this.character.setState(new Walk(this.character));
       }
     }

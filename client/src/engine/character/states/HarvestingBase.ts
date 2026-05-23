@@ -1,5 +1,6 @@
 import { CharacterStateBase } from './CharacterStateBase';
 import type { BaseCharacter } from '../BaseCharacter';
+import { Idle } from './Idle';
 
 /**
  * Base for all 5 harvesting professions.
@@ -29,7 +30,6 @@ export class HarvestingBase extends CharacterStateBase {
     if (this.progress >= 1) {
       // Yield resources — external system listens via FSM event
       this.character.service.send('harvestComplete', { profession: this.profession });
-      const { Idle } = require('./Idle');
       this.character.setState(new Idle(this.character));
     }
   }
@@ -38,7 +38,6 @@ export class HarvestingBase extends CharacterStateBase {
     // Any movement cancels harvesting
     if (this.anyDirection() || this.character.inputJustPressed?.('jump')) {
       this.character.service.send('harvestCancel', { profession: this.profession });
-      const { Idle } = require('./Idle');
       this.character.setState(new Idle(this.character));
     }
   }

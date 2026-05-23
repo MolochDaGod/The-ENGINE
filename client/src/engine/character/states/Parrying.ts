@@ -1,5 +1,6 @@
 import { CharacterStateBase } from './CharacterStateBase';
 import type { BaseCharacter } from '../BaseCharacter';
+import { CombatIdle } from './CombatIdle';
 
 const PARRY_WINDOW = 0.2; // seconds of active parry frames
 
@@ -23,7 +24,6 @@ export class Parrying extends CharacterStateBase {
     }
 
     if (this.animationEnded(dt)) {
-      const { CombatIdle } = require('./CombatIdle');
       this.character.setState(new CombatIdle(this.character));
     }
   }

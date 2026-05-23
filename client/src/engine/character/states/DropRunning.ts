@@ -1,5 +1,8 @@
 import { CharacterStateBase } from './CharacterStateBase';
 import type { BaseCharacter } from '../BaseCharacter';
+import { EndWalk } from './EndWalk';
+import { JumpRunning } from './JumpRunning';
+import { Walk } from './Walk';
 
 export class DropRunning extends CharacterStateBase {
   public tags = ['canMove', 'grounded', 'moving'];
@@ -13,7 +16,6 @@ export class DropRunning extends CharacterStateBase {
   public update(dt: number): void {
     super.update(dt);
     if (this.animationEnded(dt)) {
-      const { Walk } = require('./Walk');
       this.character.setState(new Walk(this.character));
     }
   }
@@ -21,12 +23,10 @@ export class DropRunning extends CharacterStateBase {
   public onInputChange(): void {
     super.onInputChange();
     if (this.noDirection()) {
-      const { EndWalk } = require('./EndWalk');
       this.character.setState(new EndWalk(this.character));
       return;
     }
     if (this.character.inputJustPressed?.('jump')) {
-      const { JumpRunning } = require('./JumpRunning');
       this.character.setState(new JumpRunning(this.character));
     }
   }
