@@ -3451,8 +3451,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // HEALTH CHECK (used by Railway, Docker, monitoring)
   // ═══════════════════════════════════════════════════════════════
 
-  app.get("/api/health", (_req, res) => {
-    res.json({ status: "ok", ts: Date.now(), env: process.env.NODE_ENV || "unknown" });
+  app.get("/api/health", async (_req, res) => {
+    const mem = process.memoryUsage();
+    let dbStatus = "unknown";
+    try {
+      await db.execute(sql`SELECT 1`);
+      dbStatus = "connected";
+    } catch (e: any) {
+      dbStatus = `error: ${(e.message || "").slice(0, 80)}`;
+    }
+    res.json({
+      status: dbStatus === "connected" ? "healthy" : "degraded",
+      ts: Date.now(),
+      env: process.env.NODE_ENV || "unknown",
+      uptime: Math.round(process.uptime()),
+      database: dbStatus,
+      memory: {
+        rss: Math.round(mem.rss / 1024 / 1024),
+        heap: Math.round(mem.heapUsed / 1024 / 1024),
+      },
+    });
   });
 
   // Fleet health (admin)

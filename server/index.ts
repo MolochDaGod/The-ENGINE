@@ -1,44 +1,69 @@
 import express, { type Request, Response, NextFunction } from "express";
+import compression from "compression";
+import helmet from "helmet";
+import cors from "cors";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 
 const app = express();
-const allowedOrigins = (process.env.CORS_ORIGINS || "https://grudge-studio.com,http://localhost:5173")
+const isProd = process.env.NODE_ENV === "production";
+
+const allowedOrigins = (process.env.CORS_ORIGINS || [
+  "https://grudge-studio.com",
+  "https://grudgewarlords.com",
+  "https://client.grudge-studio.com",
+  "https://dash.grudge-studio.com",
+  "https://nexus-nemesis-game.vercel.app",
+  "https://the-engine.vercel.app",
+  "http://localhost:5173",
+  "http://localhost:3000",
+].join(","))
   .split(",")
   .map((origin) => origin.trim())
   .filter(Boolean);
 
+// ── Trust proxy (Railway / Vercel) ─────────────────────────────
+if (isProd) app.set("trust proxy", 1);
+
+// ── Compression — gzip all responses (huge win for 3D game assets)
+app.use(compression());
+
+// ── Security headers via helmet ────────────────────────────────
+app.use(helmet({
+  contentSecurityPolicy: false,          // managed per-route by the game
+  crossOriginEmbedderPolicy: false,      // required for SharedArrayBuffer / game workers
+  crossOriginResourcePolicy: { policy: "cross-origin" },  // allow CDN asset loading
+}));
+
+// ── CORS ────────────────────────────────────────────────────────
+app.use(cors({
+  origin: (origin, cb) => {
+    if (!origin) return cb(null, true); // same-origin / server-to-server
+    if (
+      allowedOrigins.includes(origin) ||
+      origin.includes("puter.com") ||
+      origin.includes("puter.site") ||
+      /^https:\/\/.*\.vercel\.app$/.test(origin) ||
+      origin.startsWith("http://localhost:")
+    ) return cb(null, true);
+    cb(null, false);
+  },
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+}));
+
 // ── Path alias: /auth/* → /api/auth/* ──────────────────────────
-// id.grudge-studio.com serves auth routes without the /api/ prefix
-// e.g. id.grudge-studio.com/auth/github/callback
 app.use((req, _res, next) => {
   if (req.url.startsWith("/auth/")) req.url = "/api" + req.url;
   next();
 });
 
 // ── Favicon ────────────────────────────────────────────────────
-// Browsers always request /favicon.ico regardless of <link> tags.
-// Redirect to favicon.png so they stop getting an HTML response.
 app.get("/favicon.ico", (_req, res) => res.redirect(301, "/favicon.png"));
 
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
-  if (origin && allowedOrigins.includes(origin)) {
-    res.setHeader("Access-Control-Allow-Origin", origin);
-    res.setHeader("Vary", "Origin");
-    res.setHeader("Access-Control-Allow-Credentials", "true");
-    res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
-  }
-
-  if (req.method === "OPTIONS") {
-    return res.sendStatus(204);
-  }
-
-  next();
-});
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: false, limit: "10mb" }));
 
 app.use((req, res, next) => {
   const start = Date.now();

@@ -17,6 +17,16 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
+    chunkSizeWarningLimit: 1500,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          three: ["three"],
+          cannon: ["cannon-es"],
+          vendor: ["react", "react-dom", "wouter", "@tanstack/react-query"],
+        },
+      },
+    },
   },
   server: {
     fs: {
