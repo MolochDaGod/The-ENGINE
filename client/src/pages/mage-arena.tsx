@@ -334,10 +334,16 @@ export default function MageArena() {
       wsRef.current.send(JSON.stringify({ t: "cast", qi: qiMap[abilityKey], tx, ty }));
     }
 
+    // Mana restored per basic hit (projectile hits grant mana in the projectile loop)
+    const BASIC_MANA_ON_HIT = g.heroId === "death_mage" ? 12
+      : g.heroId === "orc_shaman" ? 10
+      : g.heroId === "holy_paladin" ? 8
+      : 6; // stone_guardian
+
     // ── Death Mage ──
     if (g.heroId === "death_mage") {
       if (abilityKey === "basic") {
-        g.projectiles.push({ id: pid, x: p.x, y: p.y, vx: nx * 14, vy: ny * 14, radius: 7, color: "#d355e8", damage: 30, ownerId: "local", life: 60 });
+        g.projectiles.push({ id: pid, x: p.x, y: p.y, vx: nx * 14, vy: ny * 14, radius: 7, color: "#d355e8", damage: 30, ownerId: "local", life: 60, _manaOnHit: BASIC_MANA_ON_HIT } as any);
       } else if (abilityKey === "q") {
         // Soul Drain: AOE around player, heal
         g.enemies.forEach(e => {
@@ -364,12 +370,14 @@ export default function MageArena() {
     // ── Holy Paladin ──
     if (g.heroId === "holy_paladin") {
       if (abilityKey === "basic") {
+        let meleeHits = 0;
         g.enemies.forEach(e => {
           const d = Math.hypot(e.x - p.x, e.y - p.y);
           const aToE = Math.atan2(e.y - p.y, e.x - p.x);
           const diff = Math.abs(aToE - p.angle);
-          if (d < 95 && diff < 1.0) e.health -= 50;
+          if (d < 95 && diff < 1.0) { e.health -= 50; meleeHits++; }
         });
+        if (meleeHits > 0) p.mana = Math.min(p.maxMana, p.mana + BASIC_MANA_ON_HIT * meleeHits);
         g.effects.push({ id: pid, x: p.x, y: p.y, radius: 0, maxRadius: 95, color: "#fff176", life: 12, maxLife: 12, type: "flash" });
       } else if (abilityKey === "q") {
         p.shielded = true;
@@ -390,7 +398,7 @@ export default function MageArena() {
     // ── Orc Shaman ──
     if (g.heroId === "orc_shaman") {
       if (abilityKey === "basic") {
-        g.projectiles.push({ id: pid, x: p.x, y: p.y, vx: nx * 13, vy: ny * 13, radius: 6, color: "#a8ff3e", damage: 28, ownerId: "local", life: 55 });
+        g.projectiles.push({ id: pid, x: p.x, y: p.y, vx: nx * 13, vy: ny * 13, radius: 6, color: "#a8ff3e", damage: 28, ownerId: "local", life: 55, _manaOnHit: BASIC_MANA_ON_HIT } as any);
       } else if (abilityKey === "q") {
         g.enemies.forEach(e => { if (Math.hypot(e.x - p.x, e.y - p.y) < 190) { e.health -= 55; e.stunTimer = 90; } });
         g.effects.push({ id: pid, x: p.x, y: p.y, radius: 0, maxRadius: 190, color: "#82e0aa", life: 22, maxLife: 22, type: "ring" });
@@ -412,12 +420,14 @@ export default function MageArena() {
     // ── Stone Guardian ──
     if (g.heroId === "stone_guardian") {
       if (abilityKey === "basic") {
+        let meleeHits = 0;
         g.enemies.forEach(e => {
           const d = Math.hypot(e.x - p.x, e.y - p.y);
           const aToE = Math.atan2(e.y - p.y, e.x - p.x);
           const diff = Math.abs(aToE - p.angle);
-          if (d < 110 && diff < 1.1) e.health -= 60;
+          if (d < 110 && diff < 1.1) { e.health -= 60; meleeHits++; }
         });
+        if (meleeHits > 0) p.mana = Math.min(p.maxMana, p.mana + BASIC_MANA_ON_HIT * meleeHits);
         g.effects.push({ id: pid, x: p.x, y: p.y, radius: 0, maxRadius: 110, color: "#bdc3c7", life: 14, maxLife: 14, type: "flash" });
       } else if (abilityKey === "q") {
         p.stoneHardened = true;
@@ -509,9 +519,9 @@ export default function MageArena() {
       if (p.shieldTimer > 0) { p.shieldTimer--; if (p.shieldTimer === 0) p.shielded = false; }
       if (p.hardSkinTimer > 0) { p.hardSkinTimer--; if (p.hardSkinTimer === 0) p.stoneHardened = false; }
 
-      // ── Mana regen ──
+      // ── Mana regen (slow passive — basic attacks are the primary source) ──
       g.manaRegen++;
-      if (g.manaRegen > 40) { p.mana = Math.min(p.maxMana, p.mana + 1); g.manaRegen = 0; }
+      if (g.manaRegen > 90) { p.mana = Math.min(p.maxMana, p.mana + 1); g.manaRegen = 0; }
 
       // ── Enemy update (solo/PvE host) ──
       const isEnemyHost = g.mode === "solo" || (g.mode === "pve" && g.isHost);
@@ -628,6 +638,11 @@ export default function MageArena() {
             const e = g.enemies[j];
             if (Math.hypot(proj.x - e.x, proj.y - e.y) < proj.radius + 20) {
               e.health -= proj.damage;
+              // Mana on hit (basic attacks restore mana)
+              const manaGain = (proj as any)._manaOnHit;
+              if (manaGain && proj.ownerId === "local") {
+                p.mana = Math.min(p.maxMana, p.mana + manaGain);
+              }
               // Knockback + hitstun on projectile hit
               const kbForce = proj.radius > 12 ? 12 : 8; // heavier projectiles push more
               const pdx = e.x - proj.x, pdy = e.y - proj.y;
