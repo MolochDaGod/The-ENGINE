@@ -1,6 +1,6 @@
 # Grudge Studio — Architecture & Operations Guide
 
-> **Last updated**: 2026-05-08
+> **Last updated**: 2026-05-25
 > **Owner**: Racalvin The Pirate King
 > **Canonical backend**: The-ENGINE on Railway (`the-engine.up.railway.app`)
 
@@ -376,9 +376,55 @@ To deploy the Puter app:
 1. Upload `deploy/puter-app/index.html` to Puter FS as `index.html` in the grudgestudio-2 site folder
 2. The app auto-discovers the player's session from the `.grudge-studio.com` cookie or Puter SSO
 
-## 14. Production Verification Log (2026-05-08)
+## 14. Production Verification Log
 
-Full end-to-end verification after commit `35c5faf`:
+### 2026-05-25 — Full deployment + integration test (commit `3bf3f4a`)
+
+**Deployment status** — 12 services tested, all green:
+
+| Service | URL | HTTP |
+|---------|-----|------|
+| ENGINE Vercel | the-engine.vercel.app | ✅ 200 |
+| GrudgeWarlords | grudgewarlords.com | ✅ 200 |
+| GrudgeWarlords /wallet | grudgewarlords.com/wallet | ✅ 200 |
+| GrudgeWarlords API | /api/health | ✅ healthy, DB connected |
+| Client Hub | client.grudge-studio.com | ✅ 200 |
+| Nexus Nemesis (Vercel) | nexus-nemesis-game.vercel.app | ✅ 200 |
+| Nexus Nemesis (Railway) | /api/health | ✅ healthy, DB connected |
+| Grudge Arena | grudge-arena.vercel.app | ✅ 200 |
+| Dungeon Crawler | dungeon-crawler-quest.vercel.app | ✅ 200 |
+| ObjectStore | molochdagod.github.io/ObjectStore | ✅ 200 |
+| Fleet Map | fleet.grudge-studio.com | ✅ 200 |
+| Match-3 WebGL | molochdagod.github.io/grudge-match-webgl | ✅ 200 |
+
+**Backend health:**
+- GrudgeWarlords: `healthy`, DB `connected`, 105MB RSS, 35MB heap, uptime 722s
+- Nexus Nemesis: `healthy`, DB `connected`, 0 socket connections
+- Vercel→Railway API proxy: working (Nexus Nemesis)
+
+**E2E integration test:**
+
+| Test | Result |
+|------|--------|
+| Guest auth (`POST /api/auth/guest`) | ✅ Created user, Grudge ID assigned, 0 GBUX |
+| Auth guard (`GET /api/auth/me` no cookie) | ✅ 401 |
+| Wallet endpoints (no session) | ✅ All return 401 (auth-gated) |
+| Game library (`GET /api/games`) | ✅ 1360+ games, embed URLs correct per platform |
+| GrudaChain status | ✅ Service available |
+
+**Production hardening applied this session:**
+- Added `compression` middleware (gzip for 3D assets)
+- Added `helmet` security headers
+- Replaced manual CORS with `cors` package
+- Enhanced `/api/health` with DB probe (3s timeout), uptime, memory metrics
+- Vercel config: `build:client` script, `--legacy-peer-deps`, asset cache headers
+- Vite: manual chunks (three/cannon/vendor), 1500KB chunk warning limit
+
+**Nexus Nemesis fix:** Restored missing `QueryClientProvider` + `AuthProvider` wrappers in App.tsx (all queries and auth were broken).
+
+---
+
+### 2026-05-08 — Initial verification (commit `35c5faf`)
 
 | Endpoint | Method | Expected | Actual | Status |
 |----------|--------|----------|--------|--------|
