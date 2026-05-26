@@ -7,6 +7,7 @@ import grudgeLogo from "@assets/uXpJmRe_1773828784729.png";
 import { useAuth } from "@/components/auth-provider";
 import { useAuthModal } from "@/components/auth-modal";
 import { useGrudgePanel } from "@/components/grudge-panel";
+import { useLaunchNav } from "@/hooks/useLaunchNav";
 import {
   featuredProducts,
   legacyProducts,
@@ -23,6 +24,8 @@ const statusClasses: Record<string, string> = {
 };
 
 function ProductMenuRow({ product, onNavigate }: { product: PortalProduct; onNavigate: () => void }) {
+  const { navigateExternal } = useLaunchNav();
+
   const content = (
     <div className="flex items-start justify-between gap-3 p-3 rounded-lg border border-[hsl(43,60%,30%)]/20 hover:border-[hsl(43,60%,30%)]/40 hover:bg-[hsl(225,25%,12%)] transition-colors">
       <div className="min-w-0">
@@ -37,6 +40,26 @@ function ProductMenuRow({ product, onNavigate }: { product: PortalProduct; onNav
   );
 
   if (product.external) {
+  if (product.authRequired) {
+    return (
+      <div
+          role= "link"
+    tabIndex = { 0}
+    className = "cursor-pointer"
+    onClick = {() => { onNavigate(); navigateExternal(product.href, true); }
+  }
+  onKeyDown = {(e) => {
+    if (e.key === "Enter") {
+      onNavigate();
+      navigateExternal(product.href, true);
+    }
+  }
+}
+        >
+  { content }
+  </div>
+      );
+    }
     return (
       <a href={product.href} target="_blank" rel="noopener noreferrer" onClick={onNavigate}>
         {content}
@@ -57,13 +80,14 @@ export default function Header() {
   const { player, logout } = useAuth();
   const { open: openAuthModal } = useAuthModal();
   const { toggle: togglePanel } = useGrudgePanel();
+  const { navigateExternal } = useLaunchNav();
 
   useEffect(() => {
     setMenuOpen(false);
   }, [location]);
 
   const navLinks = [
-    { name: "Warlords", href: "https://grudgewarlords.com", icon: Swords, external: true },
+    { name: "Warlords", href: "https://grudgewarlords.com", icon: Swords, external: true, authRequired: true },
     { name: "Nexus", href: "/#products", icon: Layers3 },
     { name: "Armada", href: "/#play", icon: Flame },
     { name: "Compete", href: "/leaderboards", icon: Trophy },
@@ -98,6 +122,7 @@ export default function Header() {
             <nav className="hidden md:flex items-center gap-6">
               {navLinks.map((link) => {
                 const isExternal = "external" in link && link.external;
+                const isAuthRequired = "authRequired" in link && link.authRequired;
                 const active =
                   isExternal
                     ? false
@@ -110,6 +135,18 @@ export default function Header() {
                           : location === link.href;
                 const className = `transition-colors font-body text-sm ${active ? "text-[hsl(43,85%,55%)]" : "text-[hsl(45,30%,90%)] hover:text-[hsl(43,85%,55%)]"}`;
                 if (isExternal) {
+                  if (isAuthRequired) {
+                    return (
+                      <button
+                        key= { link.name }
+                    onClick = {() => navigateExternal(link.href, true)
+                  }
+                  className = { className }
+                    >
+                    { link.name }
+                    </button>
+                    );
+            }
                   return (
                     <a key={link.name} href={link.href} target="_blank" rel="noopener noreferrer" className={className}>
                       {link.name}

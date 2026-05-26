@@ -81,17 +81,36 @@ export function verifyLaunchToken(token: string): LaunchTokenClaims | null {
 /** Origins allowed to host the modal / consume launch tokens. Defaults to CORS_ORIGINS. */
 export function allowedAuthOrigins(): string[] {
   const source = process.env.AUTH_ALLOWED_ORIGINS || process.env.CORS_ORIGINS || "";
-  return source
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
+  if (source) {
+    return source
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }
+  // Fall back to the same hardcoded defaults used by the CORS middleware in index.ts
+  return [
+    "https://grudge-studio.com",
+    "https://grudgewarlords.com",
+    "https://client.grudge-studio.com",
+    "https://dash.grudge-studio.com",
+    "https://ai.grudge-studio.com",
+    "https://nexus-nemesis-game.vercel.app",
+    "https://the-engine.vercel.app",
+    "http://localhost:5173",
+    "http://localhost:3000",
+  ];
 }
 
 export function isOriginAllowed(origin: string | undefined | null): boolean {
   if (!origin) return false;
   const list = allowedAuthOrigins();
-  if (list.length === 0) return false;
-  return list.includes(origin);
+  if (list.includes(origin)) return true;
+  // Puter-hosted apps and Vercel preview deployments are always allowlisted for
+  // launch-token exchange (same policy as the CORS middleware in index.ts).
+  if (origin.includes("puter.com") || origin.includes("puter.site")) return true;
+  if (/^https:\/\/.*\.vercel\.app$/.test(origin)) return true;
+  if (origin.startsWith("http://localhost:")) return true;
+  return false;
 }
 
 // ── Constants ────────────────────────────────────────────────────

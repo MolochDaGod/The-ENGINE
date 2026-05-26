@@ -17,3 +17,5 @@ The-ENGINE/
 /target
 
 .vercel
+.vscode/
+.history/

@@ -10,8 +10,9 @@
  *   LMB  (Mouse0)           — light attack       (FSM: attack / keyJUp)
  *   RMB  (Mouse2)           — heavy attack/bash  (FSM: bash   / keyUUp)
  *   Space                   — jump               (FSM: jump)
- *   Shift (L/R)             — dash               (FSM: dash)
- *   1                       — block  (hold)      (FSM: block  / keyLUp)
+ *   Shift (L/R)             — dash / dodge       (FSM: dash)
+ *   Ctrl  (L/R, hold)       — block              (FSM: block  / keyLUp)
+ *   1                       — dash attack        (FSM: dashAttack)
  *   2                       — launch (uppercut)  (FSM: launch / keyOUp)
  *   3                       — bash (kbd-only)    (FSM: bash   / keyUUp)
  *   4                       — pop / special      (calls role.pop.pop())
@@ -21,11 +22,10 @@
  *   →↓→LMB  → shoryuken
  *   ↓←Space → ajejebloken
  *
- * Movement uses position-based approach (body.position += direction)
- * which avoids the issues with velocity-based movement noted in Annihilate.
+ * Movement uses velocity-based approach (body.velocity) so Cannon-ES
+ * resolves slope/wall/terrain contacts and gravity is preserved.
  */
 
-import * as THREE from 'three';
 import { BaseCharacter } from './BaseCharacter';
 import { GrudgeEngine, Updatable } from '../core/GrudgeEngine';
 
@@ -93,7 +93,7 @@ export class RoleControls implements Updatable {
     this.holdKey[event.code] = false;
 
     switch (event.code) {
-      case 'Digit1': case 'Numpad1':
+      case 'ControlLeft': case 'ControlRight':
         // block release
         this.role.service.send('keyLUp');
         this.seqKey.length = 0; break;
@@ -182,14 +182,15 @@ export class RoleControls implements Updatable {
     if (!this.role) return;
 
     // Action key processing (tickKey = pressed this frame) — Grudge keymap
-    const lmb = this.tickKey[CODE_LMB];                                  // attack
-    const rmb = this.tickKey[CODE_RMB];                                  // bash
-    const jump = this.tickKey['Space'];                                   // jump
-    const dash = this.tickKey['ShiftLeft'] || this.tickKey['ShiftRight']; // dash
-    const block = this.tickKey['Digit1'] || this.tickKey['Numpad1'];    // ability 1
-    const launch = this.tickKey['Digit2'] || this.tickKey['Numpad2'];    // ability 2
-    const bashK = this.tickKey['Digit3'] || this.tickKey['Numpad3'];    // ability 3
-    const pop = this.tickKey['Digit4'] || this.tickKey['Numpad4'];    // ability 4
+    const lmb = this.tickKey[CODE_LMB];                                                          // attack
+    const rmb = this.tickKey[CODE_RMB];                                                          // bash
+    const jump = this.tickKey['Space'];                                                           // jump
+    const dash = this.tickKey['ShiftLeft'] || this.tickKey['ShiftRight'];                        // dash / dodge (Shift)
+    const dashAttack = this.tickKey['Digit1'] || this.tickKey['Numpad1'];                        // dash attack (1)
+    const block = this.tickKey['ControlLeft'] || this.tickKey['ControlRight'];                   // block (Ctrl hold)
+    const launch = this.tickKey['Digit2'] || this.tickKey['Numpad2'];                            // ability 2
+    const bashK = this.tickKey['Digit3'] || this.tickKey['Numpad3'];                             // ability 3
+    const pop = this.tickKey['Digit4'] || this.tickKey['Numpad4'];                               // ability 4
 
     // Ability 4 → pop / special (replaces the original JKL-simultaneous combo)
     if (pop) {
@@ -200,6 +201,7 @@ export class RoleControls implements Updatable {
       else if (rmb) this.role.service.send('bash');
       else if (jump) this.role.service.send('jump');
       else if (dash) this.role.service.send('dash');
+      else if (dashAttack) this.role.service.send('dashAttack');
       else if (block) this.role.service.send('block');
       else if (launch) this.role.service.send('launch');
       else if (bashK) this.role.service.send('bash');
@@ -208,45 +210,77 @@ export class RoleControls implements Updatable {
     // Clear tick keys — they only fire once per press
     this.tickKey = {};
 
-    // ── Movement direction from WASD (mirrors annihilate exactly) ──────────
-    this.role.direction.set(0, 0);
-    if (this.holdKey['KeyW'] || this.holdKey['ArrowUp'])
-      this.role.direction.add(new THREE.Vector2(0, -1));
-    if (this.holdKey['KeyS'] || this.holdKey['ArrowDown'])
-      this.role.direction.add(new THREE.Vector2(0, 1));
-    if (this.holdKey['KeyA'] || this.holdKey['ArrowLeft'])
-      this.role.direction.add(new THREE.Vector2(-1, 0));
-    if (this.holdKey['KeyD'] || this.holdKey['ArrowRight'])
-      this.role.direction.add(new THREE.Vector2(1, 0));
+    // ── Movement: camera-relative WASD → Cannon velocity ────────────────────
+    // Raw input direction (input-local: -y = forward, +x = right).
+    let ix = 0, iy = 0;
+    if (this.holdKey['KeyW'] || this.holdKey['ArrowUp']) iy -= 1;
+    if (this.holdKey['KeyS'] || this.holdKey['ArrowDown']) iy += 1;
+    if (this.holdKey['KeyA'] || this.holdKey['ArrowLeft']) ix -= 1;
+    if (this.holdKey['KeyD'] || this.holdKey['ArrowRight']) ix += 1;
 
-    this.role.direction.normalize().multiplyScalar(this.role.speed * dt * 60);
-    const dirLenSq = this.role.direction.lengthSq();
+    const inputLenSq = ix * ix + iy * iy;
+    if (inputLenSq > 0) {
+      const inv = 1 / Math.sqrt(inputLenSq);
+      ix *= inv;
+      iy *= inv;
+    }
 
-    if (this.role.service.hasTag('canMove')) {
-      if (dirLenSq > 0) {
-        // Update facing from movement direction
-        this.role.facing.copy(this.role.direction);
+    // Compute camera yaw on XZ so WASD is always "into the screen".
+    // forward = (camera → role) projected onto XZ.
+    const cam = this._engine.camera;
+    let camYaw = 0;
+    if (cam && this.role.body) {
+      const dx = this.role.body.position.x - cam.position.x;
+      const dz = this.role.body.position.z - cam.position.z;
+      if (dx * dx + dz * dz > 1e-6) camYaw = Math.atan2(dx, dz);
+    }
+    const cosY = Math.cos(camYaw);
+    const sinY = Math.sin(camYaw);
+    // forward (input -Z) maps to world (sinY, cosY); right (input +X) to (cosY, -sinY)
+    const moveX = ix * cosY + iy * sinY;
+    const moveZ = -ix * sinY + iy * cosY;
+
+    // Keep legacy direction Vector2 = per-frame displacement (x=worldX, y=worldZ).
+    const perFrame = this.role.speed * dt * 60;
+    this.role.direction.set(moveX * perFrame, moveZ * perFrame);
+    const hasInput = inputLenSq > 0;
+    const canMove = this.role.service.hasTag('canMove');
+
+    if (canMove) {
+      if (hasInput) {
+        // Update facing from movement (annihilate Vector2 convention).
+        this.role.facing.set(moveX, moveZ);
       }
-      // Always update mesh rotation from facing (even when standing still)
+      // Always update mesh yaw from facing (even when standing still).
       this.role.mesh?.rotation.set(
         0,
         -this.role.facing.angle() + Math.PI / 2,
         0
       );
 
-      // Position-based movement (annihilate move strategy 1)
-      this.role.body.position.x += this.role.direction.x;
-      this.role.body.position.z += this.role.direction.y;
-    }
+      // Velocity-based movement: Cannon resolves slope/wall/terrain contacts.
+      // role.speed is units/frame @ 60fps → units/sec = speed * 60.
+      const v = this.role.speed * 60;
+      if (hasInput) {
+        this.role.body.velocity.x = moveX * v;
+        this.role.body.velocity.z = moveZ * v;
+      } else {
+        // Snappy stop on input release — preserve gravity (velocity.y).
+        this.role.body.velocity.x = 0;
+        this.role.body.velocity.z = 0;
+      }
+      // velocity.y is left alone so gravity / jump / knockback all keep working.
 
-    // Send run/stop to FSM — MUST be outside the canMove guard.
-    // idle has no canMove tag; if run is gated behind canMove the
-    // character can never transition idle → run.  (Matches original
-    // annihilate RoleControls.js lines 203-209.)
-    if (dirLenSq > 0) {
-      this.role.service.send('run');
+      if (hasInput) {
+        this.role.service.send('run');
+      } else {
+        this.role.service.send('stop');
+      }
     } else {
-      this.role.service.send('stop');
+      // Locked out of movement (mid-attack, hit-stun, etc.) — bleed horizontal
+      // drift so the character doesn't slide through the action.
+      this.role.body.velocity.x *= 0.5;
+      this.role.body.velocity.z *= 0.5;
     }
   }
 

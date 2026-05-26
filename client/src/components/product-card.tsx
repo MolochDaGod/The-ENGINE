@@ -2,6 +2,7 @@ import { Link } from "wouter";
 import { ArrowUpRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import type { PortalProduct } from "@/data/portalProducts";
+import { useLaunchNav } from "@/hooks/useLaunchNav";
 
 const STATUS_CLASSES: Record<string, string> = {
   live: "bg-[hsl(120,60%,50%)]/15 text-[hsl(120,60%,60%)] border-[hsl(120,60%,50%)]/30",
@@ -11,6 +12,8 @@ const STATUS_CLASSES: Record<string, string> = {
 };
 
 export function ProductCard({ product }: { product: PortalProduct }) {
+  const { navigateExternal } = useLaunchNav();
+
   const outerStyle = product.image
     ? {
         backgroundImage: `linear-gradient(to bottom, hsla(225,30%,8%,0.55), hsla(225,30%,6%,0.92)), url(${product.image})`,
@@ -56,6 +59,21 @@ export function ProductCard({ product }: { product: PortalProduct }) {
   );
 
   if (product.external) {
+  if (product.authRequired) {
+    return (
+      <div
+          role= "link"
+    tabIndex = { 0}
+    className = "block h-full cursor-pointer"
+    onClick = {() => navigateExternal(product.href, true)
+  }
+  onKeyDown = {(e) => { if (e.key === "Enter") navigateExternal(product.href, true); }
+}
+        >
+  { body }
+  </div>
+      );
+    }
     return (
       <a href={product.href} target="_blank" rel="noopener noreferrer" className="block h-full">{body}</a>
     );

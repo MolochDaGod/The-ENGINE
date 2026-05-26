@@ -98,11 +98,49 @@ The engine at `/annihilate-demo` features:
 - **6 Grudge race characters** — Human, Elf, Dwarf, Orc, Barbarian, Undead (GLB models)
 - **4 weapon animation packs** — Sword & Shield, Great Sword, Longbow, Magic Caster (FBX)
 - **Full FSM combat** — 35+ states: combo attacks, charge, block, dash, jump, whirlwind, hadouken
-- **Physics** — Cannon-ES capsule bodies, ground detection, climb mechanics
+- **Physics** — Cannon-ES capsule bodies, **velocity-based movement** (slopes, walls, terrain resolve via solver), ground detection, climb mechanics
+- **Camera-relative WASD** — input is rotated by the camera yaw so "forward" always matches the player's view
 - **AI enemies** — BaseAi with detection sphere, chase/attack behavior
 - **Character presets** — Race stats, attack speed, movement speed, health per loadout
 
+### Control Scheme (Grudge Hotkey Standard)
+
+| Input | Action |
+|-------|--------|
+| `W A S D` / Arrows | Move (camera-relative) |
+| `LMB` | Light attack |
+| `RMB` | Heavy attack / bash |
+| `Space` | Jump |
+| `Shift` | Dash / dodge |
+| `Ctrl` (hold) | Block |
+| `1` | Dash attack |
+| `2` | Launch (uppercut) |
+| `3` | Bash (kbd) |
+| `4` | Pop / special |
+| `→ ↓ → LMB` | Shoryuken combo |
+| `↓ ← Space` | Ajejebloken combo |
+
 Engine source: `client/src/engine/` (GrudgeEngine, BaseCharacter, CharacterFSM, RoleControls, Attacker, BaseAi)
+
+## Cross-Domain SSO — Launch Token Flow
+
+Grudge ID (`id.grudge-studio.com`) brokers single sign-on to external Grudge apps
+hosted on Puter (`*.puter.com`, `*.puter.site`) and Vercel (`*.vercel.app`):
+
+1. User clicks an auth-gated product (e.g. **Nexus Nemesis**, **Warlords**) in the portal.
+2. Client (`useLaunchNav` hook) calls `POST /api/auth/popup-token` with `{ audience: <target origin> }`.
+3. Backend mints a short-lived HMAC-signed JWT (`server/auth.ts → mintLaunchToken`).
+4. Target site opens with `?grudge_token=<jwt>` appended; it exchanges the token for a session cookie via `POST /api/auth/session/exchange`.
+5. If the player isn't signed in, the auth modal opens instead.
+
+Origin allowlist (`isOriginAllowed`) auto-trusts:
+
+- Configured `AUTH_ALLOWED_ORIGINS` / `CORS_ORIGINS` entries
+- `*.puter.com`, `*.puter.site`
+- `*.vercel.app`
+- `localhost:*`
+
+Wired in: `client/src/hooks/useLaunchNav.ts`, `client/src/components/header.tsx`, `client/src/components/product-card.tsx`, `server/auth.ts`.
 
 ## Deployment
 
