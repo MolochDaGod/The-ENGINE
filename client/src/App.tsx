@@ -49,6 +49,7 @@ import MageArena from "@/pages/mage-arena";
 import AnnihilateDemo from "@/pages/annihilate-demo";
 import WargusDefault from "@/pages/wargus-default";
 import AssetPipeline from "@/pages/asset-pipeline";
+import ComingSoon from "@/pages/coming-soon";
 import AdminGuard from "@/components/admin-guard";
 import AdminEntryButton from "@/components/admin-entry-button";
 
@@ -107,6 +108,11 @@ function Router() {
       <Route path="/annihilate-demo" component={AnnihilateDemo} />
       <Route path="/asset-pipeline" component={withAdminGuard(AssetPipeline)} />
       <Route path="/admin-login" component={AdminLogin} />
+      <Route path="/starway-gruda" component={ComingSoon} />
+      <Route path="/rts-star-armada" component={ComingSoon} />
+      <Route path="/mech-armada" component={ComingSoon} />
+      <Route path="/star-rts" component={ComingSoon} />
+      <Route path="/survival" component={ComingSoon} />
       <Route component={NotFound} />
     </Switch>
   );

@@ -28,7 +28,7 @@ export const PORTAL_PRODUCTS: PortalProduct[] = [
     external: true,
     authRequired: true,
     tags: ["mmo", "pvp", "pvpve", "coop"],
-    image: "https://assets.grudge-studio.com/portal/warlords-card.jpg",
+    image: "/assets/store/dark_fantasy_scenes.png",
   },
   {
     id: "launcher",
@@ -40,7 +40,7 @@ export const PORTAL_PRODUCTS: PortalProduct[] = [
     external: true,
     authRequired: true,
     note: "Mission-phase target — launcher build in progress",
-    image: "https://assets.grudge-studio.com/portal/launcher-card.jpg",
+    image: "/assets/store/grudge_launcher.png",
   },
   {
     id: "dashboard",
@@ -51,7 +51,7 @@ export const PORTAL_PRODUCTS: PortalProduct[] = [
     section: "featured",
     external: true,
     authRequired: true,
-    image: "https://assets.grudge-studio.com/portal/dashboard-card.jpg",
+    image: "/assets/store/mmo_development.png",
   },
   {
     id: "ai-hub",
@@ -62,7 +62,7 @@ export const PORTAL_PRODUCTS: PortalProduct[] = [
     section: "featured",
     external: true,
     authRequired: true,
-    image: "https://assets.grudge-studio.com/portal/ai-hub-card.jpg",
+    image: "/assets/store/custom_development.png",
   },
   {
     id: "wargus",
@@ -72,7 +72,7 @@ export const PORTAL_PRODUCTS: PortalProduct[] = [
     status: "beta",
     section: "play",
     tags: ["rts", "pvp", "coop"],
-    image: "https://assets.grudge-studio.com/portal/wargus-card.jpg",
+    image: "/assets/store/wargus_rts_engine.png",
   },
   {
     id: "tower-defense",
@@ -82,7 +82,7 @@ export const PORTAL_PRODUCTS: PortalProduct[] = [
     status: "beta",
     section: "play",
     tags: ["solo", "coop"],
-    image: "https://assets.grudge-studio.com/portal/tower-defense-card.jpg",
+    image: "/assets/games/arena-card.png",
   },
   {
     id: "mage-arena",
@@ -92,7 +92,7 @@ export const PORTAL_PRODUCTS: PortalProduct[] = [
     status: "beta",
     section: "play",
     tags: ["pvp", "arena"],
-    image: "https://assets.grudge-studio.com/portal/mage-arena-card.jpg",
+    image: "/assets/games/mage-card.png",
   },
   {
     id: "avernus-arena",
@@ -102,7 +102,7 @@ export const PORTAL_PRODUCTS: PortalProduct[] = [
     status: "beta",
     section: "play",
     tags: ["pvp", "pvpve", "arena"],
-    image: "https://assets.grudge-studio.com/portal/avernus-card.jpg",
+    image: "/assets/games/dungeon-crawler-card.png",
   },
   {
     id: "multiplayer-racing",
@@ -112,7 +112,7 @@ export const PORTAL_PRODUCTS: PortalProduct[] = [
     status: "beta",
     section: "play",
     tags: ["pvp", "arena"],
-    image: "https://assets.grudge-studio.com/portal/overdrive-card.jpg",
+    image: "/assets/games/race-select-card.png",
   },
   {
     id: "annihilate-demo",
@@ -122,7 +122,7 @@ export const PORTAL_PRODUCTS: PortalProduct[] = [
     status: "beta",
     section: "play",
     tags: ["coop", "pvpve"],
-    image: "https://assets.grudge-studio.com/portal/annihilate-card.jpg",
+    image: "/assets/games/final-fighter-card.png",
   },
   {
     id: "grudge-crafting",
@@ -134,7 +134,7 @@ export const PORTAL_PRODUCTS: PortalProduct[] = [
     external: true,
     authRequired: true,
     tags: ["coop"],
-    image: "https://assets.grudge-studio.com/portal/crafting-card.jpg",
+    image: "/assets/store/character_sprites.png",
   },
   {
     id: "grudge-studio-puter",
@@ -146,7 +146,7 @@ export const PORTAL_PRODUCTS: PortalProduct[] = [
     external: true,
     authRequired: true,
     tags: ["mmo"],
-    image: "https://assets.grudge-studio.com/portal/studio-card.jpg",
+    image: "/assets/carousel/grudge-studio-bg.png",
   },
   {
     id: "catalog",
