@@ -50,18 +50,21 @@ npm start
 ## Production Architecture
 
 ```
-┌─ Vercel (static frontend) ──────────────────────────────┐
-│  the-engine.vercel.app                                   │
+┌─ Vercel (static frontend + API proxy) ───────────────────┐
+│  grudge-studio.com / the-engine.vercel.app               │
 │  └─ Vite build → dist/public (SPA + game assets)        │
+│     /api/*    → PROXY → the-engine.up.railway.app       │
+│     /ws/*     → PROXY → the-engine.up.railway.app       │
 │     /assets/* → Cache-Control: 1yr immutable             │
 │     /models/* → Cache-Control: 1wk                       │
-│     /* → SPA fallback → index.html                       │
+│     /*        → SPA fallback → index.html                │
 └──────────────────────────────────────────────────────────┘
 
-┌─ Railway (fullstack backend) ────────────────────────────┐
+┌─ Railway (API backend) ──────────────────────────────────┐
+│  the-engine.up.railway.app                               │
 │  Docker (node:22-alpine, multi-stage)                    │
 │  ├─ Express + compression + helmet + CORS                │
-│  ├─ Player auth (8 providers, cookie sessions)           │
+│  ├─ Player auth (6 providers + smart email linking)      │
 │  ├─ Game library (1360+ retro games)                     │
 │  ├─ Leaderboards, PvP challenges, GBUX economy           │
 │  ├─ WebSocket: chat rooms + arena multiplayer            │
@@ -75,7 +78,7 @@ npm start
 └──────────────────────────────────────────────────────────┘
 
 ┌─ Cloudflare Edge ────────────────────────────────────────┐
-│  grudge-studio.com → Worker → Railway                    │
+│  grudge-studio.com → Vercel (DNS)                        │
 │  id.grudge-studio.com → Worker → Railway (SSO)           │
 │  assets.grudge-studio.com → R2 bucket                    │
 │  objectstore.grudge-studio.com → Worker + R2 + D1        │
@@ -172,41 +175,68 @@ GET /api/health
 }
 ```
 
-## Production Deployment Status (2026-05-25)
+## Auth System (6 providers + smart email linking)
+
+| Button | Provider | Flow |
+|--------|----------|------|
+| Discord | Discord OAuth | `/api/auth/discord/start` → callback → cookie |
+| Google | Phantom SDK (google) | Phantom embedded wallet with Google social login |
+| Grudge | Puter auth | Puter SDK → `/api/auth/puter-sso` → cookie |
+| Solana | Phantom SDK (auto) | Extension or embedded wallet → nonce/verify |
+| Phone | Twilio Verify | OTP via SMS → `/api/auth/twilio/verify` |
+| GitHub | GitHub OAuth | `/api/auth/github/start` → callback → cookie |
+
+**Smart email linking:** When a user signs in via Discord/GitHub/Google/Puter and their OAuth email matches an existing account, the provider is linked to that account instead of creating a duplicate.
+
+**Unlink:** `DELETE /api/auth/link/:provider` (discord, github, google, phone, puter, solana)
+
+## Live Game Catalog (54 products)
+
+### Verified Live Games (2026-05-31)
+| Game | URL | Type |
+|------|-----|------|
+| Grudge Warlords | grudgewarlords.com | MMO RPG |
+| Nexus Nemesis TCG | nexus-nemesis-game.vercel.app | Card Game |
+| Grim Armada | grim-armada-web.vercel.app | Tactical Combat |
+| Grudge Drive | grudge-drive.vercel.app | Vehicular Combat |
+| Grudge Metaverse | grudge-metaverse.vercel.app | 3D Multiplayer |
+| RTS GRUDGE | rts-grudge.vercel.app | Survival RPG |
+| Grudge Fishing | grudge-fishing-game.vercel.app | 3D Fishing |
+| Grudge Three.js Port | grudge-three-port.vercel.app | 3D RPG |
+| THC Labz Battle | thc-labz-battle.vercel.app | Card Battle |
+| Dungeon Crawler Quest | dungeon-crawler-quest.vercel.app | Voxel MOBA |
+| Grudge Space RTS | grudge-space-rts.vercel.app | Space Strategy |
+| Final Fighter | final-fighter.vercel.app | 3D Fighting |
+| RPG Sprite Attack | grudge-rpg-sprite-attack.vercel.app | Tactical RPG |
+| Grudge Arena | grudge-arena.vercel.app | PvP Arena |
+| Grudge Warlords RTS | grudge-warlords-rts.vercel.app | Medieval RTS |
+| Grudge RPG | puter.com/app/grudgeRPG | RPG (Puter) |
+| Grudge Angler | puter.com/app/grudge-angler | Fishing (Puter) |
+| Grudge Match-3 | molochdagod.github.io/grudge-match-webgl | Puzzle (Unity) |
+| Betta Warlords | betta-grudgedev.replit.app | PvP Arena |
+
+### Studio Tools
+| Tool | URL |
+|------|-----|
+| Grudge Studio Forge | grudge-studio-forge.vercel.app |
+| Grudge Pipeline | grudge-pipeline.vercel.app |
+| Asset Rig Editor | asset-rig-editor.vercel.app |
+| Character Builder | molochdagod.github.io/grudge-character-builder |
+| Grudge Coder | coder.grudge-studio.com |
+| ObjectStore | browse.grudge-studio.com |
+
+## Production Deployment Status (2026-05-31)
 
 | Service | URL | Status |
 |---------|-----|--------|
-| ENGINE Vercel | the-engine.vercel.app | ✅ 200 |
+| Grudge Studio (Vercel) | grudge-studio.com | ✅ 200 |
+| Railway Backend | the-engine.up.railway.app | ✅ healthy, DB connected |
+| API Proxy | grudge-studio.com/api/* → Railway | ✅ proxied via vercel.json |
 | GrudgeWarlords | grudgewarlords.com | ✅ 200 |
-| GrudgeWarlords /wallet | grudgewarlords.com/wallet | ✅ 200 |
-| GrudgeWarlords API | /api/health | ✅ healthy, DB connected |
-| Client Hub | client.grudge-studio.com | ✅ 200 |
-| Nexus Nemesis (Vercel) | nexus-nemesis-game.vercel.app | ✅ 200 |
-| Nexus Nemesis (Railway) | /api/health | ✅ healthy, DB connected |
+| Nexus Nemesis | nexus-nemesis-game.vercel.app | ✅ 200 |
 | Grudge Arena | grudge-arena.vercel.app | ✅ 200 |
 | Dungeon Crawler | dungeon-crawler-quest.vercel.app | ✅ 200 |
 | ObjectStore | molochdagod.github.io/ObjectStore | ✅ 200 |
-| Fleet Map | fleet.grudge-studio.com | ✅ 200 |
-| Match-3 WebGL | molochdagod.github.io/grudge-match-webgl | ✅ 200 |
-
-## Integration Test Results (2026-05-25)
-
-### Auth Flow
-- `POST /api/auth/guest` → ✅ Created guest user with Grudge ID, 0 GBUX, role `guest`
-- `GET /api/auth/me` (no cookie) → ✅ Returns 401
-
-### Wallet & Account Endpoints
-- `/api/me/stats` → ✅ Auth-gated (401 without session)
-- `/api/me/wallets` → ✅ Auth-gated
-- `/api/me/connections` → ✅ Auth-gated
-
-### Game Library
-- `/api/games` → ✅ Returns 1360+ games across NES, SNES, N64, Genesis, GBA, NDS
-- Embed URLs correctly formatted per platform
-
-### Backend Health
-- GrudgeWarlords: `healthy`, DB `connected`, 105MB RSS, 35MB heap
-- Nexus Nemesis: `healthy`, DB `connected`, Vercel→Railway proxy working
 
 ---
 
