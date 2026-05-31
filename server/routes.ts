@@ -652,6 +652,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let user = await storage.getUserByGoogleId(gUser.sub);
       let isNew = false;
       if (!user) {
+        // Smart link: if Google gave us a verified email that matches an existing account,
+        // attach googleId to that account instead of creating a duplicate.
+        const verifiedEmail = gUser.email_verified && gUser.email ? gUser.email : null;
+        if (verifiedEmail) {
+          const emailMatch = await storage.getUserByEmail(verifiedEmail);
+          if (emailMatch && !emailMatch.googleId) {
+            await storage.updateUser(emailMatch.id, { googleId: gUser.sub, lastLoginAt: new Date(), ...(gUser.picture && !emailMatch.avatarUrl ? { avatarUrl: gUser.picture } : {}) });
+            user = (await storage.getUser(emailMatch.id))!;
+          }
+        }
+      }
+      if (!user) {
         const base = gUser.given_name || gUser.name || (gUser.email ? gUser.email.split("@")[0] : `google_${gUser.sub.slice(-6)}`);
         const username = await uniqueUsername(base);
         user = await storage.createUser({
@@ -763,6 +775,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let user = await storage.getUserByGithubId(ghIdString);
       let isNew = false;
       if (!user) {
+        // Smart link: if GitHub gave us an email that matches an existing account,
+        // attach githubId to that account instead of creating a duplicate.
+        if (email) {
+          const emailMatch = await storage.getUserByEmail(email);
+          if (emailMatch && !emailMatch.githubId) {
+            await storage.updateUser(emailMatch.id, { githubId: ghIdString, lastLoginAt: new Date(), ...(ghUser.avatar_url && !emailMatch.avatarUrl ? { avatarUrl: ghUser.avatar_url } : {}) });
+            user = (await storage.getUser(emailMatch.id))!;
+          }
+        }
+      }
+      if (!user) {
         const base = ghUser.login || ghUser.name || `gh_${ghIdString.slice(-6)}`;
         const username = await uniqueUsername(base);
         user = await storage.createUser({
@@ -858,6 +881,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       let user = await storage.getUserByDiscordId(dUser.id);
       let isNew = false;
+      if (!user) {
+        // Smart link: if Discord gave us an email that matches an existing account,
+        // attach discordId to that account instead of creating a duplicate.
+        if (dUser.email) {
+          const emailMatch = await storage.getUserByEmail(dUser.email);
+          if (emailMatch && !emailMatch.discordId) {
+            const avatarUrl = dUser.avatar ? `https://cdn.discordapp.com/avatars/${dUser.id}/${dUser.avatar}.png` : null;
+            await storage.updateUser(emailMatch.id, { discordId: dUser.id, lastLoginAt: new Date(), ...(avatarUrl && !emailMatch.avatarUrl ? { avatarUrl } : {}) });
+            user = (await storage.getUser(emailMatch.id))!;
+          }
+        }
+      }
       if (!user) {
         const base = dUser.username || dUser.global_name || `discord_${dUser.id.slice(-6)}`;
         const username = await uniqueUsername(base);
@@ -1013,6 +1048,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/auth/allowed-origins", (_req, res) => {
     res.json({ origins: allowedAuthOrigins() });
+  });
+
+  // Unlink a provider from the current account
+  app.delete("/api/auth/link/:provider", requirePlayer, async (req, res) => {
+    try {
+      const player = getPlayer(req)!;
+      const provider = req.params.provider;
+      const providerFields: Record<string, string> = {
+        discord: "discordId", github: "githubId", google: "googleId",
+        phone: "phone", puter: "puterId", solana: "solanaAddress",
+      };
+      const field = providerFields[provider];
+      if (!field) return res.status(400).json({ error: `Unknown provider: ${provider}` });
+      if (!(player as any)[field]) return res.status(400).json({ error: `${provider} is not linked` });
+      await storage.updateUser(player.id, { [field]: null } as any);
+      return res.json({ success: true, unlinked: provider });
+    } catch (error) {
+      console.error("Unlink error:", error);
+      return res.status(500).json({ error: "Failed to unlink provider" });
+    }
   });
 
   // ═════════════════════════════════════════════════════════════════
@@ -1224,14 +1279,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.json(publicPlayer(user, false));
       }
 
+      // Smart link: if Puter gave us an email that matches an existing account,
+      // attach puterId to that account instead of creating a duplicate.
+      if (email) {
+        const emailMatch = await storage.getUserByEmail(email);
+        if (emailMatch && !emailMatch.puterId) {
+          await storage.updateUser(emailMatch.id, { puterId, lastLoginAt: new Date() });
+          user = (await storage.getUser(emailMatch.id))!;
+          const token = createPlayerToken(user.id);
+          setPlayerCookie(res, token);
+          return res.json(publicPlayer(user, false));
+        }
+      }
+
       // Auto-create a Grudge account for this Puter user.
-      // Sanitize the Puter username and ensure it is unique in our DB.
       const baseUsername = puterUsername
         ? sanitizeUsername(String(puterUsername))
         : `puter_${puterId.slice(0, 8)}`;
       const username = await uniqueUsername(baseUsername);
       const grudgeId = generateGrudgeId();
-      // Generate a random password — user can set one later via complete-profile.
       const randomPass = crypto.randomBytes(16).toString("hex");
 
       user = await storage.createUser({

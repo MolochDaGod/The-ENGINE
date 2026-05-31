@@ -362,3 +362,18 @@ export async function twilioVerify(phone: string, code: string): Promise<{ ok: t
   }
 }
 
+/** Unlink a provider from the current account. */
+export async function unlinkProvider(provider: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const res = await fetch(`/api/auth/link/${encodeURIComponent(provider)}`, {
+      method: "DELETE",
+      credentials: "include",
+    });
+    const json = await res.json();
+    if (!res.ok) return { ok: false, error: json.error || "Unlink failed" };
+    return { ok: true };
+  } catch {
+    return { ok: false, error: "Network error" };
+  }
+}
+
