@@ -5,7 +5,15 @@
   "outputDirectory": "dist/public",
   "rewrites": [
     {
-      "source": "/((?!api/).*)",
+      "source": "/api/:path*",
+      "destination": "https://the-engine.up.railway.app/api/:path*"
+    },
+    {
+      "source": "/ws/:path*",
+      "destination": "https://the-engine.up.railway.app/ws/:path*"
+    },
+    {
+      "source": "/((?!api/|ws/).*)",
       "destination": "/index.html"
     }
   ],
