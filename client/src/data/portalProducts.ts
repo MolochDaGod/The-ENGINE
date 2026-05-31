@@ -87,11 +87,12 @@ export const PORTAL_PRODUCTS: PortalProduct[] = [
   {
     id: "mage-arena",
     name: "Mage Arena",
-    href: "/mage-arena",
-    description: "Fast PvP skirmishes in the mage arena playtest surface.",
-    status: "beta",
+    href: "https://mage-arena-seven.vercel.app",
+    description: "Dungeon crawler with Foozle Lucifer heroes (Sorceress, Skeleton Hunter, Warrior, Golem), Mythology bosses (Anubis, Medusa, Horus), mouse-aimed combat, AI teammates, and lava dungeon tileset.",
+    status: "live",
     section: "play",
-    tags: ["pvp", "arena"],
+    external: true,
+    tags: ["pvp", "pvpve", "arena", "coop"],
     image: "/assets/games/mage-card.png",
   },
   {
