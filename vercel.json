@@ -5,12 +5,24 @@
   "outputDirectory": "dist/public",
   "rewrites": [
     {
+      "source": "/api/auth/:path*",
+      "destination": "https://id.grudge-studio.com/auth/:path*"
+    },
+    {
+      "source": "/api/characters/:path*",
+      "destination": "https://api.grudge-studio.com/api/characters/:path*"
+    },
+    {
+      "source": "/api/assets/:path*",
+      "destination": "https://assets.grudge-studio.com/:path*"
+    },
+    {
       "source": "/api/:path*",
-      "destination": "https://the-engine.up.railway.app/api/:path*"
+      "destination": "https://api.grudge-studio.com/api/:path*"
     },
     {
       "source": "/ws/:path*",
-      "destination": "https://the-engine.up.railway.app/ws/:path*"
+      "destination": "https://ws.grudge-studio.com/ws/:path*"
     },
     {
       "source": "/((?!api/|ws/).*)",
