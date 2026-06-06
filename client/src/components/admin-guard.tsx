@@ -4,7 +4,7 @@ import { useAuth } from "@/components/auth-provider";
 import { useAuthModal } from "@/components/auth-modal";
 import { checkAdminSession } from "@/lib/admin-auth";
 
-const ADMIN_ROLES = ['admin', 'master_admin'];
+const ADMIN_ROLES = ['admin', 'master_admin', 'master'];
 
 interface AdminGuardProps {
   children: ReactNode;

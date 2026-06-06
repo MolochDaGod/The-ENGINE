@@ -223,8 +223,8 @@ const GAMES: GameCard[] = [
   },
   {
     id: 'polyfighter',
-    name: 'PolyFighter 95',
-    description: 'Retro 3D fighting game with custom character creator (8 head types, 7 torso types), level editor, HD city stages, voxel characters, trimesh combat, and synth audio.',
+    name: 'Grudge Fighter',
+    description: '3D fighting game with custom character creator (8 head types, 7 torso types), level editor, HD city stages, voxel characters, trimesh combat, and retro synth audio. Built for Grudge Studio.',
     type: '3D Fighting',
     engine: 'Grudge Studio Forge',
     route: '/polyfighter',

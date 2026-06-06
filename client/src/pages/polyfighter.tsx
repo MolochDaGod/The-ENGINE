@@ -36,7 +36,7 @@ export default function PolyFighter() {
             </Button>
           </Link>
           <h1 className="text-lg font-bold" style={{ color: '#ff0055' }}>
-            🥊 PolyFighter 95
+            🥊 Grudge Fighter
           </h1>
           {player && (
             <span className="text-xs text-[hsl(45,15%,60%)] ml-2">
@@ -63,7 +63,7 @@ export default function PolyFighter() {
           src="/games/polyfighter.html"
           className="w-full h-full border-0 absolute inset-0"
           allow="fullscreen; autoplay"
-          title="PolyFighter 95"
+          title="Grudge Fighter"
         />
       </div>
     </div>

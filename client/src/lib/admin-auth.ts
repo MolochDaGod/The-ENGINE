@@ -1,4 +1,4 @@
-const ADMIN_ROLES = ['admin', 'master_admin'] as const;
+const ADMIN_ROLES = ['admin', 'master_admin', 'master'] as const;
 
 /**
  * Check admin access via the player's Grudge ID role.
