@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Voxel Chaos Sandbox - Grudge Studio</title>
+<style>
+body{margin:0;overflow:hidden;background:#111;color:#fff;font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh}
+.loader{text-align:center}
+.loader h1{color:#00ffcc;font-size:2rem;margin-bottom:10px}
+.loader p{color:#888;font-size:14px}
+.spinner{width:40px;height:40px;border:3px solid #333;border-top-color:#00ffcc;border-radius:50%;animation:spin 1s linear infinite;margin:20px auto}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<div class="loader">
+<h1>🧱 Voxel Chaos Sandbox</h1>
+<div class="spinner"></div>
+<p>Loading Three.js + Cannon-ES engine...</p>
+<p style="color:#555;margin-top:20px;font-size:12px">Full game HTML to be deployed from source</p>
+</div>
+<script type="importmap">
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/","cannon-es":"https://unpkg.com/cannon-es@0.20.0/dist/cannon-es.js"}}
+</script>
+<script type="module">
+// Grudge Auth Bridge - receives auth state from parent frame
+window.addEventListener('message', (e) => {
+  if (e.data?.type === 'grudge:auth') {
+    window.__GRUDGE_PLAYER__ = e.data.player;
+    window.__GRUDGE_TOKEN__ = e.data.token;
+  }
+});
+// Signal ready to parent
+if (window.parent !== window) {
+  window.parent.postMessage({ type: 'grudge:game:ready', game: 'voxel-sandbox' }, '*');
+}
+</script>
+</body>
+</html>

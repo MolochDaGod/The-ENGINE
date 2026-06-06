@@ -1,4 +1,24 @@
-export async function checkAdminSession() {
+const ADMIN_ROLES = ['admin', 'master_admin'] as const;
+
+/**
+ * Check admin access via the player's Grudge ID role.
+ * Falls back to the legacy admin session cookie for backward compat.
+ */
+export async function checkAdminSession(): Promise<boolean> {
+  // 1. Preferred: check player role from Grudge ID auth
+  try {
+    const meRes = await fetch("/api/auth/me", { credentials: "include" });
+    if (meRes.ok) {
+      const player = await meRes.json();
+      if (player?.role && ADMIN_ROLES.includes(player.role)) {
+        return true;
+      }
+    }
+  } catch {
+    // fall through
+  }
+
+  // 2. Fallback: legacy admin passcode cookie
   try {
     const response = await fetch("/api/admin/session", {
       method: "GET",
@@ -12,6 +32,7 @@ export async function checkAdminSession() {
   }
 }
 
+/** Legacy passcode login — kept for backward compat */
 export async function loginAdmin(passcode: string) {
   try {
     const response = await fetch("/api/admin/login", {

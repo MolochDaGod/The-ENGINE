@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PolyFighter 95 - Grudge Studio</title>
+<style>
+body{margin:0;overflow:hidden;background:#000;color:#fff;font-family:'Courier New',monospace;display:flex;align-items:center;justify-content:center;height:100vh}
+.loader{text-align:center}
+.loader h1{color:#ff0055;font-size:2.5rem;text-shadow:4px 4px 0 #fff;transform:skew(-10deg);margin-bottom:10px}
+.loader p{color:#888;font-size:14px}
+.spinner{width:40px;height:40px;border:3px solid #333;border-top-color:#ff0055;border-radius:50%;animation:spin 1s linear infinite;margin:20px auto}
+@keyframes spin{to{transform:rotate(360deg)}}
+#bg{position:fixed;inset:0;z-index:-1;background-color:#0d001a;background-image:linear-gradient(0deg,transparent 95%,#ff00ff 95%,#00ffff 100%),linear-gradient(90deg,transparent 95%,#ff00ff 95%,#00ffff 100%);background-size:50px 50px;animation:grid 10s linear infinite}
+@keyframes grid{from{background-position:0 0}to{background-position:50px 50px}}
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+<div id="bg"></div>
+<div class="loader">
+<h1>POLYFIGHTER 95</h1>
+<div class="spinner"></div>
+<p>Loading Trimesh Combat Engine...</p>
+<p style="color:#555;margin-top:20px;font-size:12px">Full game HTML to be deployed from source</p>
+</div>
+<script>
+// Grudge Auth Bridge
+window.addEventListener('message', (e) => {
+  if (e.data?.type === 'grudge:auth') {
+    window.__GRUDGE_PLAYER__ = e.data.player;
+    window.__GRUDGE_TOKEN__ = e.data.token;
+  }
+});
+if (window.parent !== window) {
+  window.parent.postMessage({ type: 'grudge:game:ready', game: 'polyfighter' }, '*');
+}
+</script>
+</body>
+</html>
