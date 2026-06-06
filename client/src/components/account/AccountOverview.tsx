@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import {
-  Award, Copy, Gamepad2, Loader2, Medal, Shield, Sparkles, Swords, Trophy, Wallet,
+  Award, Copy, Gamepad, Loader2, Medal, Shield, Sparkles, Swords, Trophy, Wallet,
 } from "lucide-react";
 import type { PlayerProfile } from "@/lib/player-auth";
 import { GameCover } from "@/components/game-cover";
@@ -131,7 +131,7 @@ export default function AccountOverview({ player }: { player: PlayerProfile }) {
       {/* Stat Grid */}
       <section className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
         {[
-          { label: "Games Played", value: stats?.gamesPlayed ?? 0, icon: Gamepad2 },
+          { label: "Games Played", value: stats?.gamesPlayed ?? 0, icon: Gamepad },
           { label: "Total Plays", value: stats?.totalScores ?? 0, icon: Medal },
           { label: "Personal Bests", value: stats?.personalBests ?? 0, icon: Trophy },
           { label: "Global Records", value: stats?.globalRecords ?? 0, icon: Award },

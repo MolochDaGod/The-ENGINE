@@ -34,7 +34,7 @@ import {
   ClipboardCopy,
   Coins,
   Edit3,
-  Gamepad2,
+  Gamepad,
   Globe,
   Loader2,
   LogOut,
@@ -108,7 +108,7 @@ export function GrudgePanelProvider({ children }: { children: ReactNode }) {
 
 const TABS = [
   { id: "profile", label: "Profile", icon: User },
-  { id: "games", label: "Games", icon: Gamepad2 },
+  { id: "games", label: "Games", icon: Gamepad },
   { id: "social", label: "Social", icon: Users },
   { id: "activity", label: "Activity", icon: Zap },
   { id: "settings", label: "Settings", icon: Settings },
@@ -331,7 +331,7 @@ function ProfileTab() {
       {/* Stats grid */}
       {stats && (
         <div className="grid grid-cols-3 gap-3">
-          <StatBlock icon={Gamepad2} label="Played" value={stats.gamesPlayed ?? 0} />
+          <StatBlock icon={Gamepad} label="Played" value={stats.gamesPlayed ?? 0} />
           <StatBlock icon={Trophy} label="P. Bests" value={stats.personalBests ?? 0} />
           <StatBlock icon={Award} label="Records" value={stats.globalRecords ?? 0} />
           <StatBlock icon={Medal} label="Scores" value={stats.totalScores ?? 0} />
@@ -397,7 +397,7 @@ function GamesTab() {
         </div>
       ) : !gamesQ.data?.length ? (
         <div className="text-center py-8">
-          <Gamepad2 className="w-8 h-8 text-[hsl(45,15%,40%)] mx-auto mb-2" />
+          <Gamepad className="w-8 h-8 text-[hsl(45,15%,40%)] mx-auto mb-2" />
           <p className="text-sm text-[hsl(45,15%,55%)] font-body">No games played yet.</p>
           <Link href="/games" onClick={close}>
             <Button size="sm" className="gilded-button mt-3 text-xs">

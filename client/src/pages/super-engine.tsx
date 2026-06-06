@@ -2,7 +2,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Play, X, Maximize2, Minimize2, Cpu, Gamepad2, Swords, Car, Castle, Shield, Puzzle, Users, Zap, Globe, Box, Brain, Monitor, Check, Minus } from "lucide-react";
+import { ArrowLeft, Play, X, Maximize2, Minimize2, Cpu, Gamepad, Swords, Car, Castle, Shield, Puzzle, Users, Zap, Globe, Box, Brain, Monitor, Check, Minus } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import superEngineBg from "@assets/IqGYJJe_1773841545953.png";
@@ -30,7 +30,7 @@ interface GameCard {
   emoji: string;
   color: string;
   gradientBorder: string;
-  icon: typeof Gamepad2;
+  icon: typeof Gamepad;
   capabilities: Capability[];
   previewType: 'threejs' | 'canvas2d' | 'static';
   cardImage?: string;
@@ -116,7 +116,7 @@ const GAMES: GameCard[] = [
     emoji: '🎣',
     color: 'from-cyan-900/60 to-cyan-800/30',
     gradientBorder: 'from-cyan-500 via-blue-500 to-indigo-500',
-    icon: Gamepad2,
+    icon: Gamepad,
     capabilities: ['3D', 'Physics', 'Particles'],
     previewType: 'threejs',
   },
@@ -160,7 +160,7 @@ const GAMES: GameCard[] = [
     emoji: '🗡️',
     color: 'from-indigo-900/60 to-indigo-800/30',
     gradientBorder: 'from-indigo-500 via-violet-500 to-purple-500',
-    icon: Gamepad2,
+    icon: Gamepad,
     capabilities: ['2D', 'AI', 'Multiplayer'],
     previewType: 'canvas2d',
     cardImage: gameImgRpgMaker,
@@ -650,7 +650,7 @@ export default function SuperEngine() {
         {featuredGames && featuredGames.length > 0 && (
           <div className="mt-16">
             <div className="flex items-center gap-3 mb-6">
-              <Gamepad2 className="w-8 h-8 text-purple-400" />
+              <Gamepad className="w-8 h-8 text-purple-400" />
               <h2 className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400">
                 Classic Retro Games
               </h2>
@@ -671,7 +671,7 @@ export default function SuperEngine() {
                         <img src={game.coverUrl} alt={game.title} className="w-full aspect-square object-cover rounded" />
                       ) : (
                         <div className="w-full aspect-square bg-gradient-to-br from-purple-900/50 to-pink-900/50 rounded flex items-center justify-center">
-                          <Gamepad2 className="w-8 h-8 text-purple-400" />
+                          <Gamepad className="w-8 h-8 text-purple-400" />
                         </div>
                       )}
                       <span className="text-white text-xs font-medium text-center line-clamp-2">{game.title}</span>
@@ -697,7 +697,7 @@ export default function SuperEngine() {
         {(!featuredGames || featuredGames.length === 0) && (
           <div className="mt-16">
             <div className="flex items-center gap-3 mb-6">
-              <Gamepad2 className="w-8 h-8 text-purple-400" />
+              <Gamepad className="w-8 h-8 text-purple-400" />
               <h2 className="text-3xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400">
                 Classic Retro Games
               </h2>
@@ -712,7 +712,7 @@ export default function SuperEngine() {
                     <div className="absolute -inset-[1px] rounded-lg bg-gradient-to-r from-purple-500 to-pink-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                     <div className="relative bg-gray-800 rounded-lg p-3 flex flex-col items-center gap-2 transition-transform duration-200 group-hover:scale-[1.02]">
                       <div className="w-full aspect-square bg-gradient-to-br from-purple-900/50 to-pink-900/50 rounded flex items-center justify-center">
-                        <Gamepad2 className="w-8 h-8 text-purple-400" />
+                        <Gamepad className="w-8 h-8 text-purple-400" />
                       </div>
                       <span className="text-white text-xs font-medium text-center line-clamp-2">{title}</span>
                       <Badge className="text-[10px] bg-gray-700 text-gray-300 border-gray-600">NES</Badge>

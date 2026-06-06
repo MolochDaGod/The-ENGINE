@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Check, CreditCard, Wallet, Bitcoin, Gamepad2, Code, Swords, Sparkles, Shield, Server, Image } from "lucide-react";
+import { Check, CreditCard, Wallet, Bitcoin, Gamepad, Code, Swords, Sparkles, Shield, Server, Image } from "lucide-react";
 import type { StoreProduct } from "@shared/schema";
 import PaymentForm from "./payment-form";
 
@@ -142,7 +142,7 @@ export default function StoreSection() {
             {engines.length > 0 && (
               <div className="mb-16">
                 <h3 className="text-2xl font-heading text-[hsl(43,85%,65%)] mb-6 flex items-center gap-3" style={{ WebkitTextFillColor: 'unset' }}>
-                  <Gamepad2 className="w-6 h-6 text-[hsl(43,85%,55%)]" />
+                  <Gamepad className="w-6 h-6 text-[hsl(43,85%,55%)]" />
                   Game Engines & Software
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

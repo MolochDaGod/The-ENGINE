@@ -1,7 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ExternalLink, Code, Palette, Music, Map, Gamepad2, Star, Zap, Users, Shield, Boxes, Wand2, Volume2, Layers, PenTool, Cpu, Globe, Sword } from "lucide-react";
+import { ExternalLink, Code, Palette, Music, Map, Gamepad, Star, Zap, Users, Shield, Boxes, Wand2, Volume2, Layers, PenTool, Cpu, Globe, Sword } from "lucide-react";
 import { Link } from "wouter";
 import grudgeLogo from "@assets/uXpJmRe_1773828784729.png";
 
@@ -9,14 +9,14 @@ interface ToolItem {
   name: string;
   category: string;
   description: string;
-  icon: typeof Gamepad2;
+  icon: typeof Gamepad;
   color: string;
   url: string;
   pricing: string;
 }
 
 const gameEngines: ToolItem[] = [
-  { name: "Construct 3", category: "Game Engine", description: "Web-based no-code game engine with drag-and-drop interface for 2D games. Features physics, pathfinding, and multiplayer.", icon: Gamepad2, color: "#2196F3", url: "https://www.construct.net", pricing: "Free Tier" },
+  { name: "Construct 3", category: "Game Engine", description: "Web-based no-code game engine with drag-and-drop interface for 2D games. Features physics, pathfinding, and multiplayer.", icon: Gamepad, color: "#2196F3", url: "https://www.construct.net", pricing: "Free Tier" },
   { name: "Buildbox", category: "Game Engine", description: "Visual no-code game engine for creating 2D and 3D games with animations, effects, and sound systems.", icon: Boxes, color: "#FF9800", url: "https://www.buildbox.com", pricing: "Subscription" },
   { name: "GDevelop", category: "Game Engine", description: "Open-source no-code game engine using visual scripting. Physics, particles, and multiplayer capabilities.", icon: Code, color: "#4CAF50", url: "https://gdevelop.io", pricing: "Free & Open Source" },
   { name: "Stencyl", category: "Game Engine", description: "Drag-and-drop game creation platform with physics, animation tools, and integrated sound for 2D games.", icon: Layers, color: "#9C27B0", url: "https://www.stencyl.com", pricing: "Free for Web" },
@@ -101,7 +101,7 @@ export default function GrudgeStudioAdvantage() {
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-8">
             {[
-              { icon: Gamepad2, title: "6 Game Engines", desc: "No-code platforms for every type of game" },
+              { icon: Gamepad, title: "6 Game Engines", desc: "No-code platforms for every type of game" },
               { icon: Palette, title: "10+ Asset Tools", desc: "Professional graphics, audio, and design" },
               { icon: Cpu, title: "Custom Engines", desc: "Wargus, Avernus, Tower Defense & more" },
             ].map((item, i) => (

@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Play, Settings, Share, Gamepad2, Zap, Trophy } from "lucide-react";
+import { Play, Settings, Share, Gamepad, Zap, Trophy } from "lucide-react";
 import { Link } from "wouter";
 
 interface Project {
@@ -164,7 +164,7 @@ export default function EnhancedProjectGrid({ projects = enhancedProjects }: Enh
               {project.playable && (
                 <div className="absolute top-2 left-2">
                   <Badge className="bg-green-500/20 text-green-400 border-green-500/30">
-                    <Gamepad2 className="w-3 h-3 mr-1" />
+                    <Gamepad className="w-3 h-3 mr-1" />
                     Playable
                   </Badge>
                 </div>
@@ -174,7 +174,7 @@ export default function EnhancedProjectGrid({ projects = enhancedProjects }: Enh
                 {project.enhanced ? (
                   <Trophy className="w-16 h-16 text-orange-400 mb-2" />
                 ) : (
-                  <Gamepad2 className="w-12 h-12 text-gray-500" />
+                  <Gamepad className="w-12 h-12 text-gray-500" />
                 )}
                 {project.enhanced && (
                   <div className="text-xs text-orange-400 font-medium">Super Engine</div>

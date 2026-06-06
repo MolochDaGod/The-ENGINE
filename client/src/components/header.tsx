@@ -91,7 +91,7 @@ export default function Header() {
     { name: "Nexus", href: "/#products", icon: Layers3 },
     { name: "Armada", href: "/#play", icon: Flame },
     { name: "Compete", href: "/leaderboards", icon: Trophy },
-    { name: "Play", href: "/super-engine", icon: Gamepad2 },
+    { name: "Play", href: "/super-engine", icon: Gamepad },
     { name: "Games", href: "/games", icon: Library },
     { name: "Studio", href: "/#studio", icon: Wrench },
   ] as const;

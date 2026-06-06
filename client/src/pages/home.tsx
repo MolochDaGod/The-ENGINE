@@ -3,7 +3,7 @@ import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Anchor, ArrowUpRight, Bot, ChevronLeft, ChevronRight, Crown, ExternalLink, Flame, Gamepad2, Layers3, LayoutDashboard, Library, Loader2, Rocket, Sparkles, Swords, Trophy } from "lucide-react";
+import { Anchor, ArrowUpRight, Bot, ChevronLeft, ChevronRight, Crown, ExternalLink, Flame, Gamepad, Layers3, LayoutDashboard, Library, Loader2, Rocket, Sparkles, Swords, Trophy } from "lucide-react";
 import { useAuthModal } from "@/components/auth-modal";
 
 // Outbound URLs are environment-driven so production deploys (Railway/Vercel/Cloudflare)
@@ -389,7 +389,7 @@ setActiveKey = {(k: string) => setActiveEra(k as EraKey)}
   </a>
   < Link href = "/games" >
               <Button variant="outline" className="border-[hsl(43,60%,30%)] text-[hsl(45,30%,90%)] hover:bg-[hsl(225,25%,16%)]">
-  <Gamepad2 className="w-4 h-4 mr-2" /> Browse Games
+  <Gamepad className="w-4 h-4 mr-2" /> Browse Games
               </Button>
   </Link>
   < Button

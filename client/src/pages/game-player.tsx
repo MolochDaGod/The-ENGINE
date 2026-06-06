@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useLocation, useRoute } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Maximize2, Minimize2, Gamepad2, Loader2, Play } from "lucide-react";
+import { ArrowLeft, Maximize2, Minimize2, Gamepad, Loader2, Play } from "lucide-react";
 import type { Game } from "@shared/schema";
 import grudgeLogo from "@assets/uXpJmRe_1773828784729.png";
 import NotFound from "@/pages/not-found";
@@ -213,7 +213,7 @@ export default function GamePlayer() {
           </div>
         ) : (
           <div className="fantasy-panel p-12 text-center">
-            <Gamepad2 className="w-16 h-16 text-[hsl(43,60%,30%)] mx-auto mb-4" />
+            <Gamepad className="w-16 h-16 text-[hsl(43,60%,30%)] mx-auto mb-4" />
             <h3 className="text-xl font-heading text-[hsl(43,85%,65%)] mb-2" style={{ WebkitTextFillColor: 'unset' }}>Emulator Coming Soon</h3>
             <p className="text-[hsl(45,15%,60%)] mb-4 font-body">This game is being set up for web play. Check back soon!</p>
             <Button onClick={() => setLocation("/games")} className="dark-button">

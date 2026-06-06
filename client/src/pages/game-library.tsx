@@ -4,7 +4,7 @@ import { useLocation } from "wouter";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Search, Gamepad2, Download, Star, Play, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
+import { Loader2, Search, Gamepad, Download, Star, Play, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import type { Game, GamePlatform } from "@shared/schema";
 import libraryBg from "@assets/HRuOcD2_1773841538318.png";
@@ -212,7 +212,7 @@ export default function GameLibrary() {
 
           {!gamesLoading && filteredGames.length === 0 && (
             <div className="text-center py-20">
-              <Gamepad2 className="w-16 h-16 text-[hsl(43,60%,30%)] mx-auto mb-4" />
+              <Gamepad className="w-16 h-16 text-[hsl(43,60%,30%)] mx-auto mb-4" />
               <h3 className="text-xl font-heading text-[hsl(43,85%,65%)] mb-2" style={{ WebkitTextFillColor: 'unset' }}>No games found</h3>
               <p className="text-[hsl(45,15%,60%)] mb-4 font-body">
                 {selectedPlatform ? `Scrape ${selectedPlatform.toUpperCase()} games to populate the library` : "Select a platform and scrape games to get started"}
@@ -244,7 +244,7 @@ export default function GameLibrary() {
                     {/* Gradient placeholder — always visible as base layer */}
                     <div className="absolute inset-0 flex items-center justify-center">
                       <span className="text-4xl font-heading font-bold opacity-20 select-none" style={{ color: colors.accent }}>{initial}</span>
-                      <Gamepad2 className="absolute bottom-1 right-1 w-4 h-4 opacity-20" style={{ color: colors.accent }} />
+                      <Gamepad className="absolute bottom-1 right-1 w-4 h-4 opacity-20" style={{ color: colors.accent }} />
                     </div>
 {/* Cover art from libretro-thumbnails CDN — walks region-suffix fallbacks on 404 */ }
 { thumbUrl && <GameCover src={ thumbUrl } alt = { game.title } />}

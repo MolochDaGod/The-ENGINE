@@ -21,7 +21,7 @@
 import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Coins, Gamepad2, Loader2, LogOut, Settings, Swords, Users, UserCircle, Wallet } from "lucide-react";
+import { Coins, Gamepad, Loader2, LogOut, Settings, Swords, Users, UserCircle, Wallet } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
 import { useAuthModal } from "@/components/auth-modal";
 import AccountOverview from "@/components/account/AccountOverview";
@@ -69,7 +69,7 @@ export default function AccountPage() {
         <Tabs defaultValue="overview" className="w-full">
           <TabsList className="w-full justify-start bg-[hsl(225,25%,10%)] border border-[hsl(43,60%,30%)]/15 rounded-lg p-1 gap-1 flex-wrap h-auto">
             <TabsTrigger value="overview" className="data-[state=active]:bg-[hsl(43,85%,55%)]/15 data-[state=active]:text-[hsl(43,85%,55%)] text-[hsl(45,15%,55%)] text-xs font-heading">
-              <Gamepad2 className="w-3.5 h-3.5 mr-1.5" /> Overview
+              <Gamepad className="w-3.5 h-3.5 mr-1.5" /> Overview
             </TabsTrigger>
             <TabsTrigger value="wallet" className="data-[state=active]:bg-[hsl(43,85%,55%)]/15 data-[state=active]:text-[hsl(43,85%,55%)] text-[hsl(45,15%,55%)] text-xs font-heading">
               <Wallet className="w-3.5 h-3.5 mr-1.5" /> Wallet & Web3

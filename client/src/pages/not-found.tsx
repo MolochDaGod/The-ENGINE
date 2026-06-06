@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
-import { Home, Gamepad2 } from "lucide-react";
+import { Home, Gamepad } from "lucide-react";
 
 export default function NotFound() {
   return (
@@ -22,7 +22,7 @@ export default function NotFound() {
           </Link>
           <Link href="/games">
             <Button variant="outline" className="border-[hsl(43,60%,30%)] text-[hsl(43,85%,55%)] hover:bg-[hsl(43,85%,55%)]/10">
-              <Gamepad2 className="w-4 h-4 mr-2" />
+              <Gamepad className="w-4 h-4 mr-2" />
               Play Games
             </Button>
           </Link>
