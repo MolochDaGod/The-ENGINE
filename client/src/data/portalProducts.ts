@@ -144,6 +144,15 @@ export const PORTAL_PRODUCTS: PortalProduct[] = [
     tags: ["solo", "coop"],
   },
   {
+    id: "grudge-brawl",
+    name: "Grudge Brawl",
+    href: "/grudge-brawl",
+    description: "Third-person arena combat with body-tracks-crosshair aiming, voxel characters, custom VFX, and mobile touch support.",
+    status: "beta",
+    section: "play",
+    tags: ["pvp", "arena"],
+  },
+  {
     id: "terraforge",
     name: "TerraForge",
     href: "/terraforge",

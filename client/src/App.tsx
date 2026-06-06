@@ -53,6 +53,7 @@ import ComingSoon from "@/pages/coming-soon";
 import VoxelSandbox from "@/pages/voxel-sandbox";
 import PolyFighter from "@/pages/polyfighter";
 import TerraForge from "@/pages/terraforge";
+import GrudgeBrawl from "@/pages/grudge-brawl";
 import AdminGuard from "@/components/admin-guard";
 import AdminEntryButton from "@/components/admin-entry-button";
 
@@ -114,6 +115,7 @@ function Router() {
       <Route path="/voxel-sandbox" component={VoxelSandbox} />
       <Route path="/polyfighter" component={PolyFighter} />
       <Route path="/terraforge" component={TerraForge} />
+      <Route path="/grudge-brawl" component={GrudgeBrawl} />
       <Route path="/starway-gruda" component={ComingSoon} />
       <Route path="/rts-star-armada" component={ComingSoon} />
       <Route path="/mech-armada" component={ComingSoon} />

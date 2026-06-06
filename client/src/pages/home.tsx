@@ -97,7 +97,7 @@ const ERAS: { key: EraKey; name: string; tagline: string; description: string; i
     bgImage: "/assets/store/mmo_development.png",
     accent: "hsl(0,70%,55%)",
     accentBorder: "hsl(0,60%,35%)",
-    productIds: ["betta-warlords", "nemesis-tcg", "wargus", "multiplayer-racing", "annihilate-demo", "grudge-fighter", "voxel-sandbox", "terraforge"],
+    productIds: ["betta-warlords", "nemesis-tcg", "wargus", "multiplayer-racing", "annihilate-demo", "grudge-fighter", "grudge-brawl", "voxel-sandbox", "terraforge"],
   },
   {
     key: "armada",
