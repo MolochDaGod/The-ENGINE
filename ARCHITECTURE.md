@@ -72,6 +72,13 @@
 | `edge.grudge-studio.com` | None | Never had DNS record | ❌ Remove refs |
 | `ale.grudge-studio.com` | None | Never had DNS record | ❌ Remove refs |
 
+### Grudge-Warlords GitHub Org
+| Repo | Purpose | Status |
+|------|---------|--------|
+| `grudge-openworld-server` | Multiplayer room server — room-based world instances with player sync | ⚠️ Not deployed |
+
+The openworld server will connect to Railway (The-ENGINE) for auth + persistence. Deploy target TBD (Railway or GRUDGEYONKO VPS). Wire through `cf-game-servers` worker for matchmaking.
+
 ## 3. Cloudflare Workers
 
 | Worker Name | Route | Backend | Source |
