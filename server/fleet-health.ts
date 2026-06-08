@@ -43,9 +43,9 @@ const SERVICES: ServiceDef[] = [
   { id: 'cf-auth-gateway', name: 'grudge-auth-gateway', region: 'cloudflare', url: 'https://auth.grudge-studio.com/health', timeoutMs: 5000, warnThresholdMs: 1000 },
   { id: 'cf-identity-api', name: 'grudge-identity-api', region: 'cloudflare', url: 'https://id.grudge-studio.com/api/health', timeoutMs: 5000, warnThresholdMs: 1000 },
   { id: 'cf-ai-hub', name: 'grudge-ai-hub', region: 'cloudflare', url: 'https://ai.grudge-studio.com/api/health', timeoutMs: 5000, warnThresholdMs: 1500 },
-  { id: 'cf-objectstore', name: 'grudge-objectstore-api', region: 'cloudflare', url: 'https://objects.grudge-studio.com/health', timeoutMs: 5000, warnThresholdMs: 1000 },
+  { id: 'cf-objectstore', name: 'grudge-info-hub', region: 'cloudflare', url: 'https://info.grudge-studio.com/', timeoutMs: 5000, warnThresholdMs: 1000 },
   { id: 'cf-asset-cdn', name: 'grudge-asset-cdn', region: 'cloudflare', url: 'https://assets.grudge-studio.com/toon-shooter/manifest.json', timeoutMs: 5000, warnThresholdMs: 500 },
-  { id: 'cf-dashboard', name: 'grudge-dashboard', region: 'cloudflare', url: 'https://dash.grudge-studio.com/', timeoutMs: 5000, warnThresholdMs: 2000 },
+  { id: 'cf-dashboard', name: 'grudge-dashboard', region: 'cloudflare', url: 'https://info.grudge-studio.com/', timeoutMs: 5000, warnThresholdMs: 2000 },
   { id: 'cf-vercel-proxy', name: 'grudge-vercel-proxy', region: 'cloudflare', url: 'https://grudge-studio.com/avernus-3d', timeoutMs: 8000, warnThresholdMs: 3000 },
 
   // Vercel frontends
