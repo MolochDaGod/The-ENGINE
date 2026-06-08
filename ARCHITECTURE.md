@@ -1,6 +1,6 @@
 # Grudge Studio — Architecture & Operations Guide
 
-> **Last updated**: 2026-05-25
+> **Last updated**: 2026-06-08
 > **Owner**: Racalvin The Pirate King
 > **Canonical backend**: The-ENGINE on Railway (`the-engine.up.railway.app`)
 
@@ -47,6 +47,33 @@
 │  PostgreSQL (Railway managed)                                   │
 │  └── Drizzle ORM, auto-migrate via `db:push`                   │
 └─────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│                    PUTER PLATFORM                                │
+│                                                                 │
+│  *.puter.site        — Static sites (launcher, crafting, etc.)  │
+│  *.puter.work        — Puter Workers (AI, GrudaChain, sprites)  │
+│  puter.com/KV        — Player save cache, objectstore sync      │
+│  puter.com/FS        — Uploaded assets, player content           │
+│  puter.com/AI        — Client-side AI (user-pays model)         │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│                    GRUDGEYONKO VPS (game servers only)           │
+│                                                                 │
+│  Conan Exiles dedicated server (D:\ConanServer)                  │
+│  Conan admin panel + Discord bot (D:\conan-admin)                │
+│  Future: grudge-openworld-server (multiplayer rooms)             │
+│  ⚠ NOT auth/API — those are Railway only                        │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│                    GRUDGE-WARLORDS ORG (GitHub)                  │
+│                                                                 │
+│  grudge-openworld-server — room-based multiplayer (pending)     │
+│  → Connects to Railway for auth + persistence                   │
+│  → Wired through cf-game-servers worker for matchmaking         │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
 ## 2. Domain Inventory
@@ -71,6 +98,13 @@
 | `account.grudge-studio.com` | None | Never had DNS record | ❌ Remove refs |
 | `edge.grudge-studio.com` | None | Never had DNS record | ❌ Remove refs |
 | `ale.grudge-studio.com` | None | Never had DNS record | ❌ Remove refs |
+
+### Grudge-Warlords GitHub Org
+| Repo | Purpose | Status |
+|------|---------|--------|
+| `grudge-openworld-server` | Multiplayer room server — room-based world instances with player sync | ⚠️ Not deployed |
+
+The openworld server will connect to Railway (The-ENGINE) for auth + persistence. Deploy target TBD (Railway or GRUDGEYONKO VPS). Wire through `cf-game-servers` worker for matchmaking.
 
 ## 3. Cloudflare Workers
 
@@ -329,6 +363,8 @@ npx wrangler tail             # live logs
 
 | System | Was | Now | Notes |
 |--------|-----|-----|-------|
+| Linux VPS (74.208.155.229) | Docker: Coolify, MySQL, Redis, grudge-id, game-api, account-api, launcher-api, ws-service, watchtower | **DEAD** | All services migrated to Railway (The-ENGINE). VPS decommissioned. |
+| Windows VPS Colyseus | Colyseus multiplayer rooms | **DEAD** | Never fully deployed. Replaced by Railway WS + planned grudge-openworld-server. |
 | VPS Docker + Cloudflare Tunnel | `api.grudge-studio.com` backend | **DEAD** | Replaced by Railway. Tunnel disconnected. Worker gateway replaces it. |
 | `grudge-backend` repo | Full game API + auth | **CODE SOURCE ONLY** | Schema/route patterns were reference for The-ENGINE. Do not restore. |
 | `account.grudge-studio.com` | Planned separate account service | **NEVER EXISTED** | DNS record was never created. All account calls go through api.grudge-studio.com. |
@@ -336,6 +372,7 @@ npx wrangler tail             # live logs
 | `ale.grudge-studio.com` | AI gateway Worker | **NEVER EXISTED** | DNS record was never created. ALE Worker source exists in grudge-backend. |
 | `grudgeplatform.io` | Web3 hub | **OFFLINE** | Was Vercel, now 404. grudgeplatform.com still live. |
 | `grudgedot-launcher.vercel.app` | GrudgeDot launcher | **DEAD** | 404. Canonical launcher will be at launcher.grudge-studio.com. |
+| NeonDB | Serverless Postgres | **DEPRECATED** | Per project rules, do NOT use. Railway Postgres is primary. |
 
 ## 11. Patterns & Conventions
 
@@ -440,6 +477,43 @@ To deploy the Puter app:
 | `/api/platforms` | GET | 200 | 200 | ✅ |
 
 Fleet status: 11 live, 2 warn, 9 down (down = decommissioned VPS services, expected).
+
+---
+
+### 2026-06-08 — Fleet topology alignment (commit `f532405`)
+
+**What changed**: Aligned `admin-harbor.html`, `fleet-health.ts`, and this doc to the single source of truth.
+
+- Removed 11 dead VPS Docker vessels from admin-harbor FLEET
+- Added Railway (The-ENGINE) + Railway Postgres + grudge-openworld-server vessels
+- Replaced ~20 broken VPS connections with Railway-routed connections
+- Removed `vps-linux` region, added `railway` region, renamed `vps-windows` to GRUDGEYONKO
+- Updated captain diagnosis + PVP checks to reference Railway stack
+- Added `openworld` git remote → `Grudge-Warlords/grudge-openworld-server.git`
+
+**Fleet health (17 services):**
+
+| Service | Status | Latency |
+|---------|--------|---------|
+| The-ENGINE (Railway) | ✅ live | 263ms |
+| grudge-studio.com | ✅ live | 252ms |
+| grudge-auth-gateway | ✅ live | 836ms |
+| grudge-identity-api | ✅ live | 847ms |
+| grudge-ai-hub | ⚠️ warn | 342ms |
+| grudge-objectstore-api | ❌ down | 254ms |
+| grudge-asset-cdn | ⚠️ warn | 720ms |
+| grudge-dashboard | ⚠️ warn | 489ms |
+| grudge-vercel-proxy | ✅ live | 175ms |
+| Grudge Warlords | ✅ live | 335ms |
+| Dungeon Crawler | ✅ live | 219ms |
+| GrudgePlatform | ✅ live | 633ms |
+| Puter | ✅ live | 349ms |
+| grudgestudio.puter.site | ✅ live | 757ms |
+| grudgeplatform.puter.site | ⚠️ warn | 556ms |
+| Solana RPC | ✅ live | 447ms |
+| Discord API | ✅ live | 76ms |
+
+**Summary**: 12 live, 4 warn, 1 down (objectstore-api returning 404 on health endpoint).
 
 ## 15. Database Migration Notes
 

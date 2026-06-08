@@ -690,12 +690,13 @@ const FLEET = [
     deployCmd:'wrangler deploy --name grudge-ai-hub', logCmd:'wrangler tail grudge-ai-hub',
     docs:'Routes AI calls to Anthropic/OpenAI/Puter AI. Logs to D1 grudge-ai-hub-db. Rate limits via RATE_LIMIT KV.' },
 
-  { id:'cf-objectstore', name:'grudge-objectstore-api', kind:'frigate', size:3, region:'cloudflare', x:560, y:420,
-    status:'live', value:'R2-backed object storage API for game assets.',
-    type:'CF Worker', stack:'Workers · R2',
-    endpoint:'https://objects.grudge-studio.com', healthCheck:'https://objects.grudge-studio.com/health',
-    deployCmd:'wrangler deploy --name grudge-objectstore-api', logCmd:'wrangler tail grudge-objectstore-api',
-    docs:'CRUD for game assets. Reads/writes R2 objectstore-assets bucket. Metadata in D1 grudge-objectstore.' },
+  { id:'cf-objectstore', name:'grudge-info-hub', kind:'frigate', size:3, region:'cloudflare', x:560, y:420,
+    status:'live', value:'Game Info Hub — items, skills, assets, crafting data. One truth at info.grudge-studio.com.',
+    type:'CF Worker', stack:'Workers · Cloudflare Pages',
+    endpoint:'https://info.grudge-studio.com', healthCheck:'https://info.grudge-studio.com/',
+    deployCmd:'wrangler pages deploy', logCmd:'wrangler tail grudge-info-hub',
+    notes:'Consolidated from objects.grudge-studio.com + objectstore.grudge-studio.com + dash.grudge-studio.com.',
+    docs:'Single source of truth for game data. Items, weapons, armor, recipes, classes, races, professions. Previously split across objectstore + dashboard — now unified at info.grudge-studio.com.' },
 
   { id:'cf-asset-cdn', name:'grudge-asset-cdn', kind:'sloop', size:2, region:'cloudflare', x:340, y:460,
     status:'live', value:'Asset CDN — cached delivery from R2.',
@@ -745,12 +746,11 @@ const FLEET = [
     docs:'Monitors all Puter workers + VPS services. Posts to Discord webhook on status change.' },
 
   { id:'cf-dashboard', name:'grudge-dashboard', kind:'frigate', size:3, region:'cloudflare', x:780, y:410,
-    status:'warn', value:'dash.grudge-studio.com admin dashboard.',
-    type:'CF Worker', stack:'Workers',
-    endpoint:'https://dash.grudge-studio.com', healthCheck:'https://dash.grudge-studio.com/api/health',
-    deployCmd:'wrangler deploy --name grudge-dashboard', logCmd:'wrangler tail grudge-dashboard',
-    notes:'Reported broken in past sessions. Needs verify.',
-    docs:'Admin dashboard. Shows fleet status, user counts, GBux economy stats. Auth required (admin role).' },
+    status:'live', value:'Admin dashboard — consolidated into info.grudge-studio.com.',
+    type:'CF Worker', stack:'Workers · Cloudflare Pages',
+    endpoint:'https://info.grudge-studio.com', healthCheck:'https://info.grudge-studio.com/',
+    notes:'dash.grudge-studio.com retired. Admin features now at info.grudge-studio.com.',
+    docs:'Dashboard consolidated into info.grudge-studio.com. Fleet status, user counts, GBux economy. dash.grudge-studio.com is a dead reference — use info.grudge-studio.com.' },
 
   { id:'cf-grudgeproduction', name:'grudgeproduction', kind:'sloop', size:2, region:'cloudflare', x:260, y:240,
     status:'unknown', value:'Production catch-all? Purpose unclear.',
@@ -838,9 +838,32 @@ const FLEET = [
     status:'unknown', value:'10 additional KV namespaces — audit needed.',
     type:'KV Group', stack:'Cloudflare KV', notes:'Of 14 total KVs, 10 are unaudited.' },
 
-  // ══════ DECOMMISSIONED VPS (removed — all services migrated to Railway) ══════
-  // Linux VPS (74.208.155.229) and Windows VPS (74.208.174.62) are no longer in use.
-  // All backend services now run on Railway via The-ENGINE. See ARCHITECTURE.md §10.
+  // ══════ RAILWAY (canonical backend) ══════
+  { id:'railway-engine', name:'The-ENGINE', kind:'flagship', size:5, region:'railway', x:1000, y:860,
+    status:'live', value:'Canonical backend — auth, API, WebSocket, leaderboards, economy, Legion AI, GrudaChain.',
+    type:'Railway App', stack:'Node.js · Express · Vite SSR · Drizzle · Postgres',
+    endpoint:'https://the-engine.up.railway.app', healthCheck:'https://the-engine.up.railway.app/api/health',
+    deployCmd:'git push origin main (auto-deploy)', logCmd:'railway logs --tail',
+    restartCmd:'railway redeploy',
+    notes:'Single backend — everything goes through Railway. No separate microservices.',
+    docs:'The-ENGINE. Auth (all providers), game library (1360+ games), leaderboards, PvP challenges, GBUX economy, chat (WS), arena (WS), Web3 wallets, Discord webhooks, Legion AI, GrudaChain, fleet health, admin panel. Postgres via Drizzle ORM. See ARCHITECTURE.md.' },
+
+  { id:'railway-postgres', name:'Railway Postgres', kind:'hulk', size:3, region:'railway', x:1200, y:920,
+    status:'live', value:'Managed Postgres — Drizzle ORM, auto-migrate via db:push.',
+    type:'Railway DB', stack:'PostgreSQL · Drizzle ORM',
+    docs:'Core tables: users, scores, challenges, transactions, wallet_connections, game_library, chat_messages, store_products, orders, articles. Migrate: npm run db:push via Railway shell or public proxy.' },
+
+  // ══════ GRUDGE OPENWORLD SERVER ══════
+  { id:'gh-openworld', name:'grudge-openworld-server', kind:'frigate', size:3, region:'github', x:2440, y:1080,
+    status:'warn', value:'Multiplayer room server — room-based world instances with player sync.',
+    type:'Repo', stack:'Node.js · Colyseus-style rooms',
+    endpoint:'https://github.com/Grudge-Warlords/grudge-openworld-server',
+    notes:'Not yet deployed. Next step: deploy to Railway or VPS, wire to grudge-game-servers worker.',
+    docs:'Open-world multiplayer server. Room-based world instances with player sync. Will connect to Railway for auth + persistence. Deploy target TBD (Railway or GRUDGEYONKO VPS).' },
+
+  // ══════ WINDOWS VPS (Conan Exiles only) ══════
+  // GRUDGEYONKO (Windows VPS, RTX 3070 Ti, 32 GB RAM) — game servers ONLY, NOT auth/API.
+  // Future: grudge-openworld-server deployment target.
 
   // ══════ VERCEL FRONTENDS ══════
   { id:'vc-grudgeplatform', name:'GrudgePlatform', kind:'flagship', size:4, region:'vercel', x:820, y:1380,
@@ -1000,11 +1023,13 @@ const FLEET = [
    CONNECTIONS
 ════════════════════════════════════════════════════════════════ */
 const CONNECTIONS = [
+  // ── Cloudflare Edge → Railway ──
   { from:'cf-grudge-studio-site', to:'cf-auth-gateway', status:'active', label:'auth gate' },
   { from:'cf-auth-gateway', to:'cf-identity-api', status:'active', label:'verify GID' },
   { from:'cf-auth-gateway', to:'kv-sessions', status:'active', label:'session cache' },
-  { from:'cf-auth-gateway', to:'svc-grudge-id', status:'broken', label:'JWT validate (503)' },
-  { from:'cf-identity-api', to:'d1-game-state', status:'active', label:'reads' },
+  { from:'cf-auth-gateway', to:'railway-engine', status:'active', label:'JWT validate → Railway' },
+  { from:'cf-identity-api', to:'railway-engine', status:'active', label:'proxy → Railway auth' },
+  { from:'cf-identity-api', to:'d1-game-state', status:'active', label:'edge cache reads' },
   { from:'cf-ai-hub', to:'d1-ai-hub', status:'active', label:'rate limits' },
   { from:'cf-ai-hub', to:'kv-rate', status:'active', label:'throttle' },
   { from:'cf-ai-hub', to:'ext-anthropic', status:'active', label:'studio AI' },
@@ -1013,42 +1038,37 @@ const CONNECTIONS = [
   { from:'cf-r2-cdn', to:'r2-grudge-assets', status:'active' },
   { from:'cf-cdn', to:'r2-grudge-assets', status:'degraded', label:'duplicate?' },
   { from:'cf-grudgeassets', to:'r2-grudge-assets', status:'active' },
-  { from:'cf-objectstore', to:'r2-objectstore', status:'active' },
+  { from:'cf-objectstore', to:'r2-objectstore', status:'active', label:'info hub → R2' },
   { from:'cf-objectstore', to:'d1-objectstore', status:'active', label:'metadata' },
   { from:'cf-vercel-proxy', to:'vc-grudgeplatform', status:'active' },
   { from:'cf-vercel-proxy', to:'vc-grudgewarlords', status:'active' },
-  { from:'cf-game-servers', to:'vps-windows', status:'unverified', label:'matchmake' },
-  { from:'cf-game-servers', to:'colyseus', status:'broken', label:'WS routing' },
+  { from:'cf-game-servers', to:'railway-engine', status:'active', label:'matchmake → Railway WS' },
+  { from:'cf-game-servers', to:'gh-openworld', status:'unverified', label:'future: room server' },
   { from:'cf-route-monitor', to:'cf-grudge-studio-site', status:'active', label:'pings' },
-  { from:'cf-route-monitor', to:'cf-dashboard', status:'degraded' },
-  { from:'cf-legion-monitor', to:'vps-linux', status:'active', label:'uptime' },
-  { from:'cf-health-ping', to:'svc-grudge-id', status:'broken' },
-  { from:'cf-health-ping', to:'svc-game-api', status:'broken' },
-  { from:'svc-coolify', to:'svc-grudge-id', status:'broken', label:'orchestrate' },
-  { from:'svc-coolify', to:'svc-game-api', status:'broken' },
-  { from:'svc-coolify', to:'svc-account-api', status:'broken' },
-  { from:'svc-coolify', to:'svc-launcher-api', status:'broken' },
-  { from:'svc-coolify', to:'svc-ws', status:'broken' },
-  { from:'svc-grudge-id', to:'svc-mysql', status:'broken', label:'reads/writes' },
-  { from:'svc-game-api', to:'svc-mysql', status:'broken' },
-  { from:'svc-game-api', to:'svc-redis', status:'broken' },
-  { from:'svc-account-api', to:'svc-mysql', status:'broken' },
-  { from:'svc-launcher-api', to:'svc-mysql', status:'broken' },
-  { from:'svc-ws', to:'svc-redis', status:'broken', label:'pub/sub' },
-  { from:'svc-watchtower', to:'svc-coolify', status:'active' },
-  { from:'svc-game-api', to:'d1-game-state', status:'unverified', label:'edge sync' },
-  { from:'vps-windows', to:'colyseus', status:'broken', label:'host (not deployed)' },
-  { from:'colyseus', to:'colyseus-rooms', status:'broken' },
-  { from:'colyseus', to:'svc-game-api', status:'unverified', label:'persist 30s' },
-  { from:'colyseus', to:'svc-redis', status:'unverified', label:'pub/sub bridge' },
+  { from:'cf-route-monitor', to:'cf-dashboard', status:'active', label:'info hub' },
+  { from:'cf-route-monitor', to:'railway-engine', status:'active', label:'health ping' },
+  { from:'cf-health-ping', to:'railway-engine', status:'active', label:'heartbeat' },
+
+  // ── Railway internal ──
+  { from:'railway-engine', to:'railway-postgres', status:'active', label:'Drizzle ORM' },
+  { from:'railway-engine', to:'d1-game-state', status:'unverified', label:'edge sync' },
+  { from:'railway-engine', to:'puter-ai-agent', status:'unverified', label:'Legion AI' },
+  { from:'railway-engine', to:'ext-crossmint', status:'active', label:'wallet provision' },
+  { from:'railway-engine', to:'ext-discord', status:'active', label:'OAuth + webhooks' },
+  { from:'railway-engine', to:'ext-solana', status:'active', label:'Web3 wallets' },
+
+  // ── Vercel → Railway ──
   { from:'vc-grudgewarlords', to:'cf-auth-gateway', status:'active', label:'login' },
+  { from:'vc-grudgewarlords', to:'railway-engine', status:'active', label:'API + WS' },
   { from:'vc-grudgewarlords', to:'cf-game-servers', status:'active', label:'matchmake' },
   { from:'vc-grudgewarlords', to:'vc-dungeon', status:'active' },
-  { from:'vc-grudgewarlords', to:'colyseus', status:'broken', label:'WS connect' },
   { from:'vc-grudgeplatform', to:'cf-auth-gateway', status:'active' },
+  { from:'vc-grudgeplatform', to:'railway-engine', status:'active', label:'API' },
   { from:'vc-grudgeplatform', to:'cf-asset-cdn', status:'active' },
-  { from:'vc-engine', to:'cf-objectstore', status:'broken', label:'models 404' },
-  { from:'vc-builder', to:'cf-objectstore', status:'unverified' },
+  { from:'vc-engine', to:'cf-objectstore', status:'active', label:'info hub' },
+  { from:'vc-builder', to:'cf-objectstore', status:'active', label:'info hub' },
+
+  // ── Puter ──
   { from:'puter-grudgestudio', to:'puter-platform', status:'active' },
   { from:'puter-grudgeplatform', to:'puter-platform', status:'active' },
   { from:'puter-platform', to:'puter-server-worker', status:'broken' },
@@ -1057,17 +1077,18 @@ const CONNECTIONS = [
   { from:'puter-platform', to:'puter-grench', status:'active' },
   { from:'puter-platform', to:'puter-sprites', status:'active' },
   { from:'puter-platform', to:'puter-islands', status:'active' },
-  { from:'puter-server-worker', to:'svc-grudge-id', status:'unverified', label:'auth bridge' },
+  { from:'puter-server-worker', to:'railway-engine', status:'unverified', label:'auth bridge' },
   { from:'puter-ai-agent', to:'ext-anthropic', status:'active' },
-  { from:'svc-account-api', to:'ext-crossmint', status:'broken', label:'wallet provision' },
+
+  // ── External ──
   { from:'ext-crossmint', to:'ext-solana', status:'active' },
   { from:'puter-grench', to:'ext-solana', status:'active', label:'GBux SPL' },
-  { from:'svc-mysql', to:'ext-supabase', status:'unverified', label:'legacy migrate' },
-  { from:'ext-neondb', to:'svc-mysql', status:'unverified', label:'cutover candidate' },
-  { from:'svc-account-api', to:'ext-discord', status:'broken', label:'OAuth' },
+
+  // ── GitHub ──
   { from:'gh-org', to:'gh-auth', status:'active' },
   { from:'gh-org', to:'gh-api', status:'active' },
   { from:'gh-org', to:'gh-ui', status:'active' },
+  { from:'gh-org', to:'gh-openworld', status:'active', label:'Grudge-Warlords org' },
   { from:'gh-auth', to:'vc-grudgewarlords', status:'unverified', label:'not imported' },
   { from:'gh-auth', to:'vc-grudgeplatform', status:'unverified' },
   { from:'gh-ui', to:'vc-grudgewarlords', status:'unverified' },
@@ -1076,12 +1097,12 @@ const CONNECTIONS = [
 const REGIONS = [
   { id:'cloudflare', name:'CLOUDFLARE EDGE', sub:'19 Workers · global', x:60, y:130, w:1540, h:490 },
   { id:'storage',    name:'EDGE STORAGE',    sub:'3 R2 · 5 D1 · 14 KV', x:50, y:640, w:780, h:530 },
-  { id:'vps-linux',  name:'LINUX VPS · 74.208.155.229', sub:'Coolify · Docker · MySQL', x:840, y:800, w:660, h:440 },
-  { id:'vps-windows',name:'WINDOWS VPS · 74.208.174.62', sub:'Colyseus (pending)', x:1720, y:800, w:460, h:340 },
+  { id:'railway',    name:'RAILWAY',         sub:'The-ENGINE · Postgres · auto-deploy', x:840, y:780, w:520, h:260 },
+  { id:'vps-windows',name:'GRUDGEYONKO VPS', sub:'Conan Exiles · future game servers', x:1720, y:800, w:460, h:340 },
   { id:'vercel',     name:'VERCEL FRONTENDS', sub:'Team: grudgenexus', x:720, y:1280, w:800, h:320 },
   { id:'puter',      name:'PUTER PLATFORM',  sub:'Apps · Sites · Workers · FS', x:1560, y:1230, w:720, h:380 },
   { id:'external',   name:'EXTERNAL WATERS', sub:'3rd party services', x:2070, y:220, w:720, h:480 },
-  { id:'github',     name:'GITHUB ORG',      sub:'grudge-studio · Turborepo', x:2100, y:830, w:480, h:300 },
+  { id:'github',     name:'GITHUB ORG',      sub:'grudge-studio + Grudge-Warlords', x:2100, y:830, w:500, h:340 },
 ];
 
 /* ════════════════════════════════════════════════════════════════
@@ -1346,62 +1367,61 @@ function captainDiagnose() {
   setTimeout(() => {
     logCaptain('ai', '─── CRITICAL ISSUES ───');
 
-    // Down services
     const downVessels = FLEET.filter(v=>v.status==='down');
     if (downVessels.length) {
       logCaptain('err', `${downVessels.length} VESSELS DOWN:`);
       downVessels.forEach(v => logCaptain('err', `  ✗ ${v.name} — ${v.value}`));
     }
 
+    // Railway check
+    const engine = lookup['railway-engine'];
+    if (engine?.status !== 'live') {
+      logCaptain('err', `⚠ RAILWAY ENGINE IS ${engine?.status||'MISSING'} — this is the canonical backend!`);
+    } else {
+      logCaptain('ok', '✓ Railway (The-ENGINE) — canonical backend online');
+    }
+
     setTimeout(() => {
       logCaptain('ai', '─── RECOMMENDED ACTIONS ───');
 
-      // Priority 1: Linux VPS Docker stack
-      const downDocker = FLEET.filter(v=>v.region==='vps-linux' && v.status==='down');
-      if (downDocker.length) {
-        logCaptain('ai', `PRIORITY 1: Revive ${downDocker.length} Docker services on Linux VPS`);
-        logCaptain('cmd', `  Action: ssh grudge@74.208.155.229 "cd /opt/grudge && docker compose up -d --build"`);
-        logCaptain('ai', `  Root cause: Services don't persist after VPS restart. Add restart:always to docker-compose.yml`);
+      // Priority 1: Deploy openworld server
+      const openworld = lookup['gh-openworld'];
+      if (openworld?.status !== 'live') {
+        logCaptain('ai', `PRIORITY 1: Deploy grudge-openworld-server`);
+        logCaptain('cmd', `  Action: git clone → npm install → deploy to Railway or GRUDGEYONKO VPS`);
+        logCaptain('ai', `  This enables open-world multiplayer rooms for Grudge Warlords.`);
       }
 
       setTimeout(() => {
-        // Priority 2: Colyseus
-        const colyseus = lookup['colyseus'];
-        if (colyseus?.status === 'down') {
-          logCaptain('ai', `PRIORITY 2: Deploy Colyseus on Windows VPS (74.208.174.62)`);
-          logCaptain('cmd', `  Action: RDP → install Node.js → git clone → npm run build → node dist/index.js`);
-          logCaptain('ai', `  This unblocks multiplayer for Grudge Warlords.`);
-        }
-
-        // Priority 3: Puter workers
+        // Priority 2: Fix Puter workers
         const brokenPuter = FLEET.filter(v=>v.region==='puter' && v.status==='down');
         if (brokenPuter.length) {
-          logCaptain('ai', `PRIORITY 3: Fix ${brokenPuter.length} broken Puter workers`);
+          logCaptain('ai', `PRIORITY 2: Fix ${brokenPuter.length} broken Puter workers`);
           brokenPuter.forEach(v => logCaptain('warn', `  ${v.name}: ${v.notes||'needs investigation'}`));
         }
 
-        // Priority 4: npm packages
-        const unpublished = FLEET.filter(v=>v.region==='github' && v.status==='warn');
+        // Priority 3: npm packages
+        const unpublished = FLEET.filter(v=>v.region==='github' && v.status==='warn' && v.type==='Package');
         if (unpublished.length) {
-          logCaptain('ai', `PRIORITY 4: Publish ${unpublished.length} npm packages (@grudge/auth, @grudge/api, @grudge/ui)`);
+          logCaptain('ai', `PRIORITY 3: Publish ${unpublished.length} npm packages (@grudge/auth, @grudge/api, @grudge/ui)`);
           logCaptain('ai', `  This unblocks shared auth across all Vercel frontends.`);
         }
 
-        // Priority 5: Audit ghosts
+        // Priority 4: Audit ghosts
         const ghosts = FLEET.filter(v=>v.status==='unknown');
         if (ghosts.length) {
-          logCaptain('ai', `PRIORITY 5: Audit ${ghosts.length} ghost ships`);
+          logCaptain('ai', `PRIORITY 4: Audit ${ghosts.length} ghost ships`);
           ghosts.forEach(v => logCaptain('warn', `  ${v.name}: ${v.notes||'purpose unknown'}`));
         }
 
         setTimeout(() => {
           logCaptain('ai', '─── SEQUENCE ───');
-          logCaptain('ok', '1. docker compose up --build (Linux VPS) → restores 5 services');
-          logCaptain('ok', '2. Add restart:always to docker-compose.yml → persistence');
-          logCaptain('ok', '3. Deploy Colyseus (Windows VPS) → multiplayer online');
-          logCaptain('ok', '4. Fix Puter workers (file path errors) → AI + backend bridge');
-          logCaptain('ok', '5. npm publish @grudge packages → shared auth/UI');
-          logCaptain('ok', '6. Wire @grudge/auth into Vercel apps → unified login');
+          logCaptain('ok', '1. Verify Railway (The-ENGINE) health → canonical backend');
+          logCaptain('ok', '2. Deploy grudge-openworld-server → multiplayer rooms');
+          logCaptain('ok', '3. Fix Puter workers (file path errors) → AI + backend bridge');
+          logCaptain('ok', '4. npm publish @grudge packages → shared auth/UI');
+          logCaptain('ok', '5. Wire @grudge/auth into Vercel apps → unified login');
+          logCaptain('ok', '6. Wire Puter server-worker → Railway auth bridge');
           logCaptain('ok', '7. Audit ghost ships → clean fleet');
           logCaptain('ai', '═══ CAPTAIN STANDING BY ═══');
         }, 800);
@@ -1416,12 +1436,11 @@ function captainPVP() {
   setTimeout(() => {
     logCaptain('ai', 'Pre-flight checks:');
     const checks = [
-      { name: 'MySQL 8 (game state)', id: 'svc-mysql' },
-      { name: 'Redis (pub/sub)', id: 'svc-redis' },
-      { name: 'game-api (persistence)', id: 'svc-game-api' },
-      { name: 'ws-service (fanout)', id: 'svc-ws' },
-      { name: 'Colyseus (rooms)', id: 'colyseus' },
-      { name: 'grudge-game-servers (matchmaking)', id: 'cf-game-servers' },
+      { name: 'Railway (The-ENGINE)', id: 'railway-engine' },
+      { name: 'Railway Postgres', id: 'railway-postgres' },
+      { name: 'Auth gateway (CF)', id: 'cf-auth-gateway' },
+      { name: 'Game servers worker (matchmaking)', id: 'cf-game-servers' },
+      { name: 'Openworld server (rooms)', id: 'gh-openworld' },
     ];
 
     checks.forEach((c, i) => {
@@ -1473,7 +1492,7 @@ function parseCommand(input) {
       log('info', '  pvp start           — Start PVP server sequence');
       log('info', '  pvp check           — Check PVP readiness');
       log('info', '  restart-fleet       — Restart all down services');
-      log('info', '  restart-docker      — Restart Linux VPS Docker stack');
+      log('info', '  restart-docker      — Redeploy Railway (The-ENGINE)');
       log('info', '  audit ghosts        — List all unverified vessels');
       log('info', '  find <name>         — Find and select a vessel');
       log('info', '  connections <id>    — List vessel connections');
@@ -1543,20 +1562,21 @@ function parseCommand(input) {
     }
 
     case 'restart-docker':
-      log('cmd', '› ssh grudge@74.208.155.229 "cd /opt/grudge && docker compose up -d --build"');
-      log('info', 'Restarting entire Docker stack on Linux VPS...');
-      const dockerSvcs = FLEET.filter(v => v.region==='vps-linux' && v.type==='Docker Service');
-      dockerSvcs.forEach((v, i) => {
+      log('cmd', '› Railway redeploy (The-ENGINE)');
+      log('info', 'Triggering Railway redeploy for canonical backend...');
+      const engine = lookup['railway-engine'];
+      if (engine) {
         setTimeout(() => {
-          log('info', `  Starting ${v.name}...`);
+          log('info', `  Redeploying ${engine.name}...`);
           setTimeout(() => {
-            const up = Math.random() > 0.3;
-            v.status = up ? 'live' : 'down';
-            log(up?'ok':'err', `  ${up?'✓':'✗'} ${v.name} — ${up?'UP':'FAILED'}`);
-            renderVessels(); updateTopbarStats();
-          }, 800);
-        }, i * 1500);
-      });
+            engine.status = 'live';
+            log('ok', `  ✓ ${engine.name} — REDEPLOYED`);
+            renderVessels(); renderConnections(); updateTopbarStats();
+          }, 2000);
+        }, 500);
+      } else {
+        log('err', 'Railway engine vessel not found in fleet.');
+      }
       break;
 
     case 'audit':
@@ -1758,7 +1778,7 @@ function renderInspector() {
       <div class="ins-section">
         <h4>Quick Actions</h4>
         <div class="admin-actions">
-          <button class="admin-btn danger" onclick="parseCommand('restart-docker')">⟳ Restart Docker</button>
+          <button class="admin-btn danger" onclick="parseCommand('restart-docker')">⟳ Redeploy Railway</button>
           <button class="admin-btn deploy" onclick="parseCommand('scan')">⊕ Scan Fleet</button>
           <button class="admin-btn info" onclick="parseCommand('captain')">⚙ AI Diagnosis</button>
           <button class="admin-btn restart" onclick="parseCommand('pvp start')">⚔ PVP Start</button>

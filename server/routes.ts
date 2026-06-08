@@ -1078,7 +1078,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // The deployed grudge-launcher consumes that KV, so keeping these fresh keeps
   // the launcher fresh.
 
-  const OBJECTSTORE_BASE = process.env.OBJECTSTORE_PUBLIC_URL || "https://objectstore.grudge-studio.com";
+  const OBJECTSTORE_BASE = process.env.OBJECTSTORE_PUBLIC_URL || "https://info.grudge-studio.com";
   const GAME_DATA_DATASETS = [
     "items", "weapons", "armor", "recipes", "relics", "capes", "shields",
     "mounts", "workstations", "classes", "races", "professions",
