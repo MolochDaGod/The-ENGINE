@@ -51,48 +51,82 @@ npm start
 
 ```
 ┌─ Vercel (static frontend + API proxy) ───────────────────┐
-│  grudge-studio.com / the-engine.vercel.app               │
+│  grudgewarlords.com (Grudge-Builder)                      │
+│  grudge-studio.com / the-engine.vercel.app (The-ENGINE)  │
 │  └─ Vite build → dist/public (SPA + game assets)        │
-│     /api/*    → PROXY → the-engine.up.railway.app       │
-│     /ws/*     → PROXY → the-engine.up.railway.app       │
+│     /api/*    → PROXY → Railway via CF Workers           │
+│     /ws/*     → PROXY → Railway WebSocket                │
 │     /assets/* → Cache-Control: 1yr immutable             │
 │     /models/* → Cache-Control: 1wk                       │
 │     /*        → SPA fallback → index.html                │
 └──────────────────────────────────────────────────────────┘
 
-┌─ Railway (API backend) ──────────────────────────────────┐
+┌─ Railway (canonical backend — single source of truth) ───┐
 │  the-engine.up.railway.app                               │
-│  Docker (node:22-alpine, multi-stage)                    │
-│  ├─ Express + compression + helmet + CORS                │
-│  ├─ Player auth (6 providers + smart email linking)      │
+│  ├─ Player auth (8 providers + smart email linking)      │
 │  ├─ Game library (1360+ retro games)                     │
 │  ├─ Leaderboards, PvP challenges, GBUX economy           │
 │  ├─ WebSocket: chat rooms + arena multiplayer            │
 │  ├─ Web3: Solana wallets, Crossmint, SPL tokens          │
 │  ├─ Legion AI: NPC dialogue, moderation, quests          │
 │  ├─ GrudaChain: Puter KV saves, account linking         │
-│  ├─ Fleet health monitoring                              │
+│  ├─ Fleet health monitoring (17 services)                │
 │  └─ /api/health → DB probe + uptime + memory metrics    │
 │                                                          │
-│  PostgreSQL (Drizzle ORM, auto-migrate)                  │
+│  PostgreSQL (Drizzle ORM, auto-migrate via db:push)      │
 └──────────────────────────────────────────────────────────┘
 
 ┌─ Cloudflare Edge ────────────────────────────────────────┐
-│  grudge-studio.com → Vercel (DNS)                        │
 │  id.grudge-studio.com → Worker → Railway (SSO)           │
-│  assets.grudge-studio.com → R2 bucket                    │
-│  objectstore.grudge-studio.com → Worker + R2 + D1        │
+│  api.grudge-studio.com → Worker → Railway (game API)     │
+│  info.grudge-studio.com → Game Info Hub (items, data)    │
+│  assets.grudge-studio.com → R2 bucket (CDN)              │
 │  client.grudge-studio.com → CNAME → Vercel               │
+└──────────────────────────────────────────────────────────┘
+
+┌─ Puter Platform ─────────────────────────────────────────┐
+│  grudgestudio.puter.site — Command hub                   │
+│  grudge-crafting.puter.site — Crafting suite              │
+│  Puter Workers — AI agent, GrudaChain, sprites           │
+│  Puter KV/FS/AI — player saves, assets, client AI        │
+└──────────────────────────────────────────────────────────┘
+
+┌─ Grudge-Warlords Org ────────────────────────────────────┐
+│  grudge-openworld-server — multiplayer room server       │
+│  → Connects to Railway for auth + persistence            │
+│  → Wired through cf-game-servers for matchmaking         │
 └──────────────────────────────────────────────────────────┘
 ```
 
 ## Production Middleware
 
 - **compression** — gzip all responses (critical for 3D model/FBX assets)
-- **helmet** — security headers (CSP disabled for game canvas, CORP cross-origin for CDN)
+- **helmet** — security headers (CSP disabled server-side — managed via Vercel headers)
 - **cors** — origin allowlist with Puter/Vercel/localhost wildcard support
 - **trust proxy** — enabled for Railway/Vercel reverse proxies
 - **10MB body limit** — supports large game state payloads
+
+## Content Security Policy
+
+CSP is set in `vercel.json` headers (both The-ENGINE and Grudge-Builder), **not** in helmet (which has `contentSecurityPolicy: false`). The policy allows game assets from any HTTPS source while restricting scripts to known origins.
+
+| Directive | Value | Why |
+|-----------|-------|-----|
+| `default-src` | `'self'` | Baseline restriction |
+| `script-src` | `'self' 'unsafe-inline' 'unsafe-eval' https://js.puter.com https://*.grudge-studio.com https://*.vercel.app https://vercel.live` | Puter SDK, CF Workers, Vercel previews |
+| `style-src` | `'self' 'unsafe-inline' https://fonts.googleapis.com` | Google Fonts CSS |
+| `font-src` | `'self' https://fonts.gstatic.com data:` | Google Fonts files |
+| `img-src` | `'self' data: blob: https: http:` | **Permissive** — game thumbnails, CDNs, avatars from any source |
+| `connect-src` | `'self' https: wss:` | **Permissive** — Railway, Solana RPC, Crossmint, Puter, Discord |
+| `frame-src` | `'self' https://*.puter.com https://*.grudge-studio.com https://*.vercel.app` | Puter embeds, studio iframes |
+| `media-src` | `'self' https://assets.grudge-studio.com blob:` | Audio/video from R2 CDN |
+| `worker-src` | `'self' blob:` | Service workers, game workers |
+
+**Important:** The CSP lives in two places:
+- `D:\The-ENGINE\vercel.json` — for grudge-studio.com / the-engine.vercel.app
+- `E:\Grudge-Builder\vercel.json` — for grudgewarlords.com (the main game client)
+
+Both must be updated together. If images or API calls break, check `img-src` and `connect-src`.
 
 ## Annihilate 3D Combat Engine
 
@@ -218,25 +252,35 @@ GET /api/health
 ### Studio Tools
 | Tool | URL |
 |------|-----|
+| Game Info Hub | info.grudge-studio.com |
 | Grudge Studio Forge | grudge-studio-forge.vercel.app |
 | Grudge Pipeline | grudge-pipeline.vercel.app |
 | Asset Rig Editor | asset-rig-editor.vercel.app |
 | Character Builder | molochdagod.github.io/grudge-character-builder |
 | Grudge Coder | coder.grudge-studio.com |
-| ObjectStore | browse.grudge-studio.com |
 
-## Production Deployment Status (2026-05-31)
+## Consolidated Services (2026-06-08)
+
+The following services were consolidated into `info.grudge-studio.com`:
+- `objects.grudge-studio.com` — DNS dead, never resolved
+- `objectstore.grudge-studio.com` — static SPA only, no API
+- `dash.grudge-studio.com` — 404, nothing deployed
+- `browse.grudge-studio.com` — legacy reference
+
+## Production Deployment Status (2026-06-08)
 
 | Service | URL | Status |
 |---------|-----|--------|
-| Grudge Studio (Vercel) | grudge-studio.com | ✅ 200 |
-| Railway Backend | the-engine.up.railway.app | ✅ healthy, DB connected |
-| API Proxy | grudge-studio.com/api/* → Railway | ✅ proxied via vercel.json |
-| GrudgeWarlords | grudgewarlords.com | ✅ 200 |
-| Nexus Nemesis | nexus-nemesis-game.vercel.app | ✅ 200 |
-| Grudge Arena | grudge-arena.vercel.app | ✅ 200 |
+| GrudgeWarlords | grudgewarlords.com | ✅ 200 (154ms) |
+| Railway Backend | the-engine.up.railway.app/api/health | ✅ healthy, DB connected (344ms) |
+| API Proxy | grudgewarlords.com/api/health → Railway | ✅ proxied (623ms) |
+| Auth Gateway | id.grudge-studio.com | ✅ 200 (786ms) |
+| Game Info Hub | info.grudge-studio.com | ✅ 200 (355ms) |
+| Assets CDN | assets.grudge-studio.com | ✅ 200 (167ms) |
+| Grudge Studio | grudge-studio.com | ✅ 200 |
 | Dungeon Crawler | dungeon-crawler-quest.vercel.app | ✅ 200 |
-| ObjectStore | molochdagod.github.io/ObjectStore | ✅ 200 |
+| GrudgePlatform | grudgeplatform.com | ✅ 200 |
+| Puter Command Hub | grudgestudio.puter.site | ✅ 200 |
 
 ---
 
