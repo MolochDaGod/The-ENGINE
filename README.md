@@ -128,6 +128,29 @@ CSP is set in `vercel.json` headers (both The-ENGINE and Grudge-Builder), **not*
 
 Both must be updated together. If images or API calls break, check `img-src` and `connect-src`.
 
+## Grudge AI — Provider Priority
+
+The floating AI assistant (⚡ button, `Ctrl+Shift+G`) auto-selects the best available provider:
+
+| Priority | Provider | Indicator | Model | Cost | When active |
+|----------|----------|-----------|-------|------|-------------|
+| 1 | **Ollama** (local) | 🟢 green | grudge-dev / llama3 | Free (local GPU) | Dev machine with Ollama running |
+| 2 | **Cloud gateway** | 🔵 blue | gpt-5.4-pro / claude | API key billing | `ai.grudge-studio.com` responds 200 |
+| 3 | **Puter AI** | 🟣 purple | gpt-4o-mini | Free (Puter-pays) | Puter SDK loaded + user signed in |
+| 4 | **Offline** | 🔴 red | — | — | No providers available |
+
+**How it works:**
+- `getStatus()` probes the cloud gateway AND checks `isPuterReady()` from `puterIntegration.ts`
+- `chatRaw()` tries cloud first; if it returns 401/error or is unreachable, auto-falls back to Puter
+- `chatStream()` does the same (Puter doesn't support SSE, so it yields the full response at once)
+- Users with a Puter ID get free AI with zero configuration
+
+**Key files (Grudge-Builder repo):**
+- `client/src/lib/aiClient.ts` — provider detection, routing, Puter fallback
+- `client/src/lib/puterIntegration.ts` — `puterAI.chat()`, `isPuterReady()`
+- `client/src/lib/aiGateway.ts` — typed SDK for `ai.grudge-studio.com` (when available)
+- `client/src/components/GrudgeAI.tsx` — floating chat panel UI
+
 ## Annihilate 3D Combat Engine
 
 The engine at `/annihilate-demo` features:
