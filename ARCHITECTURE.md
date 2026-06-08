@@ -92,6 +92,8 @@
 | `ws.grudge-studio.com` | Planned | WebSocket (Railway) | 🔜 Planned |
 | `launcher.grudge-studio.com` | DNS exists, nothing deployed | GrudgeDot launcher | 🔜 Planned |
 | `grudge-crafting.puter.site` | Puter hosting | Crafting frontend | ✅ Live |
+| `grudge-ui-editor.puter.site` | Puter hosting | UI Kit editor (mirror) | ✅ Live |
+| `ui.grudge-studio.com` | Vercel + CF DNS | UI Kit editor (primary) | 🔜 Deploy needed |
 | `grudge-server.puter.work` | Puter Worker | AI/sync worker | ✅ Live |
 | `grudgeplatform.com` | Squarespace/static | Command center landing | ✅ Live |
 | `grudgeplatform.io` | Dead | Was Web3 hub | ❌ Offline |

@@ -1193,6 +1193,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         { tag: "Cloud", name: "Grudge Cloud Admin", url: "https://grudge-cloud.puter.site" },
         { tag: "Catalog", name: "Item Catalog (590)", url: "https://grudge-launcher-xu9q5.puter.site" },
         { tag: "Studio", name: "Crafting Suite", url: "https://grudge-crafting.puter.site" },
+        { tag: "UI", name: "UI Editor", url: "https://grudge-ui-editor.puter.site" },
         { tag: "Nexus", name: "Grudge Platform", url: "https://grudgeplatform.puter.site" },
       ],
       workers: [
