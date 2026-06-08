@@ -151,12 +151,57 @@ The floating AI assistant (⚡ button, `Ctrl+Shift+G`) auto-selects the best ava
 - `client/src/lib/aiGateway.ts` — typed SDK for `ai.grudge-studio.com` (when available)
 - `client/src/components/GrudgeAI.tsx` — floating chat panel UI
 
+## Weapon Animation Architecture
+
+All 6 Grudge race characters (Human, Barbarian, Dwarf, Elf, Orc, Undead) use the **Mixamo 24-joint skeleton** and share a unified weapon animation library. The game has **17 weapon types** that map to **4 animation categories** on the R2 CDN.
+
+### Weapon → Animation Category Mapping
+
+```
+17 Weapon Types ──→ 4 Animation Categories ──→ 4 CDN Folders
+```
+
+| Category | CDN Folder | Weapon Types | Anim States |
+|----------|-----------|--------------|-------------|
+| **1h melee** | `animations/sword-shield/` | Sword, Axe, Dagger, Hammer1h, Mace | 15 (idle, run, attack1-3, block, death, jump, kick, slash1-2, cast, crouch, impact, draw) |
+| **2h melee** | `animations/greatsword/` | Greatsword, Greataxe, Hammer2h, Spear | 14 (idle, run, walk, attack1-2, slash1-2, block, death, jump, special, kick, cast, impact, draw) |
+| **Ranged** | `animations/longbow/` | Bow, Crossbow, Gun | 12 (idle, run, walk, attack1-3, block, death, dodge, kick, draw, special) |
+| **Caster** | `animations/magic/` | Fire/Frost/Nature/Holy/Arcane/Lightning Staff + all Tomes | 9 (idle, attack1-3, cast, special, block, blockIdle, crouch) |
+
+### How it works
+
+1. `WeaponType` (27 values) = the full union of all weapon types + legacy aliases
+2. `AnimCategory` (4 values) = `sword-shield`, `greatsword`, `longbow`, `magic`
+3. `WEAPON_ANIM_CATEGORY` maps every `WeaponType` → `AnimCategory`
+4. `getAnimationSet(weaponType)` resolves any weapon to the correct CDN folder
+5. Class defaults: warrior→`sword`, ranger→`bow`, mage→`arcane-staff`, worg→`greatsword`
+
+### Adding weapon-specific animations
+
+When dedicated animations are uploaded to R2 (e.g. `animations/dagger/` with stab motions):
+1. Add a new entry to `WEAPON_ANIMATION_SETS` keyed by the weapon type
+2. Update `getAnimationSet()` to check for direct matches before category fallback
+3. Or use `animOverrides` on a specific `ModelUnit` for per-model customization
+
+### Key files (Grudge-Builder repo)
+
+- `client/src/lib/modelManifest.ts` — `WeaponType`, `AnimCategory`, `WEAPON_ANIM_CATEGORY`, `WEAPON_ANIMATION_SETS`
+- `shared/definitions/weaponsData.ts` — 17 weapon types, 6 weapons each (102 weapons total)
+- `shared/definitions/weaponSkillsNew.ts` — skill slots per weapon type (primary, secondary, ability, ultimate)
+
+### Verified (2026-06-08)
+
+- 28/28 weapon types resolve to the correct animation category
+- 24/24 race×class combos produce valid weapon→animation chains
+- 17/17 animation files load from R2 CDN (one per weapon type tested)
+- All 6 Grudge race model GLBs load (248KB–4.7MB)
+
 ## Annihilate 3D Combat Engine
 
 The engine at `/annihilate-demo` features:
 
 - **6 Grudge race characters** — Human, Elf, Dwarf, Orc, Barbarian, Undead (GLB models)
-- **4 weapon animation packs** — Sword & Shield, Great Sword, Longbow, Magic Caster (FBX)
+- **17 weapon types** mapped to 4 animation categories (50 animation states total)
 - **Full FSM combat** — 35+ states: combo attacks, charge, block, dash, jump, whirlwind, hadouken
 - **Physics** — Cannon-ES capsule bodies, **velocity-based movement** (slopes, walls, terrain resolve via solver), ground detection, climb mechanics
 - **Camera-relative WASD** — input is rotated by the camera yaw so "forward" always matches the player's view
