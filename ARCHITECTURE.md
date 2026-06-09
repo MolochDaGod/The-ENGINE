@@ -10,21 +10,27 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                        CLOUDFLARE EDGE                          │
+│                    CLOUDFLARE EDGE  (56 DNS records)             │
 │                                                                 │
-│  grudge-studio.com ──┐                                          │
-│  id.grudge-studio.com ──→ Worker: grudge-identity-api ──┐       │
-│  www.grudge-studio.com ─┘                                │       │
-│                                                          ▼       │
-│  api.grudge-studio.com ──→ Worker: grudge-game-api ──→ Railway  │
+│  CF Tunnels → Railway:                                          │
+│    api.grudge-studio.com  ──→ Game API gateway                  │
+│    id.grudge-studio.com   ──→ Auth gateway (SSO)                │
+│    dash.grudge-studio.com ──→ Admin dashboard                   │
+│    ws.grudge-studio.com   ──→ WebSocket endpoint                │
 │                                                                 │
-│  assets.grudge-studio.com ──→ R2 bucket: grudge-assets          │
-│  objectstore.grudge-studio.com ──→ Worker: objectstore-api      │
+│  CF Workers (AAAA 100:: / A 192.0.2.1):                         │
+│    ai.grudge-studio.com   ──→ Legion AI hub                     │
+│    forge.grudge-studio.com──→ Forge Worker                      │
+│    models.grudge-studio.com─→ 3D model API                      │
+│    objectstore ──→ Worker + R2 + D1                             │
+│    auth, characters, grudachain, vps                             │
 │                                                                 │
-│  client.grudge-studio.com ──→ CNAME → Vercel (GrudgeBuilder)   │
-│  grudgewarlords.com ──→ Vercel (GrudgeBuilder)                  │
-│  wallet.grudge-studio.com ──→ Cloudflare Pages (static)        │
-│  dash.grudge-studio.com ──→ Cloudflare Access (→ Pages)        │
+│  CF R2:  assets.grudge-studio.com ──→ public.r2.dev             │
+│  CF Pages: browse, coder, fleet, grudgedot, wcs                 │
+│  CF Tunnel (VPS): conan.grudge-studio.com ──→ Conan server      │
+│                                                                 │
+│  17 Vercel CNAMEs → cname.vercel-dns.com (DNS only)             │
+│  Email: 3 MX + SPF + DKIM                                      │
 └─────────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────────┐
@@ -78,26 +84,34 @@
 
 ## 2. Domain Inventory
 
-### Backend Services (Cloudflare-proxied → Railway)
-| Domain | Platform | Serves | Status |
-|--------|----------|--------|--------|
-| `api.grudge-studio.com` | CF Worker → Railway | Game API gateway | ✅ Live |
-| `id.grudge-studio.com` | CF Worker → Railway | Auth gateway (SSO) | ✅ Live |
-| `auth.grudge-studio.com` | CF Worker → Railway | Auth gateway (legacy alias) | ✅ Live |
-| `assets.grudge-studio.com` | CF R2 | Binary assets CDN | ✅ Live |
-| `objectstore.grudge-studio.com` | CF Worker + R2 + D1 | ObjectStore API | ✅ Live |
-| `ai.grudge-studio.com` | CF Worker | Legion AI hub (auth-gated) | ✅ Live (401 expected) |
-| `ws.grudge-studio.com` | CF → Railway | WebSocket endpoint | ⚠️ HTTP 404 (WS only) |
-| `world.grudge-studio.com` | CF → origin TBD | PvP/multiplayer server | ❌ 530 origin error |
+### Backend Services (Cloudflare-proxied)
+| Domain | Type | Origin | Status |
+|--------|------|--------|--------|
+| `api.grudge-studio.com` | CF Tunnel | Railway (The-ENGINE) | ✅ Live |
+| `id.grudge-studio.com` | CF Tunnel | Railway (The-ENGINE) | ✅ Live |
+| `auth.grudge-studio.com` | CF Worker (A 192.0.2.1) | Railway (legacy alias) | ✅ Live |
+| `ws.grudge-studio.com` | CF Tunnel | Railway WebSocket | ✅ Live (WS only) |
+| `dash.grudge-studio.com` | CF Tunnel | Railway admin | ✅ Live |
+| `ai.grudge-studio.com` | CF Worker (AAAA 100::) | Legion AI hub | ✅ Live (401 auth-gated) |
+| `assets.grudge-studio.com` | CNAME → public.r2.dev | R2 binary CDN | ✅ Live |
+| `objectstore.grudge-studio.com` | CF Worker (AAAA 100::) | R2 + D1 | ✅ Live |
+| `models.grudge-studio.com` | CF Worker (AAAA 100::) | 3D model API | ✅ Live |
+| `forge.grudge-studio.com` | CF Worker (AAAA 100::) | Forge Worker | ✅ Live |
+| `vps.grudge-studio.com` | CF Worker (AAAA 100::) | VPS proxy | ✅ Live |
+| `wallet.grudge-studio.com` | A → 74.208.155.229 | Wallet UI (external) | ✅ Live |
+| `conan.grudge-studio.com` | CF Tunnel | Conan game server (VPS) | ⚠️ 502 (server offline) |
 
-### Frontend Domains (Vercel)
+### Frontend Domains (Vercel — CNAME → cname.vercel-dns.com, DNS only)
 | Domain | Project | Status |
 |--------|---------|--------|
 | `grudge-studio.com` | the-engine | ✅ Live |
 | `www.grudge-studio.com` | the-engine | ✅ Live |
 | `grudgewarlords.com` | grudge-builder | ✅ Live |
 | `warlord3d.grudge-studio.com` | grudge-builder | ✅ Live |
+| `test.grudge-studio.com` | grudge-builder | ✅ Live |
 | `ui.grudge-studio.com` | grudge-ui-editor | ✅ Live |
+| `tv.grudge-studio.com` | grudatv | ✅ Live |
+| `play.grudge-studio.com` | star-way-gruda-web-client | ✅ Live |
 | `characters.grudge-studio.com` | playground | ✅ Live |
 | `dcq.grudge-studio.com` | dungeon-crawler-quest | ✅ Live |
 | `metaverse.grudge-studio.com` | grudge-metaverse | ✅ Live |
@@ -106,16 +120,22 @@
 | `grudges.grudge-studio.com` | survival | ✅ Live |
 | `armada.grudge-studio.com` | grim-armada-web | ✅ Live |
 | `drive.grudge-studio.com` | grudge-drive | ✅ Live |
-| `forge.grudge-studio.com` | grudge-studio-forge | ✅ Live |
 | `grudge6.grudge-studio.com` | character-viewer | ✅ Live |
 | `grudge-arena.grudge-studio.com` | grudge-arena | ✅ Live |
 | `wow.grudge-studio.com` | wow-frontend | ✅ Live |
 | `dev.grudge-studio.com` | grudgedot-launcher | ✅ Live |
 | `platform.grudge-studio.com` | grudachain | ✅ Live |
 | `apps.grudge-studio.com` | grudge-platform | ✅ Live |
-| `tv.grudge-studio.com` | grudatv | ❌ No DNS record |
-| `test.grudge-studio.com` | grudge-builder | ❌ Points to dead CF tunnel |
-| `play.grudge-studio.com` | star-way-gruda-web-client | ❌ No DNS record |
+| `client.grudge-studio.com` | grudge-builder (alias) | ✅ Live |
+
+### Cloudflare Pages
+| Domain | Pages project | Status |
+|--------|---------------|--------|
+| `browse.grudge-studio.com` | grudge-objectstore | ✅ Live |
+| `fleet.grudge-studio.com` | grudge-fleet | ✅ Live |
+| `coder.grudge-studio.com` | grudgechain-vibe-ide | ✅ Live |
+| `grudgedot.grudge-studio.com` | grudgedot | ✅ Live |
+| `wcs.grudge-studio.com` | grudge-wcs | ✅ Live |
 
 ### Puter
 | Domain | Serves | Status |
@@ -131,32 +151,50 @@
 | `grudachain.grudgestudio.com` | ✅ Live (Vercel) |
 | `grudgeplatform.io` | ❌ Offline (unverified in Vercel) |
 
+### Decommissioned (2026-06-09)
+| Record | Was | Reason |
+|--------|-----|--------|
+| `world.grudge-studio.com` | CNAME → dead CF tunnel | Removed — re-add when openworld server deploys |
+| `nemesis.grudge-studio.com` | CNAME → stale Railway deploy | Removed — 404, no active service |
+| `battle.thc-labz.xyz.grudge-studio.com` | CNAME → dead CF tunnel | Removed — wrong zone (belongs on thc-labz.xyz) |
+| `_railway-verify.nemesis` | TXT | Removed — orphaned verification record |
+
 ### Grudge-Warlords GitHub Org
 | Repo | Purpose | Status |
 |------|---------|--------|
 | `grudge-openworld-server` | Multiplayer room server — room-based world instances with player sync | ⚠️ Not deployed |
 
-The openworld server will connect to Railway (The-ENGINE) for auth + persistence. Deploy target TBD (Railway or GRUDGEYONKO VPS). Wire through `cf-game-servers` worker for matchmaking.
+The openworld server will connect to Railway (The-ENGINE) for auth + persistence. When deployed, re-add `world.grudge-studio.com` DNS.
 
-## 3. Cloudflare Workers
+## 3. Cloudflare Configuration
 
+### DNS Management
+DNS is managed via Cloudflare API using `CF_DNS_EDIT_TOKEN` (Zone DNS Edit scope on `grudge-studio.com`).
+Zone ID: `e8c0c2ee3063f24eb31affddabf9730a`
+
+**Adding a Vercel subdomain** (automated via API):
+1. Create CNAME `subdomain → cname.vercel-dns.com` (proxy OFF)
+2. Add domain to Vercel project
+3. Issue SSL cert via Vercel API
+
+**Adding a CF Worker subdomain**:
+1. Create proxied A `subdomain → 192.0.2.1` or AAAA `→ 100::`
+2. Add `[[routes]]` to Worker's `wrangler.toml`
+3. Add origin to `ALLOWED_ORIGINS`
+4. Deploy: `npx wrangler deploy`
+
+### Workers
 | Worker Name | Route | Backend | Source |
 |-------------|-------|---------|--------|
 | `grudge-identity-api` | `id.grudge-studio.com/*`, `grudge-studio.com/*` | Railway | `deploy/auth-gateway/` |
 | `grudge-game-api` | `api.grudge-studio.com/*` | Railway | `deploy/game-api-gateway/` |
 | `objectstore-api` | `objectstore.grudge-studio.com/*` | R2 + D1 | Separate repo |
 
-### Deploying a Worker
-```bash
-cd deploy/game-api-gateway   # or auth-gateway
-npx wrangler deploy
-```
-
-### Adding a new subdomain
-1. In Cloudflare DNS: add proxied A record `subdomain → 192.0.2.1` (dummy IP, Worker intercepts)
-2. Add `[[routes]]` entry to the appropriate Worker's `wrangler.toml`
-3. Add origin to `ALLOWED_ORIGINS` in `wrangler.toml`
-4. Redeploy: `npx wrangler deploy`
+### Cloudflare Tunnels
+| Tunnel ID | Subdomains |
+|-----------|------------|
+| `fbba62f9-49df-...` | api, id, dash, ws |
+| `2a20e3d9-ce4f-...` | conan (VPS) |
 
 ## 4. Authentication Flow
 
