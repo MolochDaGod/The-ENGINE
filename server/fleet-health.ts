@@ -38,20 +38,33 @@ const SERVICES: ServiceDef[] = [
   // Railway (canonical backend)
   { id: 'railway-engine', name: 'The-ENGINE (Railway)', region: 'railway', url: 'https://the-engine.up.railway.app/api/health', timeoutMs: 10000, warnThresholdMs: 2000 },
 
-  // Cloudflare Workers
-  { id: 'cf-grudge-studio-site', name: 'grudge-studio-site', region: 'cloudflare', url: 'https://grudge-studio.com/', timeoutMs: 8000, warnThresholdMs: 2000 },
-  { id: 'cf-auth-gateway', name: 'grudge-auth-gateway', region: 'cloudflare', url: 'https://auth.grudge-studio.com/health', timeoutMs: 5000, warnThresholdMs: 1000 },
-  { id: 'cf-identity-api', name: 'grudge-identity-api', region: 'cloudflare', url: 'https://id.grudge-studio.com/api/health', timeoutMs: 5000, warnThresholdMs: 1000 },
-  { id: 'cf-ai-hub', name: 'grudge-ai-hub', region: 'cloudflare', url: 'https://ai.grudge-studio.com/api/health', timeoutMs: 5000, warnThresholdMs: 1500 },
-  { id: 'cf-objectstore', name: 'grudge-info-hub', region: 'cloudflare', url: 'https://info.grudge-studio.com/', timeoutMs: 5000, warnThresholdMs: 1000 },
-  { id: 'cf-asset-cdn', name: 'grudge-asset-cdn', region: 'cloudflare', url: 'https://assets.grudge-studio.com/toon-shooter/manifest.json', timeoutMs: 5000, warnThresholdMs: 500 },
-  { id: 'cf-dashboard', name: 'grudge-dashboard', region: 'cloudflare', url: 'https://info.grudge-studio.com/', timeoutMs: 5000, warnThresholdMs: 2000 },
-  { id: 'cf-vercel-proxy', name: 'grudge-vercel-proxy', region: 'cloudflare', url: 'https://grudge-studio.com/avernus-3d', timeoutMs: 8000, warnThresholdMs: 3000 },
+  // Cloudflare Workers / Proxied backends
+  { id: 'cf-grudge-studio-site', name: 'grudge-studio.com', region: 'cloudflare', url: 'https://grudge-studio.com/', timeoutMs: 8000, warnThresholdMs: 2000 },
+  { id: 'cf-auth-gateway', name: 'auth-gateway', region: 'cloudflare', url: 'https://auth.grudge-studio.com/health', timeoutMs: 5000, warnThresholdMs: 1000 },
+  { id: 'cf-identity-api', name: 'identity-api (id)', region: 'cloudflare', url: 'https://id.grudge-studio.com/api/health', timeoutMs: 5000, warnThresholdMs: 1000 },
+  { id: 'cf-game-api', name: 'game-api', region: 'cloudflare', url: 'https://api.grudge-studio.com/api/health', timeoutMs: 5000, warnThresholdMs: 1000 },
+  { id: 'cf-ai-hub', name: 'ai-hub', region: 'cloudflare', url: 'https://ai.grudge-studio.com/api/health', timeoutMs: 5000, warnThresholdMs: 1500 },
+  { id: 'cf-info-hub', name: 'info-hub', region: 'cloudflare', url: 'https://info.grudge-studio.com/', timeoutMs: 5000, warnThresholdMs: 1000 },
+  { id: 'cf-asset-cdn', name: 'asset-cdn', region: 'cloudflare', url: 'https://assets.grudge-studio.com/toon-shooter/manifest.json', timeoutMs: 5000, warnThresholdMs: 500 },
+  { id: 'cf-objectstore', name: 'objectstore', region: 'cloudflare', url: 'https://objectstore.grudge-studio.com/', timeoutMs: 5000, warnThresholdMs: 1000 },
 
-  // Vercel frontends
+  // Vercel frontends (custom domains)
   { id: 'vc-grudgewarlords', name: 'Grudge Warlords', region: 'vercel', url: 'https://grudgewarlords.com/', timeoutMs: 8000, warnThresholdMs: 2000 },
-  { id: 'vc-dungeon', name: 'Dungeon Crawler', region: 'vercel', url: 'https://dungeon-crawler-quest.vercel.app/', timeoutMs: 8000, warnThresholdMs: 2000 },
-  { id: 'vc-grudgeplatform', name: 'GrudgePlatform', region: 'vercel', url: 'https://grudgeplatform.com/', timeoutMs: 8000, warnThresholdMs: 2000 },
+  { id: 'vc-warlord3d', name: 'Warlord 3D', region: 'vercel', url: 'https://warlord3d.grudge-studio.com/', timeoutMs: 8000, warnThresholdMs: 2000 },
+  { id: 'vc-ui-editor', name: 'UI Editor', region: 'vercel', url: 'https://ui.grudge-studio.com/', timeoutMs: 8000, warnThresholdMs: 2000 },
+  { id: 'vc-characters', name: 'Character Creator', region: 'vercel', url: 'https://characters.grudge-studio.com/', timeoutMs: 8000, warnThresholdMs: 2000 },
+  { id: 'vc-dcq', name: 'Dungeon Crawler Quest', region: 'vercel', url: 'https://dcq.grudge-studio.com/', timeoutMs: 8000, warnThresholdMs: 2000 },
+  { id: 'vc-survival', name: 'Survival', region: 'vercel', url: 'https://survival.grudge-studio.com/', timeoutMs: 8000, warnThresholdMs: 2000 },
+  { id: 'vc-armada', name: 'Grim Armada', region: 'vercel', url: 'https://armada.grudge-studio.com/', timeoutMs: 8000, warnThresholdMs: 2000 },
+  { id: 'vc-metaverse', name: 'Metaverse', region: 'vercel', url: 'https://metaverse.grudge-studio.com/', timeoutMs: 8000, warnThresholdMs: 2000 },
+  { id: 'vc-wow', name: 'WoW Frontend', region: 'vercel', url: 'https://wow.grudge-studio.com/', timeoutMs: 8000, warnThresholdMs: 2000 },
+  { id: 'vc-dev', name: 'GrudgeDot Launcher', region: 'vercel', url: 'https://dev.grudge-studio.com/', timeoutMs: 8000, warnThresholdMs: 2000 },
+  { id: 'vc-forge', name: 'Forge', region: 'vercel', url: 'https://forge.grudge-studio.com/', timeoutMs: 8000, warnThresholdMs: 2000 },
+  { id: 'vc-drive', name: 'Grudge Drive', region: 'vercel', url: 'https://drive.grudge-studio.com/', timeoutMs: 8000, warnThresholdMs: 2000 },
+  { id: 'vc-platform', name: 'GrudaChain Platform', region: 'vercel', url: 'https://platform.grudge-studio.com/', timeoutMs: 8000, warnThresholdMs: 2000 },
+  { id: 'vc-apps', name: 'Apps Hub', region: 'vercel', url: 'https://apps.grudge-studio.com/', timeoutMs: 8000, warnThresholdMs: 2000 },
+  { id: 'vc-grudge-arena', name: 'Grudge Arena', region: 'vercel', url: 'https://grudge-arena.grudge-studio.com/', timeoutMs: 8000, warnThresholdMs: 2000 },
+  { id: 'vc-grudge6', name: 'Character Viewer', region: 'vercel', url: 'https://grudge6.grudge-studio.com/', timeoutMs: 8000, warnThresholdMs: 2000 },
 
   // Puter
   { id: 'puter-platform', name: 'Puter', region: 'puter', url: 'https://puter.com/', timeoutMs: 8000, warnThresholdMs: 2000 },

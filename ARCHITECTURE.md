@@ -1,6 +1,6 @@
 # Grudge Studio — Architecture & Operations Guide
 
-> **Last updated**: 2026-06-08
+> **Last updated**: 2026-06-09
 > **Owner**: Racalvin The Pirate King
 > **Canonical backend**: The-ENGINE on Railway (`the-engine.up.railway.app`)
 
@@ -78,28 +78,58 @@
 
 ## 2. Domain Inventory
 
+### Backend Services (Cloudflare-proxied → Railway)
 | Domain | Platform | Serves | Status |
 |--------|----------|--------|--------|
-| `grudge-studio.com` | CF Worker → Railway | Portal SPA + API | ✅ Live |
+| `api.grudge-studio.com` | CF Worker → Railway | Game API gateway | ✅ Live |
 | `id.grudge-studio.com` | CF Worker → Railway | Auth gateway (SSO) | ✅ Live |
-| `api.grudge-studio.com` | CF Worker → Railway | Game API — Worker ready at `deploy/game-api-gateway/`, run `npx wrangler deploy` | ⚠️ Deploy needed |
-| `client.grudge-studio.com` | CNAME → Vercel | GrudgeBuilder SPA alias | ✅ Live |
-| `grudgewarlords.com` | Vercel | GrudgeBuilder SPA (main) | ✅ Live |
+| `auth.grudge-studio.com` | CF Worker → Railway | Auth gateway (legacy alias) | ✅ Live |
 | `assets.grudge-studio.com` | CF R2 | Binary assets CDN | ✅ Live |
 | `objectstore.grudge-studio.com` | CF Worker + R2 + D1 | ObjectStore API | ✅ Live |
-| `wallet.grudge-studio.com` | CF Pages | Wallet UI | ✅ Live |
-| `dash.grudge-studio.com` | CF Access + Pages | Admin dashboard | ⚠️ Needs Grudge auth |
-| `ws.grudge-studio.com` | Planned | WebSocket (Railway) | 🔜 Planned |
-| `launcher.grudge-studio.com` | DNS exists, nothing deployed | GrudgeDot launcher | 🔜 Planned |
-| `grudge-crafting.puter.site` | Puter hosting | Crafting frontend | ✅ Live |
-| `grudge-ui-editor.puter.site` | Puter hosting | UI Kit editor (mirror) | ✅ Live |
-| `ui.grudge-studio.com` | Vercel + CF DNS | UI Kit editor (primary) | 🔜 Deploy needed |
-| `grudge-server.puter.work` | Puter Worker | AI/sync worker | ✅ Live |
-| `grudgeplatform.com` | Squarespace/static | Command center landing | ✅ Live |
-| `grudgeplatform.io` | Dead | Was Web3 hub | ❌ Offline |
-| `account.grudge-studio.com` | None | Never had DNS record | ❌ Remove refs |
-| `edge.grudge-studio.com` | None | Never had DNS record | ❌ Remove refs |
-| `ale.grudge-studio.com` | None | Never had DNS record | ❌ Remove refs |
+| `ai.grudge-studio.com` | CF Worker | Legion AI hub (auth-gated) | ✅ Live (401 expected) |
+| `ws.grudge-studio.com` | CF → Railway | WebSocket endpoint | ⚠️ HTTP 404 (WS only) |
+| `world.grudge-studio.com` | CF → origin TBD | PvP/multiplayer server | ❌ 530 origin error |
+
+### Frontend Domains (Vercel)
+| Domain | Project | Status |
+|--------|---------|--------|
+| `grudge-studio.com` | the-engine | ✅ Live |
+| `www.grudge-studio.com` | the-engine | ✅ Live |
+| `grudgewarlords.com` | grudge-builder | ✅ Live |
+| `warlord3d.grudge-studio.com` | grudge-builder | ✅ Live |
+| `ui.grudge-studio.com` | grudge-ui-editor | ✅ Live |
+| `characters.grudge-studio.com` | playground | ✅ Live |
+| `dcq.grudge-studio.com` | dungeon-crawler-quest | ✅ Live |
+| `metaverse.grudge-studio.com` | grudge-metaverse | ✅ Live |
+| `info.grudge-studio.com` | objectstore-grudge | ✅ Live |
+| `survival.grudge-studio.com` | survival | ✅ Live |
+| `grudges.grudge-studio.com` | survival | ✅ Live |
+| `armada.grudge-studio.com` | grim-armada-web | ✅ Live |
+| `drive.grudge-studio.com` | grudge-drive | ✅ Live |
+| `forge.grudge-studio.com` | grudge-studio-forge | ✅ Live |
+| `grudge6.grudge-studio.com` | character-viewer | ✅ Live |
+| `grudge-arena.grudge-studio.com` | grudge-arena | ✅ Live |
+| `wow.grudge-studio.com` | wow-frontend | ✅ Live |
+| `dev.grudge-studio.com` | grudgedot-launcher | ✅ Live |
+| `platform.grudge-studio.com` | grudachain | ✅ Live |
+| `apps.grudge-studio.com` | grudge-platform | ✅ Live |
+| `tv.grudge-studio.com` | grudatv | ❌ No DNS record |
+| `test.grudge-studio.com` | grudge-builder | ❌ Points to dead CF tunnel |
+| `play.grudge-studio.com` | star-way-gruda-web-client | ❌ No DNS record |
+
+### Puter
+| Domain | Serves | Status |
+|--------|--------|--------|
+| `grudge-crafting.puter.site` | Crafting frontend | ✅ Live |
+| `grudge-ui-editor.puter.site` | UI Kit editor (mirror) | ✅ Live |
+| `grudge-server.puter.work` | AI/sync worker | ✅ Live |
+
+### Other Domains
+| Domain | Status |
+|--------|--------|
+| `grudgeplatform.com` | ✅ Live (Squarespace) |
+| `grudachain.grudgestudio.com` | ✅ Live (Vercel) |
+| `grudgeplatform.io` | ❌ Offline (unverified in Vercel) |
 
 ### Grudge-Warlords GitHub Org
 | Repo | Purpose | Status |
