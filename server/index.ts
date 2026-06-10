@@ -56,25 +56,12 @@ app.use(cors({
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
 }));
-// ── Serve Grudge ID auth page ──────────────────────────────────────
-// CF Tunnel only forwards /api/* and /auth/* paths, so we serve the
-// auth HTML from an API route. The /auth/ rewrite below handles the alias.
-import { readFileSync } from "fs";
-import { resolve as resolvePath } from "path";
-
-let _authPageCache: string | null = null;
-function getAuthPageHtml(): string {
-  if (!_authPageCache) {
-    try { _authPageCache = readFileSync(resolvePath("public/grudge-id.html"), "utf8"); }
-    catch { try { _authPageCache = readFileSync(resolvePath("dist/public/grudge-id.html"), "utf8"); } catch { _authPageCache = "<h1>Auth page not found</h1>"; } }
-  }
-  return _authPageCache;
-}
-app.get("/api/auth/page", (_req, res) => { res.type("html").send(getAuthPageHtml()); });
-// id.grudge-studio.com root → auth page
+// ── Serve Grudge ID auth page (inlined HTML — no filesystem dependency) ────
+import { AUTH_PAGE_HTML } from "./auth-page-html";
+app.get("/api/auth/page", (_req, res) => { res.type("html").send(AUTH_PAGE_HTML); });
 app.get("/", (req, res, next) => {
-  const host = (req.hostname || req.headers.host || "").replace(/:\d+$/, "");
-  if (host === "id.grudge-studio.com") return res.type("html").send(getAuthPageHtml());
+  const host = (req.hostname || req.headers["x-forwarded-host"] || req.headers.host || "").toString().replace(/:\d+$/, "");
+  if (host === "id.grudge-studio.com") return res.type("html").send(AUTH_PAGE_HTML);
   next();
 });
 
