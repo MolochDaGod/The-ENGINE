@@ -91,9 +91,12 @@ export function allowedAuthOrigins(): string[] {
   return [
     "https://grudge-studio.com",
     "https://grudgewarlords.com",
+    "https://id.grudge-studio.com",
     "https://client.grudge-studio.com",
     "https://dash.grudge-studio.com",
     "https://ai.grudge-studio.com",
+    "https://ui.grudge-studio.com",
+    "https://characters.grudge-studio.com",
     "https://nexus-nemesis-game.vercel.app",
     "https://the-engine.vercel.app",
     "http://localhost:5173",
@@ -105,6 +108,8 @@ export function isOriginAllowed(origin: string | undefined | null): boolean {
   if (!origin) return false;
   const list = allowedAuthOrigins();
   if (list.includes(origin)) return true;
+  // All *.grudge-studio.com subdomains are allowed
+  if (/^https:\/\/[a-z0-9-]+\.grudge-studio\.com$/.test(origin)) return true;
   // Puter-hosted apps and Vercel preview deployments are always allowlisted for
   // launch-token exchange (same policy as the CORS middleware in index.ts).
   if (origin.includes("puter.com") || origin.includes("puter.site")) return true;

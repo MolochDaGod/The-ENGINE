@@ -11,8 +11,11 @@ const isProd = process.env.NODE_ENV === "production";
 const allowedOrigins = (process.env.CORS_ORIGINS || [
   "https://grudge-studio.com",
   "https://grudgewarlords.com",
+  "https://id.grudge-studio.com",
   "https://client.grudge-studio.com",
   "https://dash.grudge-studio.com",
+  "https://ui.grudge-studio.com",
+  "https://characters.grudge-studio.com",
   "https://nexus-nemesis-game.vercel.app",
   "https://the-engine.vercel.app",
   "http://localhost:5173",
@@ -41,6 +44,7 @@ app.use(cors({
     if (!origin) return cb(null, true); // same-origin / server-to-server
     if (
       allowedOrigins.includes(origin) ||
+      /^https:\/\/[a-z0-9-]+\.grudge-studio\.com$/.test(origin) ||  // all *.grudge-studio.com subdomains
       origin.includes("puter.com") ||
       origin.includes("puter.site") ||
       /^https:\/\/.*\.vercel\.app$/.test(origin) ||
