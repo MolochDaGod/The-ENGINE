@@ -5,6 +5,11 @@
   "outputDirectory": "dist/public",
   "rewrites": [
     {
+      "source": "/(.*)",
+      "has": [{ "type": "host", "value": "fleet.grudge-studio.com" }],
+      "destination": "/admin-harbor.html"
+    },
+    {
       "source": "/api/auth/:path*",
       "destination": "https://id.grudge-studio.com/auth/:path*"
     },
