@@ -56,8 +56,21 @@ app.use(cors({
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
 }));
+// ── Serve Grudge ID auth page for id.grudge-studio.com ────────────
+import path from "path";
+app.get("/", (req, res, next) => {
+  const host = req.hostname || req.headers.host || "";
+  if (host === "id.grudge-studio.com" || host.startsWith("id.grudge-studio.com:")) {
+    return res.sendFile(path.resolve("public/grudge-id.html"));
+  }
+  next();
+});
+// Serve the auth page at /grudge-id for direct access from any host
+app.get("/grudge-id", (_req, res) => {
+  res.sendFile(path.resolve("public/grudge-id.html"));
+});
 
-// ── Path alias: /auth/* → /api/auth/* ──────────────────────────
+// ── Path alias: /auth/* → /api/auth/* ──────────────────────
 app.use((req, _res, next) => {
   if (req.url.startsWith("/auth/")) req.url = "/api" + req.url;
   next();
