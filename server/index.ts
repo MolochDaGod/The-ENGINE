@@ -56,34 +56,12 @@ app.use(cors({
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
 }));
-// ── Serve Grudge ID auth page (inlined HTML — no filesystem dependency) ────
+// ── Grudge ID auth page ──────────────────────────────────────────────────────
+// NOTE: Railway's proxy rewrites Host to the-engine.up.railway.app so
+// server-side hostname detection for CF Tunnel traffic doesn't work.
+// The client-side redirect in client/index.html handles id.grudge-studio.com.
 import { AUTH_PAGE_HTML } from "./auth-page-html";
-// Intercept id.grudge-studio.com at the top level — runs before Vite/static.
-app.use((req, res, next) => {
-  // Resolve hostname from all possible sources (CF Tunnel, Railway proxy, direct)
-  const host = (
-    req.get("host") ||
-    req.hostname ||
-    (req.headers["x-forwarded-host"] as string) ||
-    ""
-  ).replace(/:\d+$/, "");
-  // Serve auth page at root of id.grudge-studio.com
-  if (host === "id.grudge-studio.com" && (req.path === "/" || req.path === "/index.html")) {
-    return res.type("html").send(AUTH_PAGE_HTML);
-  }
-  next();
-});
 app.get("/api/auth/page", (_req, res) => { res.type("html").send(AUTH_PAGE_HTML); });
-// Diagnostic: see what hostname the server resolves (remove after debugging)
-app.get("/api/debug/host", (req, res) => {
-  res.json({
-    hostname: req.hostname,
-    host_header: req.headers.host,
-    x_forwarded_host: req.headers["x-forwarded-host"],
-    get_host: req.get("host"),
-    resolved: (req.get("host") || req.hostname || "").replace(/:\d+$/, ""),
-  });
-});
 
 // ── Path alias: /auth/* → /api/auth/* ──────────────────────
 app.use((req, _res, next) => {
