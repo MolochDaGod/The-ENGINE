@@ -57,6 +57,7 @@ export const storeProducts = pgTable("store_products", {
   name: text("name").notNull(),
   description: text("description").notNull(),
   price: integer("price").notNull(),
+  gbuxPrice: integer("gbux_price"),
   features: text("features").array(),
   category: text("category").notNull(),
   image: text("image"),

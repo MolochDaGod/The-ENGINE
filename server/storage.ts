@@ -181,6 +181,22 @@ export class DatabaseStorage implements IStorage {
     await db.insert(storeProducts).values(products);
   }
 
+  async initializeHydraProducts() {
+    const existing = await db.select().from(storeProducts).where(eq(storeProducts.name, "HYDRA Input Configurator")).limit(1);
+    if (existing.length > 0) return;
+
+    await db.insert(storeProducts).values({
+      name: "HYDRA Input Configurator",
+      description: "Professional keybinding editor for game developers and players. Bind 32 game actions across keyboard and mouse, manage hotbar slots, detect conflicts, and export your config as JSON. Part of the HYDRA Tool Kit by Grudge Studio.",
+      price: 0,
+      gbuxPrice: 5,
+      features: ["32 game actions across 4 categories", "Full keyboard + mouse visual map", "10-slot hotbar manager", "Conflict detection & JSON export/import"],
+      category: "tool",
+      image: "/assets/store/hydra_input_configurator.png",
+      isActive: true,
+    });
+  }
+
   async initializePlatforms() {
     const existing = await db.select().from(gamePlatforms).limit(1);
     if (existing.length > 0) return;
@@ -664,6 +680,7 @@ const storage = new DatabaseStorage();
 
 (async () => {
   await storage.initializeStoreProducts();
+  await storage.initializeHydraProducts();
   await storage.initializePlatforms();
   await storage.initializeGames();
 })();

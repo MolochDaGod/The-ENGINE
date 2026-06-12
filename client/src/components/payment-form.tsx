@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
-import { CreditCard, Wallet, Bitcoin, CheckCircle } from "lucide-react";
+import { CreditCard, Wallet, Bitcoin, CheckCircle, Gamepad2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
@@ -18,7 +18,7 @@ interface PaymentFormProps {
 }
 
 export default function PaymentForm({ productId, productName, price, onClose }: PaymentFormProps) {
-  const [paymentMethod, setPaymentMethod] = useState<"card" | "paypal" | "crypto">("card");
+  const [paymentMethod, setPaymentMethod] = useState<"card" | "paypal" | "crypto" | "gbux">("card");
   const [customerEmail, setCustomerEmail] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [cryptoCurrency, setCryptoCurrency] = useState("");
@@ -74,6 +74,23 @@ export default function PaymentForm({ productId, productName, price, onClose }: 
       return;
     }
 
+    if (paymentMethod === "gbux") {
+      const res = await fetch("/api/gbux/purchase-product", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ productId }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast({ title: "Purchase Failed", description: data.error || "GBUX purchase failed.", variant: "destructive" });
+      } else {
+        toast({ title: "Purchase Complete!", description: `${productName} unlocked. Balance: ${data.newBalance} GBUX` });
+        onClose();
+      }
+      return;
+    }
+
     createOrderMutation.mutate({
       customerEmail,
       customerName: customerName || undefined,
@@ -97,7 +114,7 @@ export default function PaymentForm({ productId, productName, price, onClose }: 
           {/* Payment Method Selection */}
           <div>
             <Label>Payment Method</Label>
-            <div className="grid grid-cols-3 gap-2 mt-2">
+            <div className="grid grid-cols-4 gap-2 mt-2">
               <Button
                 variant={paymentMethod === "card" ? "default" : "outline"}
                 size="sm"
@@ -124,6 +141,16 @@ export default function PaymentForm({ productId, productName, price, onClose }: 
               >
                 <Bitcoin size={16} />
                 Crypto
+              </Button>
+              <Button
+                variant={paymentMethod === "gbux" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setPaymentMethod("gbux")}
+                className="flex items-center gap-1"
+                style={paymentMethod === "gbux" ? { background: 'rgba(74,222,128,0.2)', borderColor: '#4ade80', color: '#4ade80' } : undefined}
+              >
+                <Gamepad2 size={16} />
+                GBUX
               </Button>
             </div>
           </div>
@@ -226,14 +253,26 @@ export default function PaymentForm({ productId, productName, price, onClose }: 
             </div>
           )}
 
+          {/* GBUX Payment */}
+          {paymentMethod === "gbux" && (
+            <div className="rounded-lg p-4 space-y-2" style={{ background: 'rgba(74,222,128,0.06)', border: '1px solid rgba(74,222,128,0.2)' }}>
+              <p className="text-sm font-semibold" style={{ color: '#4ade80' }}>Pay with GBUX</p>
+              <p className="text-xs text-muted-foreground">
+                GBUX is the Grudge Studio in-game currency. You must be logged in to spend GBUX.
+                No email or card info needed — the purchase is instant.
+              </p>
+            </div>
+          )}
+
           {/* Submit Button */}
           <Button
             onClick={handlePayment}
             disabled={createOrderMutation.isPending}
             className="w-full"
             size="lg"
+            style={paymentMethod === "gbux" ? { background: 'rgba(74,222,128,0.2)', borderColor: '#4ade80', color: '#4ade80' } : undefined}
           >
-            {createOrderMutation.isPending ? "Processing..." : `Pay $${formatPrice(price)}`}
+            {createOrderMutation.isPending ? "Processing..." : paymentMethod === "gbux" ? "Pay with GBUX" : `Pay $${formatPrice(price)}`}
           </Button>
         </CardContent>
       </Card>

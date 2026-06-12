@@ -1819,6 +1819,54 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  /** Purchase a store product with GBUX */
+  app.post("/api/gbux/purchase-product", requirePlayer, async (req, res) => {
+    try {
+      const player = getPlayer(req)!;
+      const { productId } = req.body;
+
+      if (!productId) return res.status(400).json({ error: "productId is required" });
+
+      const product = await storage.getStoreProduct(Number(productId));
+      if (!product) return res.status(404).json({ error: "Product not found" });
+      if (!product.isActive) return res.status(400).json({ error: "Product is not available" });
+      if (!product.gbuxPrice || product.gbuxPrice <= 0) {
+        return res.status(400).json({ error: "This product does not have a GBUX price" });
+      }
+
+      const balance = parseFloat(player.gbuxBalance);
+      if (balance < product.gbuxPrice) {
+        return res.status(400).json({ error: `Insufficient GBUX. Need ${product.gbuxPrice}, have ${balance.toFixed(4)}` });
+      }
+
+      const newBalance = balance - product.gbuxPrice;
+      await storage.updateUser(player.id, { gbuxBalance: newBalance.toFixed(4) });
+      await storage.createTransaction({
+        userId: player.id,
+        type: "purchase",
+        amount: (-product.gbuxPrice).toFixed(4),
+        balanceAfter: newBalance.toFixed(4),
+        referenceType: "store",
+        description: `Purchased: ${product.name}`,
+      });
+
+      const order = await storage.createOrder({
+        customerEmail: player.email || `${player.username}@grudge.studio`,
+        customerName: player.displayName || player.username,
+        productId: product.id,
+        amount: 0,
+        paymentMethod: "gbux",
+        paymentStatus: "completed",
+        transactionId: `gbux-${player.id}-${Date.now()}`,
+      });
+
+      return res.json({ success: true, order, newBalance: newBalance.toFixed(4) });
+    } catch (error) {
+      console.error("GBUX product purchase error:", error);
+      return res.status(500).json({ error: "Purchase failed" });
+    }
+  });
+
   /** Admin: Grant GBUX to a player (for rewards, promotions, corrections) */
   app.post("/api/admin/gbux/grant", async (req, res) => {
     const sessionSecret = process.env.ADMIN_SESSION_SECRET || process.env.SESSION_SECRET;

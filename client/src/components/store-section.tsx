@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Check, CreditCard, Wallet, Bitcoin, Gamepad, Code, Swords, Sparkles, Shield, Server, Image } from "lucide-react";
+import { Check, CreditCard, Wallet, Bitcoin, Gamepad, Code, Swords, Sparkles, Shield, Server, Image, Wrench } from "lucide-react";
 import type { StoreProduct } from "@shared/schema";
 import PaymentForm from "./payment-form";
 
@@ -13,6 +13,7 @@ const CATEGORY_META: Record<string, { label: string; badgeClass: string; heading
   software: { label: 'Game Engine', badgeClass: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30', heading: 'Game Engines & Software' },
   enterprise: { label: 'Custom Service', badgeClass: 'bg-purple-500/20 text-purple-400 border-purple-500/30', heading: 'Custom Development' },
   asset: { label: 'Art Asset', badgeClass: 'bg-amber-500/20 text-amber-400 border-amber-500/30', heading: 'Art & Environment Packs' },
+  tool: { label: 'HYDRA Tool', badgeClass: 'bg-green-500/20 text-green-400 border-green-500/30', heading: 'HYDRA Tool Kit' },
 };
 
 export default function StoreSection() {
@@ -49,6 +50,7 @@ export default function StoreSection() {
   const engines = products.filter(p => p.category === 'software');
   const enterprise = products.filter(p => p.category === 'enterprise');
   const assets = products.filter(p => p.category === 'asset');
+  const tools = products.filter(p => p.category === 'tool');
 
   const renderProductCard = (product: StoreProduct, size: 'large' | 'small' = 'large') => {
     const meta = CATEGORY_META[product.category] || CATEGORY_META.software;
@@ -73,9 +75,15 @@ export default function StoreSection() {
             {meta.label}
           </Badge>
           <div className="absolute bottom-3 right-3">
-            <span className="text-xl font-bold text-[hsl(43,85%,55%)] drop-shadow-lg">
-              {formatPrice(product.price)}
-            </span>
+            {product.gbuxPrice && product.gbuxPrice > 0 ? (
+              <span className="text-xl font-bold drop-shadow-lg" style={{ color: '#4ade80' }}>
+                {product.gbuxPrice} GBUX
+              </span>
+            ) : (
+              <span className="text-xl font-bold text-[hsl(43,85%,55%)] drop-shadow-lg">
+                {formatPrice(product.price)}
+              </span>
+            )}
           </div>
         </div>
 
@@ -103,9 +111,15 @@ export default function StoreSection() {
             className="w-full gilded-button"
             size={isSmall ? 'sm' : 'default'}
             onClick={() => setSelectedProduct(product)}
+            style={product.category === 'tool' ? { background: 'rgba(74,222,128,0.15)', borderColor: 'rgba(74,222,128,0.4)', color: '#4ade80' } : undefined}
           >
-            <CreditCard className="w-4 h-4 mr-2" />
-            {product.category === "enterprise" ? "Contact Sales" : `Buy — ${formatPrice(product.price)}`}
+            {product.category === 'tool' ? (
+              <><Wrench className="w-4 h-4 mr-2" />{product.gbuxPrice ? `Get — ${product.gbuxPrice} GBUX` : 'Get Free'}</>
+            ) : product.category === "enterprise" ? (
+              <><CreditCard className="w-4 h-4 mr-2" />Contact Sales</>
+            ) : (
+              <><CreditCard className="w-4 h-4 mr-2" />{`Buy — ${formatPrice(product.price)}`}</>
+            )}
           </Button>
         </CardContent>
       </Card>
@@ -139,6 +153,19 @@ export default function StoreSection() {
           </div>
         ) : (
           <>
+            {tools.length > 0 && (
+              <div className="mb-16">
+                <h3 className="text-2xl font-heading mb-6 flex items-center gap-3" style={{ WebkitTextFillColor: 'unset', color: '#4ade80' }}>
+                  <Wrench className="w-6 h-6" style={{ color: '#4ade80' }} />
+                  HYDRA Tool Kit
+                  <span className="text-xs font-body px-2 py-1 rounded-full" style={{ background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.25)', color: '#4ade80', letterSpacing: '0.05em' }}>GBUX</span>
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {tools.map((p) => renderProductCard(p, 'large'))}
+                </div>
+              </div>
+            )}
+
             {engines.length > 0 && (
               <div className="mb-16">
                 <h3 className="text-2xl font-heading text-[hsl(43,85%,65%)] mb-6 flex items-center gap-3" style={{ WebkitTextFillColor: 'unset' }}>
