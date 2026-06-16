@@ -275,4 +275,43 @@ export class GrudgeEngine {
     (body as any).belongTo = { isScene: true, isGround: true };
     this.world.addBody(body);
   }
+
+  /**
+   * Add a static box to the scene + physics world (GROUP_SCENE) so it acts as
+   * walls, ramps, ledges or steps. `rotation` is XYZ Euler radians, which lets
+   * you build slopes (rotate about X/Z) for foot-IK / slope-movement testing.
+   */
+  addBox(opts: {
+    size: [number, number, number];
+    position: [number, number, number];
+    rotation?: [number, number, number];
+    color?: number;
+  }): void {
+    const [sx, sy, sz] = opts.size;
+    const [px, py, pz] = opts.position;
+    const [rx, ry, rz] = opts.rotation ?? [0, 0, 0];
+    const color = opts.color ?? 0x3a2a5e;
+
+    // Visual
+    const geo = new THREE.BoxGeometry(sx, sy, sz);
+    const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.85 });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.set(px, py, pz);
+    mesh.rotation.set(rx, ry, rz);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    this.scene.add(mesh);
+
+    // Physics (static) — GROUP_SCENE so capsules + raycasts detect it.
+    const body = new CANNON.Body({
+      mass: 0,
+      collisionFilterGroup: GROUP_SCENE,
+      collisionFilterMask: GROUP_ROLE | GROUP_ENEMY | GROUP_ROLE_ATTACKER | GROUP_ENEMY_ATTACKER,
+    });
+    body.addShape(new CANNON.Box(new CANNON.Vec3(sx / 2, sy / 2, sz / 2)));
+    body.position.set(px, py, pz);
+    body.quaternion.setFromEuler(rx, ry, rz);
+    (body as any).belongTo = { isScene: true };
+    this.world.addBody(body);
+  }
 }

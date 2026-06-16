@@ -395,7 +395,18 @@ class GrudgeCharacter extends BaseCharacter {
             this._tweenWhirlwind = requestAnimationFrame(step);
           },
           exitWhirlwind:        () => { if (this._tweenWhirlwind) cancelAnimationFrame(this._tweenWhirlwind); },
-          playClimb:            () => { this.fadeToAction('idle'); this.body.mass = 0; this.body.velocity.set(0, 0, 0); },
+          playClimb:            () => {
+            // Use a real climbing/locomotion clip so the character isn't frozen
+            // on the wall. Falls back gracefully when a model lacks a climb clip.
+            const climbClip = ['climb', 'climbing', 'climbUp', 'ladder', 'walk', 'running', 'idle']
+              .find((n) => this.oaction[n]);
+            if (climbClip) {
+              if (this.oaction[climbClip]) this.oaction[climbClip].timeScale = 1;
+              this.fadeToAction(climbClip, 0.15);
+            }
+            this.body.mass = 0;
+            this.body.velocity.set(0, 0, 0);
+          },
           exitClimb:            () => { this.body.mass = this.mass; },
           playAjejebloken:      () => { this.fadeToAction('whirlwind', 0); },
           exitAjejebloken:      () => { this.setFacing(this.facing.x, this.facing.y); },
@@ -577,6 +588,7 @@ export default function AnnihilateDemo() {
     setLoaded(false); setInfo(`Loading ${preset.name}…`); setFsmState('loading');
     const character = new GrudgeCharacter(preset, { position: new THREE.Vector3(-2, 2, 0) });
     await character.load(() => {
+      character.enableFootIK();
       const controls = new RoleControls(character);
       controlsRef.current = controls; roleRef.current = character;
       engine.setRole(character);
@@ -596,6 +608,7 @@ export default function AnnihilateDemo() {
     const pos = new THREE.Vector3(role.body.position.x + Math.cos(angle) * dist, 2, role.body.position.z + Math.sin(angle) * dist);
     const enemy = new GrudgeEnemy(preset, { position: pos });
     await enemy.load(() => {
+      enemy.enableFootIK();
       const ai = new BaseAi(enemy, 1.5);
       enemiesRef.current.push({ character: enemy, ai, preset });
       setEnemyCount(enemiesRef.current.length);
@@ -621,7 +634,17 @@ export default function AnnihilateDemo() {
     canvas.width = canvas.clientWidth || window.innerWidth;
     canvas.height = canvas.clientHeight || window.innerHeight;
     const engine = GrudgeEngine.getInstance();
-    engine.init(canvas); engine.addGround(0x1e1030, 80); engineRef.current = engine; engine.start();
+    engine.init(canvas); engine.addGround(0x1e1030, 80); engineRef.current = engine;
+
+    // ── Test obstacles for the movement fixes ──────────────────────────────
+    //  • ramp  → foot IK plants on the slope + slope-projected movement / push-off
+    //  • block → jump into its face to wall-grab, hold W to climb, mantle the ledge (top)
+    //  • step  → foot IK on a raised edge
+    engine.addBox({ size: [10, 0.5, 6], position: [11, 1.1, 0], rotation: [0, 0, -0.3], color: 0x24407a });
+    engine.addBox({ size: [6, 4, 6], position: [-11, 2, 0], color: 0x47307a });
+    engine.addBox({ size: [4, 0.7, 4], position: [-3.5, 0.35, 5], color: 0x33235e });
+
+    engine.start();
     spawnCharacter(CHARACTER_PRESETS[0]);
     return () => {
       clearEnemies(); controlsRef.current?.destroy(); roleRef.current?.destroy();
@@ -689,6 +712,7 @@ export default function AnnihilateDemo() {
         <ControlRow keys="LMB" label="Attack (light combo)" />
         <ControlRow keys="RMB" label="Heavy / Bash / Whirlwind" />
         <ControlRow keys="Space" label="Jump / Double Jump" />
+        <ControlRow keys="Jump→Wall + W" label="Climb wall / mantle ledge" />
         <ControlRow keys="Shift" label="Dash" />
         <ControlRow keys="1" label="Block (hold for combos)" />
         <ControlRow keys="2" label="Launch (uppercut)" />

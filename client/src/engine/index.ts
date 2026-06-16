@@ -38,6 +38,7 @@ export { RACE_CONFIGS, DEFAULT_RACE }    from './character/BaseCharacter';
 
 export { Attacker }                      from './character/Attacker';
 export { RoleControls }                  from './character/RoleControls';
+export { FootIK }                        from './character/FootIK';
 
 // ── Character States (Sketchbook-style class-based FSM) ─────────────────────
 export type { ICharacterState }          from './character/states/ICharacterState';

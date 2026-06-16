@@ -22,6 +22,7 @@ import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { CharacterFSM, createFSM } from './CharacterFSM';
+import { FootIK } from './FootIK';
 import type { ICharacterState } from './states/ICharacterState';
 import { GrudgeEngine, Updatable } from '../core/GrudgeEngine';
 import {
@@ -131,6 +132,23 @@ export abstract class BaseRaceCharacter implements Updatable {
   bodyHeightHalf  = 1.65 / 2;
   mass            = 80;
   isAir           = false;
+
+  // ── Ground / terrain (cached each frame from the altitude raycast) ──────
+  grounded     = false;
+  groundNormal = new THREE.Vector3(0, 1, 0);
+  groundY      = 0;
+
+  // ── Climbing (wall / ledge grab) ────────────────────────────────────────
+  /** Forward axis from the controller: +1 = climb up, -1 = climb down, 0 = hold */
+  climbInput   = 0;
+  /** Vertical climb speed (units/sec) */
+  climbSpeed   = 2.6;
+  /** Horizontal unit direction INTO the grabbed wall */
+  climbDir     = new THREE.Vector3(0, 0, 1);
+
+  // ── Foot IK (planted feet on uneven terrain) ────────────────────────────
+  footIK:    FootIK | null = null;
+  ikEnabled  = true;
 
   // ── Rendering
   mesh!:   THREE.Object3D;
@@ -242,15 +260,33 @@ export abstract class BaseRaceCharacter implements Updatable {
     this.body.position.set(pos.x, pos.y, pos.z);
     this._engine.world.addBody(this.body);
 
-    // Climb detection — wall collision normals
+    // ── Wall / ledge grab detection ──────────────────────────────────────
+    // Grab any sufficiently-vertical scene surface while airborne. The old
+    // version only matched perfectly X-axis-aligned walls (ni.x === ±1),
+    // so most walls never triggered a climb.
     this.body.addEventListener('collide', (event: any) => {
-      if (event.body?.belongTo?.isScene) {
-        const ni = event.contact?.ni;
-        if (ni && Math.abs(ni.x) === 1 && ni.y === 0 && ni.z === 0) {
-          (this as any).climbContactSign = ni.x;
-          this.service.send('climb', { contact: event.contact });
-        }
-      }
+      if (!event.body?.belongTo?.isScene) return;
+      const contact = event.contact;
+      const ni = contact?.ni;
+      if (!ni) return;
+
+      // A wall has a mostly-horizontal contact normal (small vertical part).
+      const horizLen = Math.hypot(ni.x, ni.z);
+      if (horizLen < 0.5 || Math.abs(ni.y) > 0.6) return;
+
+      // Only grab while in the air (jumping/falling into the wall) so walking
+      // into a wall on the ground never starts a climb.
+      if (!this.isAir) return;
+
+      // Direction INTO the wall: prefer current horizontal motion, else facing.
+      let dx = this.body.velocity.x;
+      let dz = this.body.velocity.z;
+      if (dx * dx + dz * dz < 0.04) { dx = this.facing.x; dz = this.facing.y; }
+      const dl = Math.hypot(dx, dz) || 1;
+      this.climbDir.set(dx / dl, 0, dz / dl);
+      (this as any).climbContactSign = Math.sign(ni.x) || 1;
+
+      this.service.send('climb', { contact });
     });
   }
 
@@ -287,6 +323,11 @@ export abstract class BaseRaceCharacter implements Updatable {
     this.mixer.addEventListener('finished', () => {
       this.service.send('finish');
     });
+
+    // Foot IK binds lazily on first solve; safe no-op if the rig is unsupported.
+    if (this.ikEnabled && !this.footIK) {
+      this.footIK = new FootIK(this);
+    }
 
     this.service.start();
     this.service.send('loaded');
@@ -361,24 +402,41 @@ export abstract class BaseRaceCharacter implements Updatable {
     if (!this._loaded || !this.mesh) return;
     dt = Math.min(dt, MAX_DT);
 
-    // Climb state: slowly lower body to stay on wall
+    // ── Climb: input-driven vertical movement + ledge mantle (own path) ──
     if (this.service.matches('climb')) {
-      this.body.position.y -= dt;
+      this._updateClimb(dt);
+      this.mesh.position.set(
+        this.body.position.x,
+        this.body.position.y - this.bodyHeightHalf,
+        this.body.position.z
+      );
+      this.mixer?.update(dt);
+      return;
     }
 
-    // Air / land detection via raycast
+    // ── Air / land detection + ground-normal cache (slopes & foot IK) ──
     const altResult = this.getAltitude(100);
     let altitude: number;
     if (altResult.body) {
       altitude = this.body.position.y - this.bodyHeightHalf - altResult.hitPointWorld.y;
+      this.groundY = altResult.hitPointWorld.y;
+      const n = altResult.hitNormalWorld;
+      if (n) {
+        this.groundNormal.set(n.x, n.y, n.z);
+        if (this.groundNormal.y < 0) this.groundNormal.multiplyScalar(-1);
+        if (this.groundNormal.lengthSq() < 1e-6) this.groundNormal.set(0, 1, 0);
+      }
     } else {
       altitude = Infinity;
+      this.groundNormal.set(0, 1, 0);
     }
 
     if (altitude > 0.37) {
+      this.grounded = false;
       this.setAir(true);
       this.service.send('air');
     } else {
+      this.grounded = true;
       if (this.isAir || altitude < 0.0037) this.service.send('land');
       this.setAir(false);
       this.body.mass = this.mass;
@@ -396,12 +454,87 @@ export abstract class BaseRaceCharacter implements Updatable {
       this.body.position.z
     );
 
-    // Update animation mixer
+    // Update animation mixer (samples the animated pose for this frame)
     this.mixer?.update(dt);
+
+    // Foot IK — after the pose is sampled, only while planted. Guarded so a
+    // rig/math edge-case can never break the RAF loop. No-op on flat ground.
+    if (this.ikEnabled && this.footIK && this.grounded && !this.isAir) {
+      try { this.footIK.update(dt); } catch { /* never break rendering */ }
+    }
   }
 
   setAir(bool: boolean): void {
     this.isAir = bool;
+  }
+
+  // ── Climbing helpers ───────────────────────────────────────────────
+
+  /** Input-driven wall climb + ledge mantle (used while in the 'climb' state). */
+  private _updateClimb(dt: number): void {
+    // Pin to the wall; climb vertically by the controller's forward axis.
+    this.body.velocity.set(0, 0, 0);
+    const climb = this.climbInput;
+    if (climb !== 0) this.body.position.y += climb * this.climbSpeed * dt;
+
+    // Face into the wall while hanging.
+    this.setFacing(this.climbDir.x, this.climbDir.z);
+
+    // Mantle: when pushing up, look for a top surface just past the wall.
+    if (climb > 0) {
+      const topY = this._probeLedge();
+      if (topY !== null) {
+        this.body.position.y = topY + this.bodyHeightHalf + 0.04;
+        this.body.position.x += this.climbDir.x * (this.bodyRadius + 0.3);
+        this.body.position.z += this.climbDir.z * (this.bodyRadius + 0.3);
+        this.body.velocity.set(0, 0, 0);
+        this.service.send('land');     // climb → idle (exitClimb restores mass)
+        return;
+      }
+    }
+
+    // Release at the bottom — once the feet reach the floor, let go.
+    const alt = this.getAltitude(100);
+    if (alt.body) {
+      const footGap = this.body.position.y - this.bodyHeightHalf - alt.hitPointWorld.y;
+      if (footGap < 0.05) this.service.send('land');
+    }
+  }
+
+  /**
+   * Probe for a ledge top just past the wall and slightly above the head.
+   * Returns the world Y of the top surface if it's within mantle reach.
+   */
+  private _probeLedge(): number | null {
+    const headY = this.body.position.y + this.bodyHeightHalf;
+    const px = this.body.position.x + this.climbDir.x * (this.bodyRadius + 0.25);
+    const pz = this.body.position.z + this.climbDir.z * (this.bodyRadius + 0.25);
+    const res = this.raycastDown(px, headY + 0.6, pz, 1.1);
+    if (!res.body) return null;
+    const topY = res.hitPointWorld.y;
+    const feetY = this.body.position.y - this.bodyHeightHalf;
+    if (topY > feetY + 0.2 && topY <= headY + 0.5) return topY;
+    return null;
+  }
+
+  /** Downward raycast against scene geometry from an arbitrary point. */
+  raycastDown(x: number, y: number, z: number, distance: number): CANNON.RaycastResult {
+    const result = new CANNON.RaycastResult();
+    const from = new CANNON.Vec3(x, y, z);
+    const to   = new CANNON.Vec3(x, y - distance, z);
+    this._engine.world.raycastClosest(from, to, { collisionFilterMask: GROUP_SCENE }, result);
+    return result;
+  }
+
+  /** Enable foot-placement IK (call after the mesh is loaded). */
+  enableFootIK(): void {
+    this.ikEnabled = true;
+    if (!this.footIK && this.mesh) this.footIK = new FootIK(this);
+  }
+
+  /** Disable foot-placement IK. */
+  disableFootIK(): void {
+    this.ikEnabled = false;
   }
 
   // ── Combat ────────────────────────────────────────────────────────────────

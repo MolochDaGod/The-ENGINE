@@ -225,20 +225,34 @@ export class RoleControls implements Updatable {
       iy *= inv;
     }
 
-    // Compute camera yaw on XZ so WASD is always "into the screen".
-    // forward = (camera → role) projected onto XZ.
+    // ── Camera-relative basis ───────────────────────────────────────────────
+    // forward = (camera → role) projected onto XZ = the "into the screen" dir.
+    // Pressing W (iy = -1) MUST drive the character AWAY from the camera. The
+    // previous formula was sign-inverted, which made forward input run the
+    // character backwards (toward the camera).
     const cam = this._engine.camera;
-    let camYaw = 0;
+    let fwdX = 0, fwdZ = -1;                  // default: −Z is "into the screen"
     if (cam && this.role.body) {
       const dx = this.role.body.position.x - cam.position.x;
       const dz = this.role.body.position.z - cam.position.z;
-      if (dx * dx + dz * dz > 1e-6) camYaw = Math.atan2(dx, dz);
+      const lenSq = dx * dx + dz * dz;
+      if (lenSq > 1e-6) {
+        const inv = 1 / Math.sqrt(lenSq);
+        fwdX = dx * inv;
+        fwdZ = dz * inv;
+      }
     }
-    const cosY = Math.cos(camYaw);
-    const sinY = Math.sin(camYaw);
-    // forward (input -Z) maps to world (sinY, cosY); right (input +X) to (cosY, -sinY)
-    const moveX = ix * cosY + iy * sinY;
-    const moveZ = -ix * sinY + iy * cosY;
+    // right = forward × up (Y-up) = (-fwdZ, fwdX) → screen-right for D.
+    const rightX = -fwdZ;
+    const rightZ = fwdX;
+
+    // forward scalar = -iy  (W → +forward), right scalar = ix (D → +right)
+    const fwdScalar = -iy;
+    const moveX = fwdScalar * fwdX + ix * rightX;
+    const moveZ = fwdScalar * fwdZ + ix * rightZ;
+
+    // Expose the forward axis as a climb axis (W = climb up, S = climb down).
+    this.role.climbInput = fwdScalar;
 
     // Keep legacy direction Vector2 = per-frame displacement (x=worldX, y=worldZ).
     const perFrame = this.role.speed * dt * 60;
@@ -248,7 +262,7 @@ export class RoleControls implements Updatable {
 
     if (canMove) {
       if (hasInput) {
-        // Update facing from movement (annihilate Vector2 convention).
+        // Face the direction of travel (Fortnite-style over-the-shoulder).
         this.role.facing.set(moveX, moveZ);
       }
       // Always update mesh yaw from facing (even when standing still).
@@ -262,14 +276,25 @@ export class RoleControls implements Updatable {
       // role.speed is units/frame @ 60fps → units/sec = speed * 60.
       const v = this.role.speed * 60;
       if (hasInput) {
-        this.role.body.velocity.x = moveX * v;
-        this.role.body.velocity.z = moveZ * v;
+        let vx = moveX * v;
+        let vz = moveZ * v;
+        let vy = this.role.body.velocity.y;
+        // Project velocity onto the ground slope so the character follows
+        // ramps/terrain and pushes off accurately (no burrowing/launching).
+        // Skip on the jump frame (vy spiked positive) so jumps aren't eaten.
+        const gn = this.role.groundNormal;
+        if (this.role.grounded && vy <= 0.1 && gn.y > 0.3 && gn.y < 0.999) {
+          vy = -(vx * gn.x + vz * gn.z) / gn.y;
+          if (vy > v) vy = v; else if (vy < -v) vy = -v;
+        }
+        this.role.body.velocity.x = vx;
+        this.role.body.velocity.y = vy;
+        this.role.body.velocity.z = vz;
       } else {
         // Snappy stop on input release — preserve gravity (velocity.y).
         this.role.body.velocity.x = 0;
         this.role.body.velocity.z = 0;
       }
-      // velocity.y is left alone so gravity / jump / knockback all keep working.
 
       if (hasInput) {
         this.role.service.send('run');
