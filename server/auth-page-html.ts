@@ -6,7 +6,7 @@ export const AUTH_PAGE_HTML = `<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Sign in · Grudge Studio</title>
 <meta name="description" content="Grudge ID — one account for every Grudge Studio game and tool." />
-<link rel="icon" href="https://grudge-factions-site.vercel.app/favicon.png" />
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 2l11 5v8c0 7-4.7 12.4-11 15C9.7 27.4 5 22 5 15V7z' fill='%231a1405' stroke='%23d4af37' stroke-width='1.6'/%3E%3C/svg%3E" />
 <!--
   GRUDGE ID — universal auth page (id.grudge-studio.com)
   Uses same-origin API calls when hosted on id.grudge-studio.com (CF Tunnel → Railway).
@@ -191,9 +191,9 @@ body{font-family:var(--font-body);color:var(--text);background:var(--bg);min-hei
 function resolveApiBase(){
   const qs = new URLSearchParams(location.search);
   const fromQuery = qs.get("api");
-  if (fromQuery) return fromQuery.replace(/\/+\$/, "");
+  if (fromQuery) return fromQuery.replace(/\\/+$/, "");
   const meta = document.querySelector('meta[name="grudge-api"]');
-  if (meta && meta.content.trim()) return meta.content.trim().replace(/\/+\$/, "");
+  if (meta && meta.content.trim()) return meta.content.trim().replace(/\\/+$/, "");
   const h = location.hostname;
   if (h === "localhost" || h === "127.0.0.1") return location.protocol + "//" + h + ":5000";
   // FIX: id.grudge-studio.com uses same-origin (CF Tunnel → Railway) — no CORS
@@ -216,13 +216,13 @@ window.addEventListener("message", (e) => { if (e?.data?.type === "grudge-auth:i
 if (isPopup) { try { window.opener.postMessage({ type: "grudge-auth:ready" }, "*"); } catch {} }
 
 /* ══════════ DOM + API HELPERS ══════════ */
-const \$ = (id) => document.getElementById(id);
+const $ = (id) => document.getElementById(id);
 const views = ["choose","profile","email","phone","done","loading"];
-function show(name){ views.forEach(v => \$("view-"+v).classList.toggle("active", v === name)); }
+function show(name){ views.forEach(v => $("view-"+v).classList.toggle("active", v === name)); }
 
 let toastTimer;
 function toast(msg, kind){
-  const t = \$("toast"); t.textContent = msg;
+  const t = $("toast"); t.textContent = msg;
   t.className = "toast show" + (kind ? " " + kind : "");
   clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove("show"), 4200);
 }
@@ -263,7 +263,7 @@ async function handoff(user){
   if (returnTo){
     let dest = returnTo;
     try {
-      if (/^https?:\/\//i.test(returnTo)){
+      if (/^https?:\\/\\//i.test(returnTo)){
         const origin = new URL(returnTo).origin;
         if (origin !== location.origin){ const token = await mintLaunchToken(origin); if (token) dest += (returnTo.includes("?") ? "&" : "?") + "grudge_token=" + encodeURIComponent(token); }
       }
@@ -273,11 +273,11 @@ async function handoff(user){
   renderDone(user, false);
 }
 function renderDone(user, autoClose){
-  \$("done-name").textContent = user.displayName || user.username || "Warlord";
-  \$("done-gid").textContent = user.grudgeId || "";
-  if (user.isNew){ const pill = document.createElement("span"); pill.className = "new-pill"; pill.textContent = "New"; \$("done-name").appendChild(pill); }
-  \$("done-title").textContent = autoClose ? "Signed in — returning…" : "You're signed in";
-  \$("done-continue").style.display = (isPopup || returnTo) ? "flex" : "none";
+  $("done-name").textContent = user.displayName || user.username || "Warlord";
+  $("done-gid").textContent = user.grudgeId || "";
+  if (user.isNew){ const pill = document.createElement("span"); pill.className = "new-pill"; pill.textContent = "New"; $("done-name").appendChild(pill); }
+  $("done-title").textContent = autoClose ? "Signed in — returning…" : "You're signed in";
+  $("done-continue").style.display = (isPopup || returnTo) ? "flex" : "none";
   show("done");
   if (autoClose) setTimeout(() => { try { window.close(); } catch {} }, 900);
 }
@@ -287,8 +287,8 @@ function afterAuth(user, puterEmail){
 }
 
 /* ══════════ PUTER (primary) ══════════ */
-\$("btn-puter").addEventListener("click", async () => {
-  const btn = \$("btn-puter");
+$("btn-puter").addEventListener("click", async () => {
+  const btn = $("btn-puter");
   if (typeof window.puter === "undefined"){ toast("Grudge sign-in is still loading — try again in a second.", "error"); return; }
   busy(btn, true, "Opening Grudge…");
   try {
@@ -308,15 +308,15 @@ function startOAuth(provider){
   else redirect = selfUrl({ signedin:"1" });
   location.href = CONFIG.apiBase + "/api/auth/" + provider + "/start?redirect=" + encodeURIComponent(redirect);
 }
-\$("btn-google").addEventListener("click", () => startOAuth("google"));
-\$("btn-discord").addEventListener("click", () => startOAuth("discord"));
-\$("btn-github").addEventListener("click", () => startOAuth("github"));
+$("btn-google").addEventListener("click", () => startOAuth("google"));
+$("btn-discord").addEventListener("click", () => startOAuth("discord"));
+$("btn-github").addEventListener("click", () => startOAuth("github"));
 
 /* ══════════ Phantom wallet ══════════ */
 const B58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
 function base58(bytes){ if (!bytes || !bytes.length) return ""; const digits = [0]; for (let i=0;i<bytes.length;i++){ let carry = bytes[i]; for (let j=0;j<digits.length;j++){ carry += digits[j] << 8; digits[j] = carry % 58; carry = (carry / 58) | 0; } while (carry){ digits.push(carry % 58); carry = (carry / 58) | 0; } } let str = ""; for (let k=0; bytes[k] === 0 && k < bytes.length - 1; k++) str += "1"; for (let q=digits.length-1; q>=0; q--) str += B58[digits[q]]; return str; }
-\$("btn-phantom").addEventListener("click", async () => {
-  const btn = \$("btn-phantom");
+$("btn-phantom").addEventListener("click", async () => {
+  const btn = $("btn-phantom");
   const provider = window.solana || (window.phantom && window.phantom.solana);
   if (!provider || !provider.isPhantom){ toast("No Solana wallet found. Install Phantom to continue.", "error"); window.open("https://phantom.app/", "_blank"); return; }
   busy(btn, true);
@@ -336,56 +336,56 @@ function base58(bytes){ if (!bytes || !bytes.length) return ""; const digits = [
 
 /* ══════════ Email / password — FIX #4: Enter key submits ══════════ */
 let emailMode = "login";
-\$("btn-email").addEventListener("click", () => { setEmailMode("login"); show("email"); });
-\$("em-back").addEventListener("click", () => show("choose"));
-\$("em-toggle").addEventListener("click", () => setEmailMode(emailMode === "login" ? "register" : "login"));
+$("btn-email").addEventListener("click", () => { setEmailMode("login"); show("email"); });
+$("em-back").addEventListener("click", () => show("choose"));
+$("em-toggle").addEventListener("click", () => setEmailMode(emailMode === "login" ? "register" : "login"));
 function setEmailMode(mode){
   emailMode = mode; const reg = mode === "register";
-  \$("em-title").textContent = reg ? "Create your Grudge account" : "Sign in with email";
-  \$("em-sub").textContent = reg ? "Pick a username — it's your Grudge login name." : "Use your Grudge username, email, or Grudge ID.";
-  \$("em-displayname-wrap").style.display = reg ? "block" : "none";
-  \$("em-username").placeholder = reg ? "username (3–30 chars)" : "username, email, or GRUDGE-…";
-  \$("em-password").setAttribute("autocomplete", reg ? "new-password" : "current-password");
-  \$("em-submit").querySelector(".lead").textContent = reg ? "Create account" : "Sign in";
-  \$("em-toggle").textContent = reg ? "Already have an account? Sign in" : "New here? Create an account";
+  $("em-title").textContent = reg ? "Create your Grudge account" : "Sign in with email";
+  $("em-sub").textContent = reg ? "Pick a username — it's your Grudge login name." : "Use your Grudge username, email, or Grudge ID.";
+  $("em-displayname-wrap").style.display = reg ? "block" : "none";
+  $("em-username").placeholder = reg ? "username (3–30 chars)" : "username, email, or GRUDGE-…";
+  $("em-password").setAttribute("autocomplete", reg ? "new-password" : "current-password");
+  $("em-submit").querySelector(".lead").textContent = reg ? "Create account" : "Sign in";
+  $("em-toggle").textContent = reg ? "Already have an account? Sign in" : "New here? Create an account";
 }
 async function submitEmail(){
-  const btn = \$("em-submit");
-  const username = \$("em-username").value.trim(), password = \$("em-password").value;
+  const btn = $("em-submit");
+  const username = $("em-username").value.trim(), password = $("em-password").value;
   if (!username || !password){ toast("Enter your username and password.", "error"); return; }
   busy(btn, true);
   try {
-    const body = emailMode === "register" ? { username, password, displayName: \$("em-displayname").value.trim() || undefined } : { username, password };
+    const body = emailMode === "register" ? { username, password, displayName: $("em-displayname").value.trim() || undefined } : { username, password };
     const user = await api("/api/auth/" + (emailMode === "register" ? "register" : "login"), { method:"POST", body: JSON.stringify(body) });
     afterAuth(user);
   } catch (e){ toast(e.message || "Could not sign you in.", "error"); }
   finally { busy(btn, false); }
 }
-\$("em-submit").addEventListener("click", submitEmail);
-\$("em-password").addEventListener("keydown", (e) => { if (e.key === "Enter") submitEmail(); });
-\$("em-username").addEventListener("keydown", (e) => { if (e.key === "Enter") \$("em-password").focus(); });
+$("em-submit").addEventListener("click", submitEmail);
+$("em-password").addEventListener("keydown", (e) => { if (e.key === "Enter") submitEmail(); });
+$("em-username").addEventListener("keydown", (e) => { if (e.key === "Enter") $("em-password").focus(); });
 
 /* ══════════ Phone OTP — FIX #4: Enter key submits ══════════ */
 let phoneStage = "number";
-\$("btn-phone").addEventListener("click", () => { setPhoneStage("number"); show("phone"); });
-\$("ph-back").addEventListener("click", () => show("choose"));
+$("btn-phone").addEventListener("click", () => { setPhoneStage("number"); show("phone"); });
+$("ph-back").addEventListener("click", () => show("choose"));
 function setPhoneStage(stage){
   phoneStage = stage; const code = stage === "code";
-  \$("ph-num-wrap").style.display = code ? "none" : "block";
-  \$("ph-code-wrap").style.display = code ? "block" : "none";
-  \$("ph-sub").textContent = code ? ("Enter the code we sent to " + \$("ph-number").value.trim()) : "We'll text you a one-time code.";
-  \$("ph-submit").querySelector(".lead").textContent = code ? "Verify & sign in" : "Send code";
+  $("ph-num-wrap").style.display = code ? "none" : "block";
+  $("ph-code-wrap").style.display = code ? "block" : "none";
+  $("ph-sub").textContent = code ? ("Enter the code we sent to " + $("ph-number").value.trim()) : "We'll text you a one-time code.";
+  $("ph-submit").querySelector(".lead").textContent = code ? "Verify & sign in" : "Send code";
 }
 async function submitPhone(){
-  const btn = \$("ph-submit"), phone = \$("ph-number").value.trim();
+  const btn = $("ph-submit"), phone = $("ph-number").value.trim();
   if (phoneStage === "number"){
-    if (!/^\+\d{8,15}\$/.test(phone)){ toast("Use E.164 format, e.g. +15551234567", "error"); return; }
+    if (!/^\\+\\d{8,15}$/.test(phone)){ toast("Use E.164 format, e.g. +15551234567", "error"); return; }
     busy(btn, true);
     try { const r = await api("/api/auth/twilio/start", { method:"POST", body: JSON.stringify({ phone }) }); setPhoneStage("code"); toast(r.status === "dev" ? "Dev mode: check the server logs for your code." : "Code sent.", "success"); }
     catch (e){ toast(e.message || "Couldn't send the code.", "error"); }
     finally { busy(btn, false); }
   } else {
-    const code = \$("ph-code").value.trim();
+    const code = $("ph-code").value.trim();
     if (!code){ toast("Enter the code you received.", "error"); return; }
     busy(btn, true);
     try { const user = await api("/api/auth/twilio/verify", { method:"POST", body: JSON.stringify({ phone, code }) }); afterAuth(user); }
@@ -393,13 +393,13 @@ async function submitPhone(){
     finally { busy(btn, false); }
   }
 }
-\$("ph-submit").addEventListener("click", submitPhone);
-\$("ph-number").addEventListener("keydown", (e) => { if (e.key === "Enter") submitPhone(); });
-\$("ph-code").addEventListener("keydown", (e) => { if (e.key === "Enter") submitPhone(); });
+$("ph-submit").addEventListener("click", submitPhone);
+$("ph-number").addEventListener("keydown", (e) => { if (e.key === "Enter") submitPhone(); });
+$("ph-code").addEventListener("keydown", (e) => { if (e.key === "Enter") submitPhone(); });
 
 /* ══════════ Guest ══════════ */
-\$("btn-guest").addEventListener("click", async () => {
-  const btn = \$("btn-guest"); busy(btn, true);
+$("btn-guest").addEventListener("click", async () => {
+  const btn = $("btn-guest"); busy(btn, true);
   try { const user = await api("/api/auth/guest", { method:"POST", body: "{}" }); afterAuth(user); }
   catch (e){ toast(e.message || "Could not start a guest session.", "error"); }
   finally { busy(btn, false); }
@@ -408,30 +408,30 @@ async function submitPhone(){
 /* ══════════ Username claim — FIX #5: availability check handles errors ══════════ */
 let pendingUser = null;
 function openProfileStep(user, puterEmail){
-  pendingUser = user; \$("pf-username").value = user.username || "";
-  if (puterEmail) \$("pf-email").value = puterEmail;
-  \$("pf-username-hint").className = "hint"; \$("pf-username-hint").textContent = "3–30 letters, numbers, _ or -";
-  show("profile"); setTimeout(() => \$("pf-username").focus(), 60);
+  pendingUser = user; $("pf-username").value = user.username || "";
+  if (puterEmail) $("pf-email").value = puterEmail;
+  $("pf-username-hint").className = "hint"; $("pf-username-hint").textContent = "3–30 letters, numbers, _ or -";
+  show("profile"); setTimeout(() => $("pf-username").focus(), 60);
 }
 let lookupTimer;
-\$("pf-username").addEventListener("input", () => {
-  const hint = \$("pf-username-hint"), v = \$("pf-username").value.trim();
+$("pf-username").addEventListener("input", () => {
+  const hint = $("pf-username-hint"), v = $("pf-username").value.trim();
   clearTimeout(lookupTimer);
-  if (!/^[a-zA-Z0-9_\-]{3,30}\$/.test(v)){ hint.className = "hint"; hint.textContent = "3–30 letters, numbers, _ or -"; return; }
+  if (!/^[a-zA-Z0-9_\\-]{3,30}$/.test(v)){ hint.className = "hint"; hint.textContent = "3–30 letters, numbers, _ or -"; return; }
   if (pendingUser && v === pendingUser.username){ hint.className = "hint"; hint.textContent = "Your current name."; return; }
   hint.className = "hint"; hint.textContent = "Checking…";
   lookupTimer = setTimeout(async () => {
     try {
       const r = await fetch(CONFIG.apiBase + "/api/auth/lookup?username=" + encodeURIComponent(v), { credentials: "include" });
-      if (r.ok) { hint.className = "hint bad"; hint.textContent = "\u201c" + v + "\u201d is taken."; }
-      else if (r.status === 404) { hint.className = "hint ok"; hint.textContent = "\u201c" + v + "\u201d is available."; }
+      if (r.ok) { hint.className = "hint bad"; hint.textContent = "\\u201c" + v + "\\u201d is taken."; }
+      else if (r.status === 404) { hint.className = "hint ok"; hint.textContent = "\\u201c" + v + "\\u201d is available."; }
       else { hint.className = "hint"; hint.textContent = "Could not check."; }
-    } catch { hint.className = "hint"; hint.textContent = "Could not check \u2014 offline?"; }
+    } catch { hint.className = "hint"; hint.textContent = "Could not check \\u2014 offline?"; }
   }, 350);
 });
-\$("pf-save").addEventListener("click", async () => {
-  const btn = \$("pf-save"), username = \$("pf-username").value.trim(), email = \$("pf-email").value.trim();
-  if (username && !/^[a-zA-Z0-9_\-]{3,30}\$/.test(username)){ toast("Usernames are 3–30 letters, numbers, _ or -.", "error"); return; }
+$("pf-save").addEventListener("click", async () => {
+  const btn = $("pf-save"), username = $("pf-username").value.trim(), email = $("pf-email").value.trim();
+  if (username && !/^[a-zA-Z0-9_\\-]{3,30}$/.test(username)){ toast("Usernames are 3–30 letters, numbers, _ or -.", "error"); return; }
   busy(btn, true);
   try {
     const body = {}; if (username) body.username = username; if (email) body.email = email;
@@ -439,12 +439,12 @@ let lookupTimer;
   } catch (e){ toast(e.message || "Could not save your name.", "error"); }
   finally { busy(btn, false); }
 });
-\$("pf-skip").addEventListener("click", () => { if (pendingUser) handoff(pendingUser); });
-\$("pf-username").addEventListener("keydown", (e) => { if (e.key === "Enter") \$("pf-save").click(); });
+$("pf-skip").addEventListener("click", () => { if (pendingUser) handoff(pendingUser); });
+$("pf-username").addEventListener("keydown", (e) => { if (e.key === "Enter") $("pf-save").click(); });
 
 /* ══════════ Signed-in actions ══════════ */
-\$("done-continue").addEventListener("click", async () => { try { const me = await api("/api/auth/me"); handoff(normalizeMe(me)); } catch {} });
-\$("done-switch").addEventListener("click", async () => {
+$("done-continue").addEventListener("click", async () => { try { const me = await api("/api/auth/me"); handoff(normalizeMe(me)); } catch {} });
+$("done-switch").addEventListener("click", async () => {
   try { await api("/api/auth/logout", { method:"POST", body:"{}" }); } catch {}
   if (typeof window.puter !== "undefined"){ try { await puter.auth.signOut(); } catch {} }
   show("choose");
