@@ -44,7 +44,7 @@ app.use(cors({
     if (!origin) return cb(null, true); // same-origin / server-to-server
     if (
       allowedOrigins.includes(origin) ||
-      /^https:\/\/[a-z0-9-]+\.grudge-studio\.com$/.test(origin) ||  // all *.grudge-studio.com subdomains
+      /^https:\/\/([a-z0-9-]+\.)*grudge-studio\.com$/.test(origin) ||
       origin.includes("puter.com") ||
       origin.includes("puter.site") ||
       /^https:\/\/.*\.vercel\.app$/.test(origin) ||

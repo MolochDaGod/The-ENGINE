@@ -1,4 +1,4 @@
-import type { Express } from "express";
+import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import { setupArenaRooms } from "./arena-rooms";
@@ -216,9 +216,38 @@ async function processScrapingJob(jobId: number) {
   }
 }
 
+const AUTH_PAGE_PATH = path.resolve(import.meta.dirname, "..", "deploy", "id", "index.html");
+
+function serveAuthPage(_req: Request, res: Response) {
+  try {
+    const html = fs.readFileSync(AUTH_PAGE_PATH, "utf8");
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.setHeader("Cache-Control", "public, max-age=300");
+    return res.status(200).send(html);
+  } catch (err) {
+    console.error("auth page missing:", err);
+    return res.status(500).send("Grudge ID auth page is not deployed on this host.");
+  }
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // Attach player session to every request (non-blocking)
   app.use(loadPlayer);
+
+  // ═══════════════════════════════════════════════════════════════
+  // GRUDGE ID — universal auth page (popup + redirect)
+  // ═══════════════════════════════════════════════════════════════
+  app.get("/api/auth/page", serveAuthPage);
+  app.get("/api/auth/popup", serveAuthPage);
+  app.get("/login", (req, res) => {
+    const redirect = (req.query.redirect_uri || req.query.redirect || "") as string;
+    const origin = (req.query.origin as string) || "";
+    const params = new URLSearchParams();
+    if (redirect) params.set("redirect", redirect);
+    if (origin) params.set("origin", origin);
+    const qs = params.toString();
+    res.redirect(302, `/api/auth/page${qs ? `?${qs}` : ""}`);
+  });
 
   // ═══════════════════════════════════════════════════════════════
   // PLAYER AUTH
@@ -456,7 +485,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const grudgeId = generateGrudgeId();
       const user = await storage.createUser({
         username,
-        password: hashPassword(crypto.randomBytes(16).toString("hex")),
+        // Guests are passwordless: marked role "guest" until they claim a real
+        // account (which sets a password). No throwaway random secret is stored.
+        // verifyPassword() rejects an empty stored hash, so "" can never log in.
+        password: "",
         grudgeId,
         puterId: null,
         email: null,
@@ -1213,8 +1245,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         { icon: "🗺️", name: "Mission Agent", model: "Claude" },
       ],
       auth: {
-        popupHost: process.env.AUTH_POPUP_HOST || "https://grudgewarlords.com",
-        embedScript: (process.env.AUTH_POPUP_HOST || "https://grudgewarlords.com") + "/embed/auth.js",
+        popupHost: process.env.AUTH_POPUP_HOST || "https://id.grudge-studio.com",
+        authPage: (process.env.AUTH_POPUP_HOST || "https://id.grudge-studio.com") + "/api/auth/page",
+        embedScript: "https://id.grudge-studio.com/embed/auth.js",
       },
     });
   });

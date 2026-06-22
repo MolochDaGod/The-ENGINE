@@ -259,40 +259,81 @@ export async function requestPopupToken(audience?: string): Promise<{ ok: true; 
  * a short-lived JWT + PlayerProfile back via postMessage. Use the JWT with
  * /api/auth/session/exchange on your own backend to establish a session.
  */
+const TRUSTED_AUTH_HOSTS = new Set([
+  "https://id.grudge-studio.com",
+  "https://grudge-studio.com",
+  "https://grudgewarlords.com",
+]);
+
+function isTrustedAuthOrigin(origin: string, authHost: string): boolean {
+  if (TRUSTED_AUTH_HOSTS.has(origin) || origin === authHost) return true;
+  return /^https:\/\/([a-z0-9-]+\.)*grudge-studio\.com$/.test(origin);
+}
+
+function parsePopupAuthMessage(data: unknown): { token: string; player: PlayerProfile } | null {
+  if (!data || typeof data !== "object") return null;
+  const msg = data as Record<string, unknown>;
+  if (typeof msg.token !== "string") return null;
+  if (msg.type === "grudge-auth:success") {
+    const player = (msg.user || msg.player) as PlayerProfile | undefined;
+    return player ? { token: msg.token, player } : null;
+  }
+  if (msg.type === "grudge:auth:success" && msg.player) {
+    return { token: msg.token, player: msg.player as PlayerProfile };
+  }
+  return null;
+}
+
 export function openAuthPopup(options: {
-  authHost?: string;              // e.g. https://grudge-studio.com
+  authHost?: string;              // canonical: https://id.grudge-studio.com
   audience?: string;              // origin of the caller (defaults to window.location.origin)
+  redirect?: string;              // optional full redirect URL after sign-in (non-popup fallback)
   width?: number;
   height?: number;
 } = {}): Promise<{ token: string; player: PlayerProfile }> {
-  const authHost = (options.authHost || "https://grudgewarlords.com").replace(/\/$/, "");
+  const authHost = (options.authHost || "https://id.grudge-studio.com").replace(/\/$/, "");
   const audience = options.audience || window.location.origin;
-  const width = options.width || 420;
-  const height = options.height || 640;
+  const width = options.width || 440;
+  const height = options.height || 720;
   const left = (window.screenX || 0) + ((window.outerWidth - width) / 2);
   const top = (window.screenY || 0) + ((window.outerHeight - height) / 2);
 
+  const params = new URLSearchParams({ origin: audience });
+  if (options.redirect) params.set("redirect", options.redirect);
+
   return new Promise((resolve, reject) => {
     const popup = window.open(
-      `${authHost}/auth/popup?audience=${encodeURIComponent(audience)}`,
+      `${authHost}/api/auth/page?${params.toString()}`,
       "grudge-auth",
       `width=${width},height=${height},left=${left},top=${top},popup=yes`,
     );
-    if (!popup) return reject(new Error("Popup blocked"));
+    if (!popup) return reject(new Error("Popup blocked — allow popups or use redirect sign-in"));
+
+    const sendInit = () => {
+      try { popup.postMessage({ type: "grudge-auth:init", origin: audience }, authHost); } catch { /* ignore */ }
+    };
 
     const onMessage = (event: MessageEvent) => {
-      if (event.origin !== authHost) return;
+      if (!isTrustedAuthOrigin(event.origin, authHost)) return;
       const data = event.data;
-      if (!data || typeof data !== "object") return;
-      if (data.type === "grudge:auth:success" && data.token && data.player) {
-        cleanup();
-        resolve({ token: data.token, player: data.player });
-      } else if (data.type === "grudge:auth:error") {
+      if (data?.type === "grudge-auth:ready") {
+        sendInit();
+        return;
+      }
+      if (data?.type === "grudge:auth:error") {
         cleanup();
         reject(new Error(data.error || "Authentication failed"));
-      } else if (data.type === "grudge:auth:cancel") {
+        return;
+      }
+      if (data?.type === "grudge:auth:cancel") {
         cleanup();
         reject(new Error("Authentication cancelled"));
+        return;
+      }
+      const parsed = parsePopupAuthMessage(data);
+      if (parsed) {
+        cleanup();
+        resolve(parsed);
       }
     };
 
@@ -300,6 +341,7 @@ export function openAuthPopup(options: {
       window.removeEventListener("message", onMessage);
       if (popup && !popup.closed) popup.close();
       clearInterval(poll);
+      clearInterval(initRetry);
     };
 
     const poll = setInterval(() => {
@@ -309,7 +351,11 @@ export function openAuthPopup(options: {
       }
     }, 500);
 
+    const initRetry = setInterval(sendInit, 400);
+    setTimeout(() => clearInterval(initRetry), 4000);
+
     window.addEventListener("message", onMessage);
+    sendInit();
   });
 }
 
