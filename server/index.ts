@@ -2,8 +2,12 @@ import express, { type Request, Response, NextFunction } from "express";
 import compression from "compression";
 import helmet from "helmet";
 import cors from "cors";
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import { AUTH_PAGE_HTML } from "./auth-page-html";
 
 const app = express();
 const isProd = process.env.NODE_ENV === "production";
@@ -57,13 +61,24 @@ app.use(cors({
   allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
 }));
 // ── Grudge ID auth page ──────────────────────────────────────────────────────
-// NOTE: Railway's proxy rewrites Host to the-engine.up.railway.app so
-// server-side hostname detection for CF Tunnel traffic doesn't work.
-// The client-side redirect in client/index.html handles id.grudge-studio.com.
-import { AUTH_PAGE_HTML } from "./auth-page-html";
+// Prefer public/grudge-id.html on disk (no regex-escape corruption in bundles).
+function loadAuthPageHtml(): string {
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  const candidates = [
+    path.resolve(here, "..", "public", "grudge-id.html"),
+    path.resolve(process.cwd(), "public", "grudge-id.html"),
+  ];
+  for (const file of candidates) {
+    try {
+      if (fs.existsSync(file)) return fs.readFileSync(file, "utf8");
+    } catch { /* try next */ }
+  }
+  return AUTH_PAGE_HTML;
+}
+const AUTH_PAGE_HTML_LIVE = loadAuthPageHtml();
 function sendAuthPage(_req: Request, res: Response) {
   res.setHeader("Cache-Control", "public, max-age=300");
-  res.type("html").send(AUTH_PAGE_HTML);
+  res.type("html").send(AUTH_PAGE_HTML_LIVE);
 }
 app.get("/api/auth/page", sendAuthPage);
 app.get("/api/auth/popup", sendAuthPage);

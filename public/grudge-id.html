@@ -187,12 +187,17 @@ body{font-family:var(--font-body);color:var(--text);background:var(--bg);min-hei
 "use strict";
 
 /* ══════════ CONFIG — FIX #1: same-origin when on id.grudge-studio.com ══════════ */
+function trimTrailingSlashes(value){
+  var s = value;
+  while (s.length > 0 && s.charAt(s.length - 1) === "/") s = s.slice(0, -1);
+  return s;
+}
 function resolveApiBase(){
   const qs = new URLSearchParams(location.search);
   const fromQuery = qs.get("api");
-  if (fromQuery) return fromQuery.replace(/\/+$/, "");
+  if (fromQuery) return trimTrailingSlashes(fromQuery);
   const meta = document.querySelector('meta[name="grudge-api"]');
-  if (meta && meta.content.trim()) return meta.content.trim().replace(/\/+$/, "");
+  if (meta && meta.content.trim()) return trimTrailingSlashes(meta.content.trim());
   const h = location.hostname;
   if (h === "localhost" || h === "127.0.0.1") return location.protocol + "//" + h + ":5000";
   // FIX: id.grudge-studio.com uses same-origin (CF Tunnel → Railway) — no CORS
