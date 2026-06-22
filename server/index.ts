@@ -61,7 +61,21 @@ app.use(cors({
 // server-side hostname detection for CF Tunnel traffic doesn't work.
 // The client-side redirect in client/index.html handles id.grudge-studio.com.
 import { AUTH_PAGE_HTML } from "./auth-page-html";
-app.get("/api/auth/page", (_req, res) => { res.type("html").send(AUTH_PAGE_HTML); });
+function sendAuthPage(_req: Request, res: Response) {
+  res.setHeader("Cache-Control", "public, max-age=300");
+  res.type("html").send(AUTH_PAGE_HTML);
+}
+app.get("/api/auth/page", sendAuthPage);
+app.get("/api/auth/popup", sendAuthPage);
+app.get("/login", (req, res) => {
+  const redirect = (req.query.redirect_uri || req.query.redirect || "") as string;
+  const origin = (req.query.origin as string) || "";
+  const params = new URLSearchParams();
+  if (redirect) params.set("redirect", redirect);
+  if (origin) params.set("origin", origin);
+  const qs = params.toString();
+  res.redirect(302, `/api/auth/page${qs ? `?${qs}` : ""}`);
+});
 
 // ── Path alias: /auth/* → /api/auth/* ──────────────────────
 app.use((req, _res, next) => {

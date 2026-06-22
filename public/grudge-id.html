@@ -207,7 +207,7 @@ const CONFIG = { apiBase: resolveApiBase() };
 const qs = new URLSearchParams(location.search);
 const isPopup = (() => { try { return !!window.opener && window.opener !== window; } catch { return false; } })();
 const returnTo = qs.get("redirect") || qs.get("return_to") || null;
-let openerOrigin = qs.get("origin") || null;
+let openerOrigin = qs.get("origin") || qs.get("audience") || null;
 if (!openerOrigin && document.referrer) { try { openerOrigin = new URL(document.referrer).origin; } catch {} }
 const isHandoffReturn = qs.get("handoff") === "1";
 const urlLaunchToken = qs.get("grudge_token");
@@ -253,10 +253,18 @@ async function mintLaunchToken(audience){
   try { const r = await api("/api/auth/popup-token", { method:"POST", body: JSON.stringify({ audience }) }); return r.token || null; }
   catch { return null; }
 }
+function postAuthToOpener(targetOrigin, token, user){
+  const origin = targetOrigin && targetOrigin !== "*" ? targetOrigin : "*";
+  const modern = { type:"grudge-auth:success", source:"grudge-id", token, user };
+  const legacy = { type:"grudge:auth:success", token, player: user, audience: origin !== "*" ? origin : null };
+  try { window.opener.postMessage(modern, origin); } catch {}
+  try { window.opener.postMessage(legacy, origin); } catch {}
+}
 async function handoff(user){
-  if (isPopup && openerOrigin){
-    const token = await mintLaunchToken(openerOrigin);
-    try { window.opener.postMessage({ type:"grudge-auth:success", source:"grudge-id", token, user }, openerOrigin); } catch {}
+  if (isPopup && window.opener){
+    const audience = openerOrigin || qs.get("audience") || qs.get("origin") || null;
+    const token = audience ? await mintLaunchToken(audience) : await mintLaunchToken(undefined);
+    postAuthToOpener(audience, token, user);
     renderDone(user, true); return;
   }
   if (returnTo){
