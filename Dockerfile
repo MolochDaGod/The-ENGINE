@@ -4,7 +4,7 @@ WORKDIR /app
 RUN apk add --no-cache git
 
 COPY package.json package-lock.json* ./
-RUN npm ci || npm install
+RUN npm ci --legacy-peer-deps || npm install --legacy-peer-deps
 
 COPY tsconfig.json drizzle.config.ts vite.config.ts postcss.config.js tailwind.config.ts ./
 COPY server ./server
@@ -21,7 +21,7 @@ WORKDIR /app
 RUN apk add --no-cache git
 
 COPY package.json package-lock.json* ./
-RUN npm ci --omit=dev || npm install --omit=dev
+RUN npm ci --omit=dev --legacy-peer-deps || npm install --omit=dev --legacy-peer-deps
 # drizzle-kit needed for DB migrations at startup
 RUN npm install drizzle-kit
 
