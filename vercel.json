@@ -10,8 +10,21 @@
       "destination": "/admin-harbor.html"
     },
     {
+      "source": "/",
+      "has": [{ "type": "host", "value": "id.grudge-studio.com" }],
+      "destination": "/api/auth/page"
+    },
+    {
+      "source": "/api/auth",
+      "destination": "https://the-engine.up.railway.app/api/auth"
+    },
+    {
+      "source": "/api/auth/",
+      "destination": "https://the-engine.up.railway.app/api/auth/"
+    },
+    {
       "source": "/api/auth/:path*",
-      "destination": "https://id.grudge-studio.com/api/auth/:path*"
+      "destination": "https://the-engine.up.railway.app/api/auth/:path*"
     },
     {
       "source": "/api/status",
@@ -32,6 +45,11 @@
     {
       "source": "/ws/:path*",
       "destination": "https://ws.grudge-studio.com/ws/:path*"
+    },
+    {
+      "source": "/((?!api/|embed/).*)",
+      "has": [{ "type": "host", "value": "id.grudge-studio.com" }],
+      "destination": "/api/auth/page"
     },
     {
       "source": "/((?!api/|ws/).*)",

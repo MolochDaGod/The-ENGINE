@@ -82,6 +82,69 @@ function sendAuthPage(_req: Request, res: Response) {
 }
 app.get("/api/auth/page", sendAuthPage);
 app.get("/api/auth/popup", sendAuthPage);
+
+// Bare /api/auth — discovery JSON for API clients; browsers → sign-in page
+function sendAuthDiscovery(req: Request, res: Response) {
+  const accept = req.get("accept") || "";
+  const wantsHtml = accept.includes("text/html") && !accept.includes("application/json");
+  if (wantsHtml) {
+    const qs = req.url.includes("?") ? req.url.slice(req.url.indexOf("?")) : "";
+    return res.redirect(302, `/api/auth/page${qs}`);
+  }
+  const idHost = process.env.AUTH_POPUP_HOST || "https://id.grudge-studio.com";
+  res.json({
+    success: true,
+    service: "Grudge ID",
+    version: "2.0.0",
+    authPage: `${idHost}/api/auth/page`,
+    embedScript: `${idHost}/embed/auth.js`,
+    endpoints: {
+      register: "POST /api/auth/register",
+      login: "POST /api/auth/login",
+      guest: "POST /api/auth/guest",
+      me: "GET /api/auth/me",
+      logout: "POST /api/auth/logout",
+      puterSso: "POST /api/auth/puter-sso",
+      sessionExchange: "POST /api/auth/session/exchange",
+      popupToken: "POST /api/auth/popup-token",
+      discord: "GET /api/auth/discord/start",
+      google: "GET /api/auth/google/start",
+      github: "GET /api/auth/github/start",
+      phantomNonce: "POST /api/auth/phantom/nonce",
+      phantomVerify: "POST /api/auth/phantom/verify",
+      twilioStart: "POST /api/auth/twilio/start",
+      twilioVerify: "POST /api/auth/twilio/verify",
+    },
+    providers: {
+      password: true,
+      guest: true,
+      puter: true,
+      wallet: true,
+      discord: !!process.env.DISCORD_CLIENT_ID,
+      google: !!process.env.GOOGLE_CLIENT_ID,
+      github: !!process.env.GITHUB_CLIENT_ID,
+      phone: !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_VERIFY_SERVICE_SID),
+    },
+    idDomain: idHost,
+    apiDomain: process.env.GAME_API_HOST || "https://api.grudge-studio.com",
+  });
+}
+app.get("/api/auth", sendAuthDiscovery);
+app.get("/auth", sendAuthDiscovery);
+
+// id.grudge-studio.com root → sign-in (Railway proxy strips Host; use X-Forwarded-Host)
+app.use((req, res, next) => {
+  const host = (req.get("x-forwarded-host") || req.get("host") || "").split(",")[0].trim();
+  if (
+    host === "id.grudge-studio.com" &&
+    (req.path === "/" || req.path === "/index.html")
+  ) {
+    const qs = req.url.includes("?") ? req.url.slice(req.url.indexOf("?")) : "";
+    return res.redirect(302, `/api/auth/page${qs}`);
+  }
+  next();
+});
+
 app.get("/login", (req, res) => {
   const redirect = (req.query.redirect_uri || req.query.redirect || "") as string;
   const origin = (req.query.origin as string) || "";
