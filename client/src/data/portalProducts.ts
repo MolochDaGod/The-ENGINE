@@ -191,10 +191,10 @@ const _PORTAL_PRODUCTS_RAW = [
     id: "catalog",
     name: "Item Catalog",
     href: "/catalog",
-    description: "Live item database for all Grudge products — tiers, rarities, crafting workstations, NFT items. Sourced from the launcher on Puter.",
+    description: "Live item database for all Grudge products — tiers, rarities, crafting workstations, NFT items. Sourced from ObjectStore Item Browser.",
     status: "live",
     section: "studio",
-    note: "Live feed",
+    note: "browse.grudge-studio.com",
   },
   {
     id: "my-cloud",
