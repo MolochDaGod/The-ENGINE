@@ -27,6 +27,14 @@
       "source": "/api/auth/:path*",
       "destination": "https://the-engine.up.railway.app/api/auth/:path*"
     },
+    {
+      "source": "/api/portal-admin/:path*",
+      "destination": "https://the-engine.up.railway.app/api/admin/:path*"
+    },
+    {
+      "source": "/api/admin/:path*",
+      "destination": "https://the-engine.up.railway.app/api/admin/:path*"
+    },
 
     {
       "source": "/api/status",

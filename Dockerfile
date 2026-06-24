@@ -5,16 +5,14 @@ RUN apk add --no-cache git
 
 COPY package.json package-lock.json* ./
 RUN npm ci --legacy-peer-deps --ignore-scripts || npm install --legacy-peer-deps --ignore-scripts
-RUN if [ -d node_modules/grudge-control ] && [ ! -f node_modules/grudge-control/dist/index.mjs ]; then cd node_modules/grudge-control && npm install --legacy-peer-deps --ignore-scripts && npx tsup --dts false; fi
 
-COPY tsconfig.json drizzle.config.ts vite.config.ts postcss.config.js tailwind.config.ts ./
+COPY tsconfig.json drizzle.config.ts ./
 COPY server ./server
-COPY client ./client
 COPY shared ./shared
-COPY attached_assets ./attached_assets
 
-# Build client (Vite → dist/public) and server (esbuild → dist/index.js)
-RUN npm run build
+# API-only Railway image — Vercel serves the Vite client
+RUN npm run build:server
+RUN mkdir -p dist/public
 
 # ── Stage 2: Production ────────────────────────────────────────
 FROM node:22-alpine
@@ -22,7 +20,7 @@ WORKDIR /app
 RUN apk add --no-cache git
 
 COPY package.json package-lock.json* ./
-RUN npm ci --omit=dev --legacy-peer-deps || npm install --omit=dev --legacy-peer-deps
+RUN npm ci --omit=dev --legacy-peer-deps --ignore-scripts || npm install --omit=dev --legacy-peer-deps --ignore-scripts
 # drizzle-kit needed for DB migrations at startup
 RUN npm install drizzle-kit
 
