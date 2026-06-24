@@ -386,10 +386,10 @@ export default function SuperEngine() {
   const [hoveredGame, setHoveredGame] = useState<string | null>(null);
 
   const { data: featuredGames } = useQuery<any[]>({
-    queryKey: ['/api/games', 'featured'],
+    queryKey: ['/api/games/featured'],
     queryFn: async () => {
       try {
-        const res = await fetch('/api/games?featured=true');
+        const res = await fetch('/api/games/featured');
         if (!res.ok) return [];
         return res.json();
       } catch {

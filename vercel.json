@@ -11,7 +11,11 @@
     },
     {
       "source": "/api/auth/:path*",
-      "destination": "https://id.grudge-studio.com/auth/:path*"
+      "destination": "https://id.grudge-studio.com/api/auth/:path*"
+    },
+    {
+      "source": "/api/status",
+      "destination": "https://api.grudge-studio.com/api/fleet/status"
     },
     {
       "source": "/api/characters/:path*",

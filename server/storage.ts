@@ -18,6 +18,17 @@ import { db } from "./db";
 import { eq, ilike, desc, asc, sql, and, or } from "drizzle-orm";
 import { CATALOG } from "./catalog-data";
 
+export interface GameListOptions {
+  limit?: number;
+  offset?: number;
+  letter?: string;
+}
+
+export interface GameListResult {
+  games: Game[];
+  total: number;
+}
+
 export interface IStorage {
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
@@ -43,10 +54,10 @@ export interface IStorage {
   getPlatform(id: number): Promise<GamePlatform | undefined>;
   createPlatform(platform: InsertGamePlatform): Promise<GamePlatform>;
 
-  listGames(platform?: string): Promise<Game[]>;
+  listGames(platform?: string, options?: GameListOptions): Promise<GameListResult>;
   getGame(id: number): Promise<Game | undefined>;
   createGame(game: InsertGame): Promise<Game>;
-  searchGames(query: string, platform?: string): Promise<Game[]>;
+  searchGames(query: string, platform?: string, options?: GameListOptions): Promise<GameListResult>;
 
   listArticles(category?: string): Promise<Article[]>;
   getArticle(id: number): Promise<Article | undefined>;
@@ -347,11 +358,29 @@ export class DatabaseStorage implements IStorage {
     return p;
   }
 
-  async listGames(platform?: string): Promise<Game[]> {
-    if (platform) {
-      return await db.select().from(gameLibrary).where(eq(gameLibrary.platform, platform)).orderBy(gameLibrary.title);
+  async listGames(platform?: string, options?: GameListOptions): Promise<GameListResult> {
+    const conditions = [];
+    if (platform) conditions.push(eq(gameLibrary.platform, platform));
+    if (options?.letter) {
+      if (options.letter === "#") {
+        conditions.push(sql`${gameLibrary.title} !~ '^[A-Za-z]'`);
+      } else {
+        conditions.push(ilike(gameLibrary.title, `${options.letter}%`));
+      }
     }
-    return await db.select().from(gameLibrary).orderBy(gameLibrary.title);
+    const whereClause = conditions.length ? and(...conditions) : undefined;
+
+    const [{ count }] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(gameLibrary)
+      .where(whereClause);
+
+    let query = db.select().from(gameLibrary).where(whereClause).orderBy(gameLibrary.title).$dynamic();
+    if (options?.limit) query = query.limit(options.limit);
+    if (options?.offset) query = query.offset(options.offset);
+
+    const games = await query;
+    return { games, total: count };
   }
 
   async getGame(id: number): Promise<Game | undefined> {
@@ -364,10 +393,29 @@ export class DatabaseStorage implements IStorage {
     return g;
   }
 
-  async searchGames(query: string, platform?: string): Promise<Game[]> {
+  async searchGames(query: string, platform?: string, options?: GameListOptions): Promise<GameListResult> {
     const conditions = [ilike(gameLibrary.title, `%${query}%`)];
     if (platform) conditions.push(eq(gameLibrary.platform, platform));
-    return await db.select().from(gameLibrary).where(and(...conditions)).orderBy(gameLibrary.title);
+    if (options?.letter) {
+      if (options.letter === "#") {
+        conditions.push(sql`${gameLibrary.title} !~ '^[A-Za-z]'`);
+      } else {
+        conditions.push(ilike(gameLibrary.title, `${options.letter}%`));
+      }
+    }
+    const whereClause = and(...conditions);
+
+    const [{ count }] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(gameLibrary)
+      .where(whereClause);
+
+    let q = db.select().from(gameLibrary).where(whereClause).orderBy(gameLibrary.title).$dynamic();
+    if (options?.limit) q = q.limit(options.limit);
+    if (options?.offset) q = q.offset(options.offset);
+
+    const games = await q;
+    return { games, total: count };
   }
 
   async listArticles(category?: string): Promise<Article[]> {

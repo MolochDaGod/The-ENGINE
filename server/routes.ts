@@ -3089,13 +3089,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/games", async (req, res) => {
     try {
-      const { platform, q } = req.query;
-      if (q && typeof q === 'string') {
-        const games = await storage.searchGames(q, platform as string | undefined);
+      const { platform, q, featured, limit, offset, letter, paginated } = req.query;
+
+      if (featured === "true") {
+        const games = await db.select().from(gameLibrary).where(eq(gameLibrary.isFeatured, true)).orderBy(gameLibrary.title);
         return res.json(games);
       }
-      const games = await storage.listGames(platform as string | undefined);
-      res.json(games);
+
+      const listOptions = {
+        limit: limit ? Math.min(parseInt(limit as string, 10) || 20, 100) : undefined,
+        offset: offset ? Math.max(parseInt(offset as string, 10) || 0, 0) : undefined,
+        letter: typeof letter === "string" && letter.length === 1 ? letter.toUpperCase() : undefined,
+      };
+
+      const usePagination = paginated === "true" || listOptions.limit !== undefined;
+
+      if (q && typeof q === "string") {
+        const result = await storage.searchGames(q, platform as string | undefined, usePagination ? listOptions : undefined);
+        return res.json(usePagination ? result : result.games);
+      }
+
+      const result = await storage.listGames(platform as string | undefined, usePagination ? listOptions : undefined);
+      res.json(usePagination ? result : result.games);
     } catch (error) {
       res.status(500).json({ error: "Failed to list games" });
     }
@@ -3238,7 +3253,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/scrape/game-embeds", async (req, res) => {
     try {
       const { platform } = req.body;
-      const games = await storage.listGames(platform || undefined);
+      const { games } = await storage.listGames(platform || undefined);
       let updated = 0;
 
       for (const game of games) {
@@ -3569,6 +3584,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ═══════════════════════════════════════════════════════════════
   // HEALTH CHECK (used by Railway, Docker, monitoring)
   // ═══════════════════════════════════════════════════════════════
+
+  app.get("/api/status", async (_req, res) => {
+    try {
+      const health = await getFleetHealth();
+      res.json(health);
+    } catch (error) {
+      res.status(500).json({ error: "Status check failed" });
+    }
+  });
 
   app.get("/api/health", async (_req, res) => {
     const mem = process.memoryUsage();

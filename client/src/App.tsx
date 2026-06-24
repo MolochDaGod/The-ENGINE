@@ -71,6 +71,7 @@ function Router() {
   return (
     <Switch>
       <Route path="/" component={Home} />
+      <Route path="/gs" component={Home} />
       <Route path="/home" component={Home} />
       <Route path="/login" component={Login} />
       <Route path="/account" component={AccountPage} />

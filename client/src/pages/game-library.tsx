@@ -36,6 +36,31 @@ const PLATFORM_COLORS: Record<string, { bg: string; accent: string }> = {
   nds: { bg: 'linear-gradient(135deg, hsl(330,50%,22%), hsl(330,40%,12%))', accent: 'hsl(330,60%,55%)' },
 };
 
+interface PaginatedGames {
+  games: Game[];
+  total: number;
+}
+
+async function fetchGamesPage(params: {
+  platform: string | null;
+  searchQuery: string;
+  letterFilter: string | null;
+  page: number;
+}): Promise<PaginatedGames> {
+  const qs = new URLSearchParams({
+    paginated: "true",
+    limit: String(GAMES_PER_PAGE),
+    offset: String((params.page - 1) * GAMES_PER_PAGE),
+  });
+  if (params.platform) qs.set("platform", params.platform);
+  if (params.searchQuery) qs.set("q", params.searchQuery);
+  if (params.letterFilter) qs.set("letter", params.letterFilter);
+
+  const resp = await fetch(`/api/games?${qs.toString()}`);
+  if (!resp.ok) throw new Error("Failed to load games");
+  return resp.json();
+}
+
 export default function GameLibrary() {
   const [location, setLocation] = useLocation();
   const urlParams = new URLSearchParams(location.split("?")[1] || "");
@@ -50,18 +75,20 @@ export default function GameLibrary() {
     queryKey: ["/api/platforms"],
   });
 
-  const { data: games = [], isLoading: gamesLoading } = useQuery<Game[]>({
-    queryKey: ["/api/games", selectedPlatform, searchQuery],
-    queryFn: async () => {
-      const params = new URLSearchParams();
-      if (selectedPlatform) params.set("platform", selectedPlatform);
-      if (searchQuery) params.set("q", searchQuery);
-      const resp = await fetch(`/api/games?${params.toString()}`);
-      return resp.json();
-    },
+  const { data: gamesPage, isLoading: gamesLoading, isFetching } = useQuery<PaginatedGames>({
+    queryKey: ["/api/games", "paginated", selectedPlatform, searchQuery, letterFilter, currentPage],
+    queryFn: () =>
+      fetchGamesPage({
+        platform: selectedPlatform,
+        searchQuery,
+        letterFilter,
+        page: currentPage,
+      }),
+    placeholderData: (prev) => prev,
   });
 
-
+  const games = gamesPage?.games ?? [];
+  const totalGames = gamesPage?.total ?? 0;
 
   const scrapeMutation = useMutation({
     mutationFn: async (platform: string) => {
@@ -77,18 +104,9 @@ export default function GameLibrary() {
 
   const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ#".split("");
 
-  const filteredGames = useMemo(() => {
-    if (!letterFilter) return games;
-    return games.filter((g) => {
-      if (letterFilter === "#") return /^[^a-zA-Z]/.test(g.title);
-      return g.title.toUpperCase().startsWith(letterFilter);
-    });
-  }, [games, letterFilter]);
-
-  const totalPages = Math.max(1, Math.ceil(filteredGames.length / GAMES_PER_PAGE));
+  const totalPages = Math.max(1, Math.ceil(totalGames / GAMES_PER_PAGE));
   const safePage = Math.min(currentPage, totalPages);
-  const startIdx = (safePage - 1) * GAMES_PER_PAGE;
-  const paginatedGames = filteredGames.slice(startIdx, startIdx + GAMES_PER_PAGE);
+  const startIdx = totalGames === 0 ? 0 : (safePage - 1) * GAMES_PER_PAGE;
 
   const goToPage = (page: number) => {
     setCurrentPage(Math.max(1, Math.min(page, totalPages)));
@@ -127,7 +145,7 @@ export default function GameLibrary() {
     return pages;
   }, [safePage, totalPages]);
 
-  const totalGames = platforms.reduce((sum, p) => sum + (p.gameCount || 0), 0);
+  const catalogTotal = platforms.reduce((sum, p) => sum + (p.gameCount || 0), 0);
 
   return (
     <div className="min-h-screen relative" style={{ background: 'hsl(225,30%,6%)' }}>
@@ -136,7 +154,7 @@ export default function GameLibrary() {
       <div className="max-w-7xl mx-auto px-4 py-4 relative z-10">
         <div className="flex items-center justify-between mb-4">
           <h1 className="text-xl font-heading gold-text font-bold" style={{ WebkitTextFillColor: 'unset' }}>
-            Game Library <span className="text-sm text-[hsl(45,15%,60%)] font-body ml-2">{totalGames} games</span>
+            Game Library <span className="text-sm text-[hsl(45,15%,60%)] font-body ml-2">{catalogTotal} games</span>
           </h1>
           <div className="relative w-64">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[hsl(45,15%,60%)]" />
@@ -159,7 +177,7 @@ export default function GameLibrary() {
               className={`w-full text-left px-3 py-2 rounded text-sm transition flex items-center justify-between ${!selectedPlatform ? "bg-[hsl(43,85%,55%)]/15 text-[hsl(43,85%,55%)] border border-[hsl(43,60%,30%)]" : "text-[hsl(45,30%,90%)] hover:bg-[hsl(225,25%,20%)]"}`}
             >
               <span className="font-body">All Platforms</span>
-              <span className="text-xs opacity-60">{totalGames}</span>
+              <span className="text-xs opacity-60">{catalogTotal}</span>
             </button>
             {platforms.filter(p => p.slug !== 'custom' && (p.gameCount || 0) > 0).map((p) => (
               <div key={p.id} className="flex items-center gap-1">
@@ -210,7 +228,7 @@ export default function GameLibrary() {
             </div>
           )}
 
-          {!gamesLoading && filteredGames.length === 0 && (
+          {!gamesLoading && totalGames === 0 && (
             <div className="text-center py-20">
               <Gamepad className="w-16 h-16 text-[hsl(43,60%,30%)] mx-auto mb-4" />
               <h3 className="text-xl font-heading text-[hsl(43,85%,65%)] mb-2" style={{ WebkitTextFillColor: 'unset' }}>No games found</h3>
@@ -220,10 +238,11 @@ export default function GameLibrary() {
             </div>
           )}
 
-          {!gamesLoading && filteredGames.length > 0 && (
+          {!gamesLoading && totalGames > 0 && (
             <div className="flex items-center justify-between mb-4">
               <p className="text-sm text-[hsl(45,15%,60%)] font-body">
-                Showing {startIdx + 1}–{Math.min(startIdx + GAMES_PER_PAGE, filteredGames.length)} of {filteredGames.length} games
+                Showing {startIdx + 1}–{Math.min(startIdx + GAMES_PER_PAGE, totalGames)} of {totalGames} games
+                {isFetching && !gamesLoading ? " (updating…)" : ""}
               </p>
               {totalPages > 1 && (
                 <p className="text-sm text-[hsl(45,15%,60%)] font-body">
@@ -234,21 +253,18 @@ export default function GameLibrary() {
           )}
 
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
-            {paginatedGames.map((game) => {
+            {games.map((game) => {
               const colors = PLATFORM_COLORS[game.platform || ''] || { bg: 'linear-gradient(135deg, hsl(225,25%,15%), hsl(225,30%,10%))', accent: 'hsl(43,85%,55%)' };
               const initial = (game.title[0] || '?').toUpperCase();
               const thumbUrl = (game as any).thumbnailUrl;
               return (
                 <div key={game.id} className="fantasy-panel overflow-hidden hover:animate-gem-glow transition group relative card-hover cursor-pointer" onClick={() => setLocation(`/play/${game.id}`)}>
                   <div className="aspect-[3/4] relative overflow-hidden" style={{ background: colors.bg }}>
-                    {/* Gradient placeholder — always visible as base layer */}
                     <div className="absolute inset-0 flex items-center justify-center">
                       <span className="text-4xl font-heading font-bold opacity-20 select-none" style={{ color: colors.accent }}>{initial}</span>
                       <Gamepad className="absolute bottom-1 right-1 w-4 h-4 opacity-20" style={{ color: colors.accent }} />
                     </div>
-{/* Cover art from libretro-thumbnails CDN — walks region-suffix fallbacks on 404 */ }
-{ thumbUrl && <GameCover src={ thumbUrl } alt = { game.title } />}
-                    {/* Hover play overlay */}
+                    {thumbUrl && <GameCover src={thumbUrl} alt={game.title} />}
                     <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition bg-black/60 z-10">
                       <Play className="w-8 h-8 text-[hsl(43,85%,55%)] drop-shadow-lg" />
                     </div>
