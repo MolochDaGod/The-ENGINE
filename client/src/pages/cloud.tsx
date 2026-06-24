@@ -4,8 +4,10 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/components/auth-provider";
 import { requestPopupToken } from "@/lib/player-auth";
 
+const NEXUS_LIVE = "https://grudachain-rho.vercel.app";
 const CLOUD_URL = "https://grudge-cloud.puter.site/";
 const CLOUD_ORIGIN = "https://grudge-cloud.puter.site";
+const PER_ACCOUNT_DASHBOARD = `${NEXUS_LIVE}/puter-cloud-dashboard.html`;
 
 export default function CloudPage() {
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
@@ -69,11 +71,18 @@ export default function CloudPage() {
           <div className="text-xs uppercase tracking-widest text-[hsl(43,85%,55%)] font-heading">My Grudge Cloud</div>
           <div className="text-[11px] text-[hsl(45,15%,60%)] font-body">Personal Puter cloud · synced with your Grudge ID</div>
         </div>
-        <a href={CLOUD_URL} target="_blank" rel="noopener noreferrer">
-          <Button variant="outline" size="sm" className="border-[hsl(43,60%,30%)]/40 text-[hsl(45,30%,90%)]">
-            <ExternalLink className="w-3.5 h-3.5 mr-1" /> Open in new tab
-          </Button>
-        </a>
+        <div className="flex items-center gap-2">
+          <a href={PER_ACCOUNT_DASHBOARD} target="_blank" rel="noopener noreferrer">
+            <Button variant="outline" size="sm" className="border-[hsl(43,60%,30%)]/40 text-[hsl(45,30%,90%)]">
+              <ExternalLink className="w-3.5 h-3.5 mr-1" /> Per-account dashboard
+            </Button>
+          </a>
+          <a href={CLOUD_URL} target="_blank" rel="noopener noreferrer">
+            <Button variant="outline" size="sm" className="border-[hsl(43,60%,30%)]/40 text-[hsl(45,30%,90%)]">
+              <ExternalLink className="w-3.5 h-3.5 mr-1" /> Open cloud app
+            </Button>
+          </a>
+        </div>
       </div>
       <div className="relative flex-1">
         {!iframeReady && (
