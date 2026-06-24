@@ -41,7 +41,7 @@
       "destination": "https://assets.grudge-studio.com/:path*"
     },
     {
-      "source": "/api/:path((?!games$|games/|platforms$|rom-proxy$|health$|admin/).*)",
+      "source": "/api/:path((?!games$|games/|platforms$|rom-proxy$|health$|admin/|portal-admin/).*)",
       "destination": "https://api.grudge-studio.com/api/:path"
     },
     {
