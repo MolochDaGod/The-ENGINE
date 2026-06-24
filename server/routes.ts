@@ -1259,7 +1259,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const sessionToken = createPlayerToken(user.id);
       setPlayerCookie(res, sessionToken);
-      return res.json(publicPlayer(user, false));
+      return res.json({ ...publicPlayer(user, false), token: sessionToken });
     } catch (error) {
       console.error("session/exchange error:", error);
       return res.status(500).json({ error: "Exchange failed" });

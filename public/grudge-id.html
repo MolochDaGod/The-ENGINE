@@ -255,8 +255,9 @@ function selfUrl(extra){
   return u.toString();
 }
 async function mintLaunchToken(audience){
-  try { const r = await api("/api/auth/popup-token", { method:"POST", body: JSON.stringify({ audience }) }); return r.token || null; }
-  catch { return null; }
+  const r = await api("/api/auth/popup-token", { method:"POST", body: JSON.stringify({ audience }) });
+  if (!r.token) throw new Error("Could not create sign-in handoff token.");
+  return r.token;
 }
 function postAuthToOpener(targetOrigin, token, user){
   const origin = targetOrigin && targetOrigin !== "*" ? targetOrigin : "*";
@@ -268,19 +269,21 @@ function postAuthToOpener(targetOrigin, token, user){
 async function handoff(user){
   if (isPopup && window.opener){
     const audience = openerOrigin || qs.get("audience") || qs.get("origin") || null;
-    const token = audience ? await mintLaunchToken(audience) : await mintLaunchToken(undefined);
+    const token = await mintLaunchToken(audience || undefined);
     postAuthToOpener(audience, token, user);
     renderDone(user, true); return;
   }
   if (returnTo){
     let dest = returnTo;
-    try {
-      if (/^https?:\/\//i.test(returnTo)){
-        const origin = new URL(returnTo).origin;
-        if (origin !== location.origin){ const token = await mintLaunchToken(origin); if (token) dest += (returnTo.includes("?") ? "&" : "?") + "grudge_token=" + encodeURIComponent(token); }
+    if (/^https?:\/\//i.test(returnTo)){
+      const origin = new URL(returnTo).origin;
+      if (origin !== location.origin){
+        const token = await mintLaunchToken(origin);
+        const sep = returnTo.includes("?") ? "&" : "?";
+        dest = returnTo + sep + "grudge_token=" + encodeURIComponent(token);
       }
-    } catch {}
-    (window.top || window).location.href = dest; return;
+    }
+    (window.top || window).location.replace(dest); return;
   }
   renderDone(user, false);
 }
@@ -293,9 +296,10 @@ function renderDone(user, autoClose){
   show("done");
   if (autoClose) setTimeout(() => { try { window.close(); } catch {} }, 900);
 }
-function afterAuth(user, puterEmail){
+async function afterAuth(user, puterEmail){
   if (user && user.needsProfile){ openProfileStep(user, puterEmail); return; }
-  handoff(user);
+  try { await handoff(user); }
+  catch (e) { toast(e.message || "Could not complete sign-in.", "error"); show("choose"); refreshPuterButton(); }
 }
 
 /* ══════════ PUTER — https://docs.puter.com/Auth/ ══════════ */
