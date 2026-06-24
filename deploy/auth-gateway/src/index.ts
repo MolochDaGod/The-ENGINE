@@ -65,9 +65,21 @@ export default {
     }
 
     // Path alias: /auth/* → /api/auth/*
-    // Mirrors the Express middleware in server/index.ts
-    if (url.pathname.startsWith("/auth/")) {
+    if (url.pathname.startsWith("/auth/") && url.pathname !== "/auth") {
       url.pathname = "/api" + url.pathname;
+    }
+
+    // id.grudge-studio.com — send humans to the sign-in page (Railway deploy may lag)
+    if (url.host === "id.grudge-studio.com") {
+      if (url.pathname === "/" || url.pathname === "/index.html") {
+        url.pathname = "/api/auth/page";
+      } else if (url.pathname === "/api/auth" || url.pathname === "/auth") {
+        const accept = request.headers.get("accept") || "";
+        const wantsJson = accept.includes("application/json") && !accept.includes("text/html");
+        if (!wantsJson) {
+          url.pathname = "/api/auth/page";
+        }
+      }
     }
 
     // Build the upstream URL

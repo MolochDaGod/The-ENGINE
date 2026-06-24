@@ -16,11 +16,7 @@
     },
     {
       "source": "/api/auth",
-      "destination": "https://the-engine.up.railway.app/api/auth"
-    },
-    {
-      "source": "/api/auth/",
-      "destination": "https://the-engine.up.railway.app/api/auth/"
+      "destination": "/api/auth/page"
     },
     {
       "source": "/api/auth/:path*",
