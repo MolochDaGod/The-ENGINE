@@ -102,7 +102,7 @@
     "socket.io-client": "^4.8.1",
     "tailwind-merge": "^2.6.0",
     "tailwindcss-animate": "^1.0.7",
-    "grudge-control": "file:../grudgecontrol",
+    "grudge-control": "github:MolochDaGod/grudgecontrol",
     "three": "^0.181.0",
     "three-mesh-bvh": "^0.9.9",
     "three.js": "^0.77.1",
