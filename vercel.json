@@ -26,8 +26,8 @@
       "destination": "https://assets.grudge-studio.com/:path*"
     },
     {
-      "source": "/api/:path*",
-      "destination": "https://api.grudge-studio.com/api/:path*"
+      "source": "/api/:path((?!games$|games/|platforms$|rom-proxy$|health$).*)",
+      "destination": "https://api.grudge-studio.com/api/:path"
     },
     {
       "source": "/ws/:path*",
@@ -39,6 +39,18 @@
     }
   ],
   "headers": [
+    {
+      "source": "/api/games",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, s-maxage=3600, stale-while-revalidate=86400" }
+      ]
+    },
+    {
+      "source": "/api/platforms",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, s-maxage=3600, stale-while-revalidate=86400" }
+      ]
+    },
     {
       "source": "/assets/(.*)",
       "headers": [

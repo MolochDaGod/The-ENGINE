@@ -22,7 +22,7 @@ const PLATFORM_PAGES: Record<string, string> = {
   nds: "https://rec0ded88.com/play-nintendo-ds-games/",
 };
 
-const GAMES_PER_PAGE = 20;
+const GAMES_PER_PAGE = 24;
 
 const PLATFORM_COLORS: Record<string, { bg: string; accent: string }> = {
   nes: { bg: 'linear-gradient(135deg, hsl(0,60%,20%), hsl(0,50%,12%))', accent: 'hsl(0,70%,55%)' },
@@ -36,35 +36,12 @@ const PLATFORM_COLORS: Record<string, { bg: string; accent: string }> = {
   nds: { bg: 'linear-gradient(135deg, hsl(330,50%,22%), hsl(330,40%,12%))', accent: 'hsl(330,60%,55%)' },
 };
 
-interface PaginatedGames {
-  games: Game[];
-  total: number;
-}
-
-async function fetchGamesPage(params: {
-  platform: string | null;
-  searchQuery: string;
-  letterFilter: string | null;
-  page: number;
-}): Promise<PaginatedGames> {
-  const qs = new URLSearchParams({
-    paginated: "true",
-    limit: String(GAMES_PER_PAGE),
-    offset: String((params.page - 1) * GAMES_PER_PAGE),
-  });
-  if (params.platform) qs.set("platform", params.platform);
-  if (params.searchQuery) qs.set("q", params.searchQuery);
-  if (params.letterFilter) qs.set("letter", params.letterFilter);
-
-  const resp = await fetch(`/api/games?${qs.toString()}`);
-  if (!resp.ok) throw new Error("Failed to load games");
+/** Load full retro catalog once — served from Vercel edge cache / static JSON. */
+async function fetchFullCatalog(): Promise<Game[]> {
+  const resp = await fetch("/api/games", { credentials: "same-origin" });
+  if (!resp.ok) throw new Error("Failed to load game catalog");
   const data = await resp.json();
-  // Backward compat until Railway ships paginated API
-  if (Array.isArray(data)) {
-    const offset = (params.page - 1) * GAMES_PER_PAGE;
-    return { games: data.slice(offset, offset + GAMES_PER_PAGE), total: data.length };
-  }
-  return data as PaginatedGames;
+  return Array.isArray(data) ? data : (data.games ?? []);
 }
 
 export default function GameLibrary() {
@@ -81,20 +58,29 @@ export default function GameLibrary() {
     queryKey: ["/api/platforms"],
   });
 
-  const { data: gamesPage, isLoading: gamesLoading, isFetching } = useQuery<PaginatedGames>({
-    queryKey: ["/api/games", "paginated", selectedPlatform, searchQuery, letterFilter, currentPage],
-    queryFn: () =>
-      fetchGamesPage({
-        platform: selectedPlatform,
-        searchQuery,
-        letterFilter,
-        page: currentPage,
-      }),
-    placeholderData: (prev) => prev,
+  const { data: allGames = [], isLoading: gamesLoading } = useQuery<Game[]>({
+    queryKey: ["/api/games", "catalog"],
+    queryFn: fetchFullCatalog,
+    staleTime: 1000 * 60 * 60,
   });
 
-  const games = gamesPage?.games ?? [];
-  const totalGames = gamesPage?.total ?? 0;
+  const filteredGames = useMemo(() => {
+    let list = allGames;
+    if (selectedPlatform) {
+      list = list.filter((g) => g.platform === selectedPlatform);
+    }
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      list = list.filter((g) => g.title.toLowerCase().includes(q));
+    }
+    if (letterFilter) {
+      list = list.filter((g) => {
+        if (letterFilter === "#") return /^[^a-zA-Z]/.test(g.title);
+        return g.title.toUpperCase().startsWith(letterFilter);
+      });
+    }
+    return list;
+  }, [allGames, selectedPlatform, searchQuery, letterFilter]);
 
   const scrapeMutation = useMutation({
     mutationFn: async (platform: string) => {
@@ -110,13 +96,14 @@ export default function GameLibrary() {
 
   const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ#".split("");
 
-  const totalPages = Math.max(1, Math.ceil(totalGames / GAMES_PER_PAGE));
+  const totalPages = Math.max(1, Math.ceil(filteredGames.length / GAMES_PER_PAGE));
   const safePage = Math.min(currentPage, totalPages);
-  const startIdx = totalGames === 0 ? 0 : (safePage - 1) * GAMES_PER_PAGE;
+  const startIdx = (safePage - 1) * GAMES_PER_PAGE;
+  const paginatedGames = filteredGames.slice(startIdx, startIdx + GAMES_PER_PAGE);
 
   const goToPage = (page: number) => {
     setCurrentPage(Math.max(1, Math.min(page, totalPages)));
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const handlePlatformChange = (slug: string | null) => {
@@ -136,16 +123,16 @@ export default function GameLibrary() {
   };
 
   const pageNumbers = useMemo(() => {
-    const pages: (number | 'ellipsis')[] = [];
+    const pages: (number | "ellipsis")[] = [];
     if (totalPages <= 7) {
       for (let i = 1; i <= totalPages; i++) pages.push(i);
     } else {
       pages.push(1);
-      if (safePage > 3) pages.push('ellipsis');
+      if (safePage > 3) pages.push("ellipsis");
       const start = Math.max(2, safePage - 1);
       const end = Math.min(totalPages - 1, safePage + 1);
       for (let i = start; i <= end; i++) pages.push(i);
-      if (safePage < totalPages - 2) pages.push('ellipsis');
+      if (safePage < totalPages - 2) pages.push("ellipsis");
       pages.push(totalPages);
     }
     return pages;
@@ -154,13 +141,16 @@ export default function GameLibrary() {
   const catalogTotal = platforms.reduce((sum, p) => sum + (p.gameCount || 0), 0);
 
   return (
-    <div className="min-h-screen relative" style={{ background: 'hsl(225,30%,6%)' }}>
-      <div className="fixed inset-0 z-0 opacity-10 pointer-events-none" style={{ backgroundImage: `url(${libraryBg})`, backgroundSize: 'cover', backgroundPosition: 'center', backgroundAttachment: 'fixed' }} />
+    <div className="min-h-screen relative" style={{ background: "hsl(225,30%,6%)" }}>
+      <div className="fixed inset-0 z-0 opacity-10 pointer-events-none" style={{ backgroundImage: `url(${libraryBg})`, backgroundSize: "cover", backgroundPosition: "center", backgroundAttachment: "fixed" }} />
       <div className="fixed inset-0 z-0 bg-gradient-to-b from-[hsl(225,30%,6%)]/70 via-transparent to-[hsl(225,30%,6%)]/90 pointer-events-none" />
       <div className="max-w-7xl mx-auto px-4 py-4 relative z-10">
         <div className="flex items-center justify-between mb-4">
-          <h1 className="text-xl font-heading gold-text font-bold" style={{ WebkitTextFillColor: 'unset' }}>
-            Game Library <span className="text-sm text-[hsl(45,15%,60%)] font-body ml-2">{catalogTotal} games</span>
+          <h1 className="text-xl font-heading gold-text font-bold" style={{ WebkitTextFillColor: "unset" }}>
+            Game Library{" "}
+            <span className="text-sm text-[hsl(45,15%,60%)] font-body ml-2">
+              {gamesLoading ? "…" : `${allGames.length || catalogTotal} games loaded`}
+            </span>
           </h1>
           <div className="relative w-64">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[hsl(45,15%,60%)]" />
@@ -176,16 +166,16 @@ export default function GameLibrary() {
 
       <div className="max-w-7xl mx-auto px-4 pb-6 flex gap-6 relative z-10">
         <aside className="w-56 shrink-0 hidden md:block">
-          <h2 className="text-xs font-heading text-[hsl(43,85%,55%)] uppercase tracking-widest mb-3" style={{ WebkitTextFillColor: 'unset' }}>Platforms</h2>
+          <h2 className="text-xs font-heading text-[hsl(43,85%,55%)] uppercase tracking-widest mb-3" style={{ WebkitTextFillColor: "unset" }}>Platforms</h2>
           <div className="space-y-1">
             <button
               onClick={() => handlePlatformChange(null)}
               className={`w-full text-left px-3 py-2 rounded text-sm transition flex items-center justify-between ${!selectedPlatform ? "bg-[hsl(43,85%,55%)]/15 text-[hsl(43,85%,55%)] border border-[hsl(43,60%,30%)]" : "text-[hsl(45,30%,90%)] hover:bg-[hsl(225,25%,20%)]"}`}
             >
               <span className="font-body">All Platforms</span>
-              <span className="text-xs opacity-60">{catalogTotal}</span>
+              <span className="text-xs opacity-60">{allGames.length || catalogTotal}</span>
             </button>
-            {platforms.filter(p => p.slug !== 'custom' && (p.gameCount || 0) > 0).map((p) => (
+            {platforms.filter((p) => p.slug !== "custom" && (p.gameCount || 0) > 0).map((p) => (
               <div key={p.id} className="flex items-center gap-1">
                 <button
                   onClick={() => handlePlatformChange(p.slug)}
@@ -195,9 +185,7 @@ export default function GameLibrary() {
                     <span>{p.iconEmoji}</span>
                     <span>{p.name}</span>
                   </span>
-                  {(p.gameCount || 0) > 0 && (
-                    <span className="text-xs opacity-60">{p.gameCount}</span>
-                  )}
+                  {(p.gameCount || 0) > 0 && <span className="text-xs opacity-60">{p.gameCount}</span>}
                 </button>
                 {PLATFORM_PAGES[p.slug] && (
                   <Button
@@ -234,34 +222,31 @@ export default function GameLibrary() {
             </div>
           )}
 
-          {!gamesLoading && totalGames === 0 && (
+          {!gamesLoading && filteredGames.length === 0 && (
             <div className="text-center py-20">
               <Gamepad className="w-16 h-16 text-[hsl(43,60%,30%)] mx-auto mb-4" />
-              <h3 className="text-xl font-heading text-[hsl(43,85%,65%)] mb-2" style={{ WebkitTextFillColor: 'unset' }}>No games found</h3>
+              <h3 className="text-xl font-heading text-[hsl(43,85%,65%)] mb-2" style={{ WebkitTextFillColor: "unset" }}>No games found</h3>
               <p className="text-[hsl(45,15%,60%)] mb-4 font-body">
-                {selectedPlatform ? `Scrape ${selectedPlatform.toUpperCase()} games to populate the library` : "Select a platform and scrape games to get started"}
+                {selectedPlatform ? `No matches for ${selectedPlatform.toUpperCase()}` : "Try a different search or platform filter"}
               </p>
             </div>
           )}
 
-          {!gamesLoading && totalGames > 0 && (
+          {!gamesLoading && filteredGames.length > 0 && (
             <div className="flex items-center justify-between mb-4">
               <p className="text-sm text-[hsl(45,15%,60%)] font-body">
-                Showing {startIdx + 1}–{Math.min(startIdx + GAMES_PER_PAGE, totalGames)} of {totalGames} games
-                {isFetching && !gamesLoading ? " (updating…)" : ""}
+                Showing {startIdx + 1}–{Math.min(startIdx + GAMES_PER_PAGE, filteredGames.length)} of {filteredGames.length} games
               </p>
               {totalPages > 1 && (
-                <p className="text-sm text-[hsl(45,15%,60%)] font-body">
-                  Page {safePage} of {totalPages}
-                </p>
+                <p className="text-sm text-[hsl(45,15%,60%)] font-body">Page {safePage} of {totalPages}</p>
               )}
             </div>
           )}
 
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
-            {games.map((game) => {
-              const colors = PLATFORM_COLORS[game.platform || ''] || { bg: 'linear-gradient(135deg, hsl(225,25%,15%), hsl(225,30%,10%))', accent: 'hsl(43,85%,55%)' };
-              const initial = (game.title[0] || '?').toUpperCase();
+            {paginatedGames.map((game) => {
+              const colors = PLATFORM_COLORS[game.platform || ""] || { bg: "linear-gradient(135deg, hsl(225,25%,15%), hsl(225,30%,10%))", accent: "hsl(43,85%,55%)" };
+              const initial = (game.title[0] || "?").toUpperCase();
               const thumbUrl = (game as any).thumbnailUrl;
               return (
                 <div key={game.id} className="fantasy-panel overflow-hidden hover:animate-gem-glow transition group relative card-hover cursor-pointer" onClick={() => setLocation(`/play/${game.id}`)}>
@@ -274,12 +259,10 @@ export default function GameLibrary() {
                     <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition bg-black/60 z-10">
                       <Play className="w-8 h-8 text-[hsl(43,85%,55%)] drop-shadow-lg" />
                     </div>
-                    {game.isFeatured && (
-                      <Star className="absolute top-1 left-1 w-3 h-3 text-[hsl(43,85%,55%)] fill-[hsl(43,85%,55%)] z-10" />
-                    )}
+                    {game.isFeatured && <Star className="absolute top-1 left-1 w-3 h-3 text-[hsl(43,85%,55%)] fill-[hsl(43,85%,55%)] z-10" />}
                   </div>
                   <div className="p-2">
-                    <h3 className="text-xs font-heading text-[hsl(45,30%,90%)] truncate" style={{ WebkitTextFillColor: 'unset' }}>{game.title}</h3>
+                    <h3 className="text-xs font-heading text-[hsl(45,30%,90%)] truncate" style={{ WebkitTextFillColor: "unset" }}>{game.title}</h3>
                     <div className="flex items-center justify-between mt-1">
                       <Badge variant="outline" className="text-[10px] border-[hsl(43,60%,30%)]/50 text-[hsl(43,85%,55%)]">{game.platform?.toUpperCase()}</Badge>
                       <span className="text-[10px] text-[hsl(43,85%,55%)] flex items-center gap-1 font-heading">
@@ -294,66 +277,25 @@ export default function GameLibrary() {
 
           {totalPages > 1 && (
             <nav className="flex items-center justify-center gap-1 mt-8 mb-4" aria-label="Pagination">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => goToPage(1)}
-                disabled={safePage === 1}
-                className="text-[hsl(45,15%,60%)] hover:text-[hsl(43,85%,55%)] disabled:opacity-30"
-                aria-label="First page"
-              >
+              <Button variant="ghost" size="sm" onClick={() => goToPage(1)} disabled={safePage === 1} className="text-[hsl(45,15%,60%)] hover:text-[hsl(43,85%,55%)] disabled:opacity-30" aria-label="First page">
                 <ChevronsLeft className="w-4 h-4" />
               </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => goToPage(safePage - 1)}
-                disabled={safePage === 1}
-                className="text-[hsl(45,15%,60%)] hover:text-[hsl(43,85%,55%)] disabled:opacity-30"
-                aria-label="Previous page"
-              >
+              <Button variant="ghost" size="sm" onClick={() => goToPage(safePage - 1)} disabled={safePage === 1} className="text-[hsl(45,15%,60%)] hover:text-[hsl(43,85%,55%)] disabled:opacity-30" aria-label="Previous page">
                 <ChevronLeft className="w-4 h-4" />
               </Button>
-
               {pageNumbers.map((p, idx) =>
-                p === 'ellipsis' ? (
+                p === "ellipsis" ? (
                   <span key={`e${idx}`} className="px-2 text-[hsl(45,15%,60%)]">...</span>
                 ) : (
-                  <Button
-                    key={p}
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => goToPage(p)}
-                    className={`min-w-[36px] ${safePage === p
-                      ? "bg-[hsl(43,85%,55%)] text-[hsl(225,30%,8%)] hover:bg-[hsl(43,85%,60%)] font-bold"
-                      : "text-[hsl(45,15%,60%)] hover:text-[hsl(43,85%,55%)] hover:bg-[hsl(225,25%,15%)]"
-                    }`}
-                    aria-label={`Page ${p}`}
-                    aria-current={safePage === p ? "page" : undefined}
-                  >
+                  <Button key={p} variant="ghost" size="sm" onClick={() => goToPage(p)} className={`min-w-[36px] ${safePage === p ? "bg-[hsl(43,85%,55%)] text-[hsl(225,30%,8%)] hover:bg-[hsl(43,85%,60%)] font-bold" : "text-[hsl(45,15%,60%)] hover:text-[hsl(43,85%,55%)] hover:bg-[hsl(225,25%,15%)]"}`} aria-label={`Page ${p}`} aria-current={safePage === p ? "page" : undefined}>
                     {p}
                   </Button>
                 )
               )}
-
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => goToPage(safePage + 1)}
-                disabled={safePage === totalPages}
-                className="text-[hsl(45,15%,60%)] hover:text-[hsl(43,85%,55%)] disabled:opacity-30"
-                aria-label="Next page"
-              >
+              <Button variant="ghost" size="sm" onClick={() => goToPage(safePage + 1)} disabled={safePage === totalPages} className="text-[hsl(45,15%,60%)] hover:text-[hsl(43,85%,55%)] disabled:opacity-30" aria-label="Next page">
                 <ChevronRight className="w-4 h-4" />
               </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => goToPage(totalPages)}
-                disabled={safePage === totalPages}
-                className="text-[hsl(45,15%,60%)] hover:text-[hsl(43,85%,55%)] disabled:opacity-30"
-                aria-label="Last page"
-              >
+              <Button variant="ghost" size="sm" onClick={() => goToPage(totalPages)} disabled={safePage === totalPages} className="text-[hsl(45,15%,60%)] hover:text-[hsl(43,85%,55%)] disabled:opacity-30" aria-label="Last page">
                 <ChevronsRight className="w-4 h-4" />
               </Button>
             </nav>

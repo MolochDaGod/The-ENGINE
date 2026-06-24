@@ -96,6 +96,7 @@ function Router() {
       <Route path="/real-engine-manager" component={withAdminGuard(RealEngineManager)} />
       <Route path="/advantage" component={Advantage} />
       <Route path="/super-engine" component={SuperEngine} />
+      <Route path="/super-engine/:legacyId" component={SuperEngine} />
       <Route path="/grudge-editor" component={withAdminGuard(GrudgeEditor)} />
       <Route path="/engine-launcher" component={EngineLauncher} />
       <Route path="/asset-store" component={AssetStore} />

@@ -2,39 +2,16 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Play, X, Maximize2, Minimize2, Cpu, Gamepad, Swords, Car, Castle, Shield, Puzzle, Users, Zap, Globe, Box, Brain, Monitor, Check, Minus } from "lucide-react";
+import { ArrowLeft, Play, X, Maximize2, Minimize2, Cpu, Gamepad, Swords, Users, Zap, Globe, Box, Brain, Monitor } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import superEngineBg from "@assets/IqGYJJe_1773841545953.png";
 import imgGrudgeStudio from "@assets/19aec67671d8b_1773869463362.png";
 import imgCloudPilot from "@assets/a17ae3c8-1237-463c-89d7-ad1708b48929_1773869467486.png";
 import imgGbuxCoin from "@assets/image_1773869512711.png";
-import gameImgWargus from "@assets/game_wargus_rts.png";
-import gameImgTowerDef from "@assets/game_tower_defense.png";
-import gameImgAvernus3d from "@assets/game_avernus_3d.png";
-import gameImgAvernusArena from "@assets/game_avernus_arena.png";
-import gameImgDecay from "@assets/game_decay_survival.png";
-import gameImgOverdrive from "@assets/game_overdrive_3d.png";
-import gameImgRpgMaker from "@assets/game_rpg_maker.png";
-import gameImgPuzzle from "@assets/game_puzzle_platformer.png";
-
-type Capability = '3D' | 'Physics' | 'Multiplayer' | 'AI' | '2D' | 'Particles';
-
-interface GameCard {
-  id: string;
-  name: string;
-  description: string;
-  type: string;
-  engine: string;
-  route: string;
-  emoji: string;
-  color: string;
-  gradientBorder: string;
-  icon: typeof Gamepad;
-  capabilities: Capability[];
-  previewType: 'threejs' | 'canvas2d' | 'static';
-  cardImage?: string;
-}
+import { FORGE_GAMES, resolveFleetGameId, type Capability } from "@/data/fleetGames";
+import { GamePreviewFrame } from "@/components/game-preview-frame";
+import { navigateGame } from "@/lib/game-launch";
 
 const CAPABILITY_CONFIG: Record<Capability, { icon: typeof Zap; color: string; label: string }> = {
   '3D': { icon: Box, color: 'bg-blue-500/20 text-blue-400 border-blue-500/30', label: '3D' },
@@ -45,211 +22,7 @@ const CAPABILITY_CONFIG: Record<Capability, { icon: typeof Zap; color: string; l
   'Particles': { icon: Zap, color: 'bg-orange-500/20 text-orange-400 border-orange-500/30', label: 'Particles' },
 };
 
-const GAMES: GameCard[] = [
-  {
-    id: 'rts-grudge',
-    name: 'Grudge Warlords RTS',
-    description: 'Full 3D real-time strategy with base building, unit production, hero mech, biome zones, AI squads, and wave-based combat. The flagship Grudge game.',
-    type: 'RTS',
-    engine: 'Grudge Studio Forge',
-    route: 'https://rts-grudge.vercel.app',
-    emoji: '⚔️',
-    color: 'from-red-900/60 to-red-800/30',
-    gradientBorder: 'from-red-500 via-orange-500 to-yellow-500',
-    icon: Swords,
-    capabilities: ['3D', 'AI', 'Physics', 'Particles'],
-    previewType: 'threejs',
-    cardImage: gameImgWargus,
-  },
-  {
-    id: 'survival',
-    name: 'Grudges — Survival ARPG',
-    description: 'Sci-fi survival action RPG. Bind a grudge, bear it forward. Crafting, combat, exploration in a hostile world.',
-    type: 'Survival ARPG',
-    engine: 'Grudge Studio Forge',
-    route: 'https://survival.vercel.app',
-    emoji: '🔥',
-    color: 'from-orange-900/60 to-orange-800/30',
-    gradientBorder: 'from-orange-500 via-red-500 to-pink-500',
-    icon: Shield,
-    capabilities: ['3D', 'Physics', 'AI', 'Particles'],
-    previewType: 'threejs',
-    cardImage: gameImgAvernus3d,
-  },
-  {
-    id: 'grudge-arena',
-    name: 'Grudge Arena — PvP Combat',
-    description: '3D PvP combat arena with 6 playable races, WoW-style targeting, Socket.IO multiplayer, and Grudge ID authentication.',
-    type: 'Arena PvP',
-    engine: 'Grudge Studio Forge',
-    route: 'https://grudge-arena.vercel.app',
-    emoji: '🗡️',
-    color: 'from-purple-900/60 to-purple-800/30',
-    gradientBorder: 'from-purple-500 via-pink-500 to-red-500',
-    icon: Swords,
-    capabilities: ['3D', 'Multiplayer', 'AI', 'Particles'],
-    previewType: 'threejs',
-    cardImage: gameImgAvernusArena,
-  },
-  {
-    id: 'grudge-drive',
-    name: 'Grudge Drive — Vehicular Combat',
-    description: 'High-speed vehicular combat arena brawler. BabylonJS + Havok physics, destructible environments, boost pads.',
-    type: 'Racing / Combat',
-    engine: 'Grudge Studio Forge',
-    route: 'https://grudge-drive.vercel.app',
-    emoji: '🏎️',
-    color: 'from-blue-900/60 to-blue-800/30',
-    gradientBorder: 'from-blue-500 via-cyan-500 to-teal-500',
-    icon: Car,
-    capabilities: ['3D', 'Physics', 'Particles'],
-    previewType: 'threejs',
-    cardImage: gameImgOverdrive,
-  },
-  {
-    id: 'grudge-fishing',
-    name: 'Grudge Fishing',
-    description: '3D fishing game with procedural island, animated water shaders, 35 fish species, 5 tiered rods, and tension minigame. Cloudflare D1/R2 backend.',
-    type: 'Fishing / Casual',
-    engine: 'Grudge Studio Forge',
-    route: 'https://grudge-fishing-game.vercel.app',
-    emoji: '🎣',
-    color: 'from-cyan-900/60 to-cyan-800/30',
-    gradientBorder: 'from-cyan-500 via-blue-500 to-indigo-500',
-    icon: Gamepad,
-    capabilities: ['3D', 'Physics', 'Particles'],
-    previewType: 'threejs',
-  },
-  {
-    id: 'dungeon-crawler',
-    name: 'Dungeon Crawler Quest',
-    description: 'Voxel MOBA and dungeon crawler with procedural generation, AI enemies, loot system, and map editor.',
-    type: 'Dungeon Crawler',
-    engine: 'Grudge Studio Forge',
-    route: 'https://dungeon-crawler-quest.vercel.app',
-    emoji: '🐉',
-    color: 'from-green-900/60 to-green-800/30',
-    gradientBorder: 'from-green-500 via-emerald-500 to-teal-500',
-    icon: Shield,
-    capabilities: ['3D', 'AI', 'Particles'],
-    previewType: 'threejs',
-    cardImage: gameImgDecay,
-  },
-  {
-    id: 'final-fighter',
-    name: 'Final Fighter',
-    description: '3D fighting game with GLTF characters, Box3 hitbox/hurtbox collision, combo system, and AI opponent.',
-    type: '3D Fighting',
-    engine: 'Grudge Studio Forge',
-    route: 'https://final-fighter.vercel.app',
-    emoji: '🥊',
-    color: 'from-amber-900/60 to-amber-800/30',
-    gradientBorder: 'from-amber-500 via-yellow-500 to-orange-500',
-    icon: Swords,
-    capabilities: ['3D', 'Physics', 'AI'],
-    previewType: 'threejs',
-    cardImage: gameImgTowerDef,
-  },
-  {
-    id: 'rpg-modular',
-    name: 'Betta Warlords — RPG',
-    description: 'Modular RPG with character creation, skill trees, crafting, and faction warfare. The original Grudge Warlords experience.',
-    type: 'RPG / MMO',
-    engine: 'Grudge Studio Forge',
-    route: 'https://rpg-modular.vercel.app',
-    emoji: '🗡️',
-    color: 'from-indigo-900/60 to-indigo-800/30',
-    gradientBorder: 'from-indigo-500 via-violet-500 to-purple-500',
-    icon: Gamepad,
-    capabilities: ['2D', 'AI', 'Multiplayer'],
-    previewType: 'canvas2d',
-    cardImage: gameImgRpgMaker,
-  },
-  {
-    id: 'grim-armada',
-    name: 'Grim Armada',
-    description: 'SWG-inspired tactical combat web game. Three.js + React with Grudge Backend integration. Space fleet battles and ground combat.',
-    type: 'Tactical Combat',
-    engine: 'Grudge Studio Forge',
-    route: 'https://grim-armada-web.vercel.app',
-    emoji: '🚀',
-    color: 'from-slate-900/60 to-slate-800/30',
-    gradientBorder: 'from-slate-500 via-gray-500 to-zinc-500',
-    icon: Shield,
-    capabilities: ['3D', 'AI', 'Physics'],
-    previewType: 'threejs',
-  },
-  {
-    id: 'annihilate-demo',
-    name: 'Grudge Engine Core',
-    description: 'Three.js + Cannon-ES + CharacterFSM. Full combo FSM, capsule physics, animation blending, and RoleControls. The engine core powering all Grudge 3D games.',
-    type: '3D Engine Demo',
-    engine: 'Grudge Studio Forge',
-    route: '/annihilate-demo',
-    emoji: '⚙️',
-    color: 'from-violet-900/60 to-purple-800/30',
-    gradientBorder: 'from-violet-500 via-purple-500 to-pink-500',
-    icon: Swords,
-    capabilities: ['3D', 'Physics', 'AI', 'Particles'],
-    previewType: 'threejs' as const,
-  },
-  {
-    id: 'voxel-sandbox',
-    name: 'Voxel Chaos Sandbox',
-    description: '3D physics sandbox with 23 tools, ragdoll voxel characters, NPC/zombie AI, scripting, vehicles, constraints (weld/rope/hinge/motor), day/night cycle, and world save/load.',
-    type: 'Sandbox / Physics',
-    engine: 'Grudge Studio Forge',
-    route: '/voxel-sandbox',
-    emoji: '🧱',
-    color: 'from-emerald-900/60 to-emerald-800/30',
-    gradientBorder: 'from-emerald-500 via-green-500 to-lime-500',
-    icon: Box,
-    capabilities: ['3D', 'Physics', 'AI', 'Particles'],
-    previewType: 'threejs' as const,
-  },
-  {
-    id: 'terraforge',
-    name: 'TerraForge',
-    description: 'Open-world voxel sandbox with FPS combat, city builder, castle fortress, NPC AI, item shop, world editor, and world map. Supports Simple/Pixel/HD texture modes.',
-    type: 'Open World Sandbox',
-    engine: 'Grudge Studio Forge',
-    route: '/terraforge',
-    emoji: '🌍',
-    color: 'from-lime-900/60 to-green-800/30',
-    gradientBorder: 'from-lime-500 via-green-500 to-emerald-500',
-    icon: Globe,
-    capabilities: ['3D', 'Physics', 'AI', 'Particles'],
-    previewType: 'threejs' as const,
-  },
-  {
-    id: 'grudge-brawl',
-    name: 'Grudge Brawl',
-    description: 'Third-person arena combat with body-tracks-crosshair aiming, WASD movement, AI opponents, mobile touch support, and Grudge voxel characters. Based on Snow Brawl engine.',
-    type: 'Arena Combat',
-    engine: 'Grudge Studio Forge',
-    route: '/grudge-brawl',
-    emoji: '⚔️',
-    color: 'from-red-900/60 to-orange-800/30',
-    gradientBorder: 'from-red-500 via-orange-500 to-yellow-500',
-    icon: Swords,
-    capabilities: ['3D', 'Physics', 'AI', 'Particles'],
-    previewType: 'threejs' as const,
-  },
-  {
-    id: 'polyfighter',
-    name: 'Grudge Fighter',
-    description: '3D fighting game with custom character creator (8 head types, 7 torso types), level editor, HD city stages, voxel characters, trimesh combat, and retro synth audio. Built for Grudge Studio.',
-    type: '3D Fighting',
-    engine: 'Grudge Studio Forge',
-    route: '/polyfighter',
-    emoji: '🥊',
-    color: 'from-pink-900/60 to-rose-800/30',
-    gradientBorder: 'from-pink-500 via-red-500 to-rose-500',
-    icon: Swords,
-    capabilities: ['3D', 'Physics', 'AI'],
-    previewType: 'threejs' as const,
-  },
-];
+const GAMES = FORGE_GAMES;
 
 interface EngineRow {
   name: string;
@@ -389,7 +162,7 @@ export default function SuperEngine() {
     queryKey: ['/api/games/featured'],
     queryFn: async () => {
       try {
-        const res = await fetch('/api/games/featured');
+        const res = await fetch('/api/games?featured=true');
         if (!res.ok) return [];
         return res.json();
       } catch {
@@ -399,7 +172,8 @@ export default function SuperEngine() {
   });
 
   const handlePlay = useCallback((gameId: string) => {
-    setExpandedGame(prev => prev === gameId ? null : gameId);
+    const resolvedId = resolveFleetGameId(gameId);
+    setExpandedGame((prev) => (prev === resolvedId ? null : resolvedId));
   }, []);
 
   const handleFullscreen = useCallback((gameId: string) => {
@@ -411,14 +185,10 @@ export default function SuperEngine() {
   }, []);
 
   const handleNavigate = useCallback((route: string) => {
-    if (route.startsWith('http')) {
-      window.open(route, '_blank', 'noopener');
-    } else {
-      navigate(route);
-    }
+    navigateGame(route, navigate);
   }, [navigate]);
 
-  const fullscreenGameData = GAMES.find(g => g.id === fullscreenGame);
+  const fullscreenGameData = GAMES.find((g) => g.id === fullscreenGame);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-black text-white relative">
@@ -437,12 +207,7 @@ export default function SuperEngine() {
             </Button>
           </div>
           <div className="flex-1">
-            <iframe
-              src={fullscreenGameData.route}
-              className="w-full h-full border-0"
-              title={fullscreenGameData.name}
-              allow="autoplay; fullscreen"
-            />
+            <GamePreviewFrame game={fullscreenGameData} className="w-full h-full border-0" />
           </div>
         </div>
       )}
@@ -512,12 +277,7 @@ export default function SuperEngine() {
                     {isExpanded ? (
                       <div className="flex flex-col">
                         <div className="relative w-full" style={{ height: '500px' }}>
-                          <iframe
-                            src={game.route}
-                            className="w-full h-full border-0 rounded-t-lg"
-                            title={game.name}
-                            allow="autoplay; fullscreen"
-                          />
+                          <GamePreviewFrame game={game} className="w-full h-full border-0 rounded-t-lg" />
                           <div className="absolute top-3 right-3 flex gap-2">
                             <Button
                               size="sm"
@@ -607,7 +367,12 @@ export default function SuperEngine() {
                         </div>
 
                         <div className="flex items-start justify-between mb-2">
-                          <h3 className="text-white font-bold text-lg">{game.name}</h3>
+                          <div>
+                            <h3 className="text-white font-bold text-lg">{game.name}</h3>
+                            {game.disambiguation && (
+                              <p className="text-[11px] text-gray-500 mt-0.5">{game.disambiguation}</p>
+                            )}
+                          </div>
                           <Badge className="bg-orange-500/20 text-orange-400 border-orange-500/30 shrink-0 ml-2">
                             {game.type}
                           </Badge>
