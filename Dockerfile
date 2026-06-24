@@ -4,7 +4,8 @@ WORKDIR /app
 RUN apk add --no-cache git
 
 COPY package.json package-lock.json* ./
-RUN npm ci --legacy-peer-deps || npm install --legacy-peer-deps
+RUN npm ci --legacy-peer-deps --ignore-scripts || npm install --legacy-peer-deps --ignore-scripts
+RUN if [ -d node_modules/grudge-control ] && [ ! -f node_modules/grudge-control/dist/index.mjs ]; then cd node_modules/grudge-control && npm install --legacy-peer-deps --ignore-scripts && npx tsup --dts false; fi
 
 COPY tsconfig.json drizzle.config.ts vite.config.ts postcss.config.js tailwind.config.ts ./
 COPY server ./server
