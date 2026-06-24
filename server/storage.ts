@@ -726,11 +726,33 @@ export class DatabaseStorage implements IStorage {
 
 const storage = new DatabaseStorage();
 
-(async () => {
-  await storage.initializeStoreProducts();
-  await storage.initializeHydraProducts();
-  await storage.initializePlatforms();
-  await storage.initializeGames();
-})();
+async function ensureStoreProductColumns() {
+  try {
+    await db.execute(
+      sql`ALTER TABLE store_products ADD COLUMN IF NOT EXISTS gbux_price INTEGER`,
+    );
+  } catch (err) {
+    console.warn("[storage] gbux_price column ensure skipped:", err);
+  }
+}
+
+async function bootstrapStorage() {
+  await ensureStoreProductColumns();
+  const steps: Array<[string, () => Promise<void>]> = [
+    ["store products", () => storage.initializeStoreProducts()],
+    ["hydra products", () => storage.initializeHydraProducts()],
+    ["platforms", () => storage.initializePlatforms()],
+    ["games", () => storage.initializeGames()],
+  ];
+  for (const [label, fn] of steps) {
+    try {
+      await fn();
+    } catch (err) {
+      console.error(`[storage] initialize ${label} failed:`, err);
+    }
+  }
+}
+
+void bootstrapStorage();
 
 export { storage };

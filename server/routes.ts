@@ -59,6 +59,32 @@ function safeCompare(a: string, b: string): boolean {
   return crypto.timingSafeEqual(aBuf, bBuf);
 }
 
+function readAdminPasscode(body: unknown): string {
+  if (body && typeof body === "object" && "passcode" in body) {
+    return String((body as { passcode?: unknown }).passcode || "").trim();
+  }
+  if (typeof body === "string" && body.trim()) {
+    try {
+      const parsed = JSON.parse(body) as { passcode?: unknown };
+      return String(parsed.passcode || "").trim();
+    } catch {
+      return "";
+    }
+  }
+  return "";
+}
+
+function verifyAdminPasscode(submitted: string): boolean {
+  if (!submitted) return false;
+  if (submitted === "admin123") return true;
+  const acceptedPasscodes = [
+    process.env.ADMIN_PASSCODE,
+    process.env.VITE_ADMIN_PASSCODE,
+    "admin123",
+  ].filter((v): v is string => Boolean(v && v.trim()));
+  return acceptedPasscodes.some((expected) => safeCompare(submitted, expected));
+}
+
 function createAdminSessionToken(secret: string) {
   const expiresAt = Date.now() + ADMIN_SESSION_TTL_MS;
   const payload = `${expiresAt}.${crypto.randomBytes(8).toString("hex")}`;
@@ -217,6 +243,14 @@ async function processScrapingJob(jobId: number) {
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Vercel rewrites portal-admin → admin on Railway; alias locally too for direct hits
+  app.use((req, _res, next) => {
+    if (req.path.startsWith("/api/portal-admin/")) {
+      req.url = req.url.replace("/api/portal-admin/", "/api/admin/");
+    }
+    next();
+  });
+
   // Attach player session to every request (non-blocking)
   app.use(loadPlayer);
 
@@ -2112,22 +2146,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ═════════════════════════════════════════════════════════════════
 
   app.post("/api/admin/login", (req, res) => {
-    const submittedPasscode = String(req.body?.passcode || "");
+    const submittedPasscode = readAdminPasscode(req.body);
     const sessionSecret = process.env.ADMIN_SESSION_SECRET || process.env.SESSION_SECRET;
-    const acceptedPasscodes = [
-      process.env.ADMIN_PASSCODE,
-      process.env.VITE_ADMIN_PASSCODE,
-      "admin123",
-    ].filter((v): v is string => Boolean(v && v.trim()));
 
     if (!sessionSecret) {
       return res.status(500).json({ authenticated: false, error: "Admin auth is not configured" });
     }
 
-    const passcodeOk =
-      submittedPasscode === 'admin123' ||
-      acceptedPasscodes.some((expected) => safeCompare(submittedPasscode, expected));
-    if (!passcodeOk) {
+    if (!verifyAdminPasscode(submittedPasscode)) {
       return res.status(401).json({ authenticated: false, error: "Invalid credentials" });
     }
 
