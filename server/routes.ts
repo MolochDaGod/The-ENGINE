@@ -26,7 +26,7 @@ import { onScoreSubmitted, startRewardWorker, getRewardQueueStatus } from "./web
 import { getPlatformBalances, listOnChainTransactions, listDBTransactions, disconnectWallet, getActiveConnections, recordWalletConnection } from "./web3/admin-wallet";
 import { getWalletStatus } from "./web3/solana-client";
 import { getFleetHealth, checkSingleService, getServiceRegistry } from "./fleet-health";
-import { legionAI, generateNPCDialogue, moderateContent, generateQuestText, analyzeFleetStatus, type LegionTask } from "./legion-ai";
+import { legionAI, generateNPCDialogue, moderateContent, generateQuestText, analyzeFleetStatus, studioAssistant, type LegionTask } from "./legion-ai";
 import { getGBuxBalance, requestGBuxMint, savePlayerData, loadPlayerData, listPlayerSaves, deletePlayerSave, linkPuterToGrudge, resolveGrudgeId, getGrudaChainStatus } from "./grudachain";
 
 const ADMIN_SESSION_COOKIE = "gs_admin_session";
@@ -3500,6 +3500,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(result);
     } catch (error) {
       res.status(500).json({ error: "Captain analysis failed" });
+    }
+  });
+
+  // Studio-wide assistant — knows the fleet, deployments, data layer, and recent
+  // GitHub history (studio context injected in legion-ai.ts).
+  app.post("/api/legion/studio", async (req, res) => {
+    try {
+      const { prompt, context } = req.body;
+      if (!prompt) return res.status(400).json({ error: "prompt required" });
+      const result = await studioAssistant(prompt, context);
+      res.json(result);
+    } catch (error) {
+      res.status(500).json({ error: "Studio assistant request failed" });
     }
   });
 

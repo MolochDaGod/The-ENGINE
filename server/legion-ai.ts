@@ -15,7 +15,7 @@
  */
 
 export type LegionModel = 'claude' | 'gpt4o' | 'auto';
-export type LegionTask = 'dialogue' | 'lore' | 'moderation' | 'balance' | 'captain' | 'general';
+export type LegionTask = 'dialogue' | 'lore' | 'moderation' | 'balance' | 'captain' | 'general' | 'studio';
 
 export interface LegionRequest {
   task: LegionTask;
@@ -47,13 +47,111 @@ const SYSTEM_PROMPTS: Record<LegionTask, string> = {
   captain: `You are the Legion AI Captain — fleet operations commander for Grudge Studio infrastructure. Analyze service status data and recommend actions. Be direct, technical, and prioritize by business impact. Format: numbered priority list.`,
 
   general: `You are an AI assistant for Grudge Studio. Answer questions about the game systems, infrastructure, or development.`,
+
+  studio: `You are the Grudge Studio Assistant — the studio-wide AI that knows the whole operation, not just the Grudge Warlords game. Grudge Studio is created by "Racalvin The Pirate King". You understand the fleet of games, the deployment topology (Cloudflare Workers + Vercel + Railway), the data layer (D1, R2, KV, Puter), how every app connects to the backend, and the recent GitHub history. Use the STUDIO CONTEXT and RECENT GITHUB HISTORY provided below to answer questions about the studio, the game fleet, deployments, infrastructure, and what changed recently. Be accurate and concrete: cite the relevant domain, repo, or service. If something is not in the provided context, say so rather than guessing.`,
 };
+
+// ═══ STUDIO CONTEXT + GITHUB DIGEST (shared context layer) ═══
+// Pulled from the backend (api.grudge-studio.com), with a CDN fallback, plus the
+// GitHub history worker. Both are cached in-process so we don't refetch per call.
+const STUDIO_CONTEXT_URL =
+  process.env.STUDIO_CONTEXT_URL || 'https://api.grudge-studio.com/ai/studio-context';
+const STUDIO_CONTEXT_CDN_URL =
+  process.env.STUDIO_CONTEXT_CDN_URL || 'https://assets.grudge-studio.com/context/studio-context.json';
+const GITHUB_DIGEST_URL =
+  process.env.GITHUB_DIGEST_URL || 'https://github.grudge-studio.com/digest';
+
+const CONTEXT_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+interface CtxCache { text: string; ts: number; }
+let studioContextCache: CtxCache | null = null;
+let githubDigestCache: CtxCache | null = null;
+
+/** Tasks that should receive the full studio-wide context. */
+function needsStudioContext(task: LegionTask): boolean {
+  return task === 'studio' || task === 'general' || task === 'captain';
+}
+
+function stringifyContext(data: unknown): string {
+  if (typeof data === 'string') return data;
+  try {
+    return JSON.stringify(data, null, 2);
+  } catch {
+    return String(data);
+  }
+}
+
+/**
+ * Fetch the canonical Grudge Studio context.
+ * Tries the backend endpoint first, then the CDN mirror. Falls back to a stale
+ * cache if both are unreachable. Field names follow the shared contract
+ * (version/studio/domains/games/deployments/dataLayer/connectionMatrix/patterns)
+ * but we stringify the whole payload so renamed fields still flow through.
+ */
+async function fetchStudioContext(): Promise<string | null> {
+  if (studioContextCache && Date.now() - studioContextCache.ts < CONTEXT_TTL_MS) {
+    return studioContextCache.text;
+  }
+  for (const url of [STUDIO_CONTEXT_URL, STUDIO_CONTEXT_CDN_URL]) {
+    try {
+      const resp = await fetch(url, { signal: AbortSignal.timeout(8000) });
+      if (!resp.ok) continue;
+      const data = await resp.json();
+      const text = stringifyContext(data);
+      studioContextCache = { text, ts: Date.now() };
+      return text;
+    } catch {
+      continue;
+    }
+  }
+  return studioContextCache?.text || null; // serve stale if available
+}
+
+/** Fetch the recent GitHub history digest from the github-context worker. */
+async function fetchGitHubDigest(): Promise<string | null> {
+  if (githubDigestCache && Date.now() - githubDigestCache.ts < CONTEXT_TTL_MS) {
+    return githubDigestCache.text;
+  }
+  try {
+    const resp = await fetch(GITHUB_DIGEST_URL, { signal: AbortSignal.timeout(8000) });
+    if (!resp.ok) return githubDigestCache?.text || null;
+    const data = await resp.json();
+    const text = stringifyContext(data);
+    githubDigestCache = { text, ts: Date.now() };
+    return text;
+  } catch {
+    return githubDigestCache?.text || null;
+  }
+}
+
+/**
+ * Resolve the system prompt for a request, injecting the studio context and
+ * GitHub digest for studio-aware tasks.
+ */
+async function resolveSystemPrompt(task: LegionTask): Promise<string> {
+  const base = SYSTEM_PROMPTS[task];
+  if (!needsStudioContext(task)) return base;
+
+  const [studioCtx, githubDigest] = await Promise.all([
+    fetchStudioContext(),
+    fetchGitHubDigest(),
+  ]);
+
+  let prompt = base;
+  if (studioCtx) {
+    prompt += `\n\n--- GRUDGE STUDIO CONTEXT (canonical) ---\n${studioCtx}`;
+  }
+  if (githubDigest) {
+    prompt += `\n\n--- RECENT GITHUB HISTORY ---\n${githubDigest}`;
+  }
+  return prompt;
+}
 
 // ═══ AI HUB (CF Worker) ═══
 const AI_HUB_URL = process.env.AI_HUB_URL || 'https://ai.grudge-studio.com/api';
 const AI_HUB_KEY = process.env.AI_HUB_API_KEY || '';
 
-async function callAIHub(req: LegionRequest): Promise<LegionResponse | null> {
+async function callAIHub(req: LegionRequest, systemPrompt: string): Promise<LegionResponse | null> {
   if (!AI_HUB_KEY) return null; // not configured
 
   const start = Date.now();
@@ -67,7 +165,7 @@ async function callAIHub(req: LegionRequest): Promise<LegionResponse | null> {
       body: JSON.stringify({
         model: req.model || 'auto',
         messages: [
-          { role: 'system', content: SYSTEM_PROMPTS[req.task] },
+          { role: 'system', content: systemPrompt },
           { role: 'user', content: req.prompt },
         ],
         max_tokens: req.maxTokens || 500,
@@ -95,7 +193,7 @@ async function callAIHub(req: LegionRequest): Promise<LegionResponse | null> {
 // ═══ PUTER AI (fallback) ═══
 const PUTER_AI_WORKER_URL = process.env.PUTER_AI_WORKER_URL || 'https://ai-agent-service.puter.site';
 
-async function callPuterAI(req: LegionRequest): Promise<LegionResponse | null> {
+async function callPuterAI(req: LegionRequest, systemPrompt: string): Promise<LegionResponse | null> {
   const start = Date.now();
   try {
     const resp = await fetch(`${PUTER_AI_WORKER_URL}/api/chat`, {
@@ -103,7 +201,7 @@ async function callPuterAI(req: LegionRequest): Promise<LegionResponse | null> {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         messages: [
-          { role: 'system', content: SYSTEM_PROMPTS[req.task] },
+          { role: 'system', content: systemPrompt },
           { role: 'user', content: req.prompt },
         ],
         max_tokens: req.maxTokens || 500,
@@ -129,7 +227,7 @@ async function callPuterAI(req: LegionRequest): Promise<LegionResponse | null> {
 // ═══ DIRECT ANTHROPIC (emergency) ═══
 const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY || '';
 
-async function callAnthropicDirect(req: LegionRequest): Promise<LegionResponse | null> {
+async function callAnthropicDirect(req: LegionRequest, systemPrompt: string): Promise<LegionResponse | null> {
   if (!ANTHROPIC_KEY) return null;
 
   const start = Date.now();
@@ -144,7 +242,7 @@ async function callAnthropicDirect(req: LegionRequest): Promise<LegionResponse |
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
         max_tokens: req.maxTokens || 500,
-        system: SYSTEM_PROMPTS[req.task],
+        system: systemPrompt,
         messages: [{ role: 'user', content: req.prompt }],
         temperature: req.temperature ?? 0.7,
       }),
@@ -173,16 +271,20 @@ async function callAnthropicDirect(req: LegionRequest): Promise<LegionResponse |
  * Tries: AI Hub → Puter AI → Direct Anthropic → hardcoded fallback.
  */
 export async function legionAI(req: LegionRequest): Promise<LegionResponse> {
+  // Resolve the system prompt once (injects studio context + GitHub digest for
+  // studio-aware tasks) so every provider sees the same instructions.
+  const systemPrompt = await resolveSystemPrompt(req.task);
+
   // 1. Try AI Hub (CF Worker)
-  const hubResult = await callAIHub(req);
+  const hubResult = await callAIHub(req, systemPrompt);
   if (hubResult) return hubResult;
 
   // 2. Try Puter AI
-  const puterResult = await callPuterAI(req);
+  const puterResult = await callPuterAI(req, systemPrompt);
   if (puterResult) return puterResult;
 
   // 3. Try direct Anthropic
-  const directResult = await callAnthropicDirect(req);
+  const directResult = await callAnthropicDirect(req, systemPrompt);
   if (directResult) return directResult;
 
   // 4. Hardcoded fallback (no AI service available)
@@ -203,6 +305,7 @@ function getFallbackResponse(task: LegionTask): string {
     case 'balance': return 'Unable to analyze — AI services offline. Review manually.';
     case 'captain': return 'Legion AI Captain offline. Check ai.grudge-studio.com and Puter AI worker status.';
     case 'general': return 'AI services are currently unavailable. Try again later.';
+    case 'studio': return 'The Grudge Studio Assistant is offline right now. Try again shortly, or check ai.grudge-studio.com.';
   }
 }
 
@@ -239,5 +342,20 @@ export function analyzeFleetStatus(statusData: any) {
     task: 'captain',
     prompt: `Analyze this fleet status and recommend actions:\n${JSON.stringify(statusData, null, 2)}`,
     maxTokens: 1000,
+  });
+}
+
+/**
+ * Studio-wide assistant: answers questions about Grudge Studio as a whole — the
+ * game fleet, deployment topology, data layer, connection patterns, and recent
+ * GitHub history. Backs the portal chat on grudge-studio.puter.site.
+ */
+export function studioAssistant(prompt: string, context?: Record<string, any>) {
+  return legionAI({
+    task: 'studio',
+    prompt,
+    context,
+    maxTokens: 1200,
+    temperature: 0.5,
   });
 }

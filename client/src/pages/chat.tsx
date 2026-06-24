@@ -4,9 +4,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Send, Users, Hash, MessageSquare, Circle } from "lucide-react";
+import { Send, Users, Hash, MessageSquare, Circle, Sparkles } from "lucide-react";
 import type { ChatMessage } from "@shared/schema";
 import { useAuth } from "@/components/auth-provider";
+import StudioAssistant from "@/components/studio-assistant";
+
+type ChatMode = "tavern" | "assistant";
 
 interface ChatRoom {
   id: string;
@@ -44,6 +47,7 @@ export default function Chat() {
   const [usernameInput, setUsernameInput] = useState(username);
   const [hasJoined, setHasJoined] = useState(!!username || !!player);
   const [currentRoom, setCurrentRoom] = useState("general");
+  const [mode, setMode] = useState<ChatMode>("tavern");
   const [messages, setMessages] = useState<WsMessage[]>([]);
   const [input, setInput] = useState("");
   const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
@@ -136,11 +140,12 @@ export default function Chat() {
     }
   }, [player]);
 
-  const handleJoin = () => {
+  const handleJoin = (nextMode: ChatMode = "tavern") => {
     const name = usernameInput.trim() || getRandomName();
     setUsername(name);
     setUsernameInput(name);
     localStorage.setItem(USERNAME_KEY, name);
+    setMode(nextMode);
     setHasJoined(true);
   };
 
@@ -173,11 +178,12 @@ export default function Chat() {
         <div className="w-full max-w-md mx-4">
           <div className="fantasy-panel p-8 text-center">
             <MessageSquare className="w-12 h-12 text-[hsl(43,85%,55%)] mx-auto mb-4" />
-            <h1 className="text-2xl font-heading gold-text mb-2">Tavern Chat</h1>
+            <h1 className="text-2xl font-heading gold-text mb-2">Grudge Studio Chat</h1>
             <p className="text-[hsl(45,15%,55%)] font-body mb-6 text-sm">
-              Enter a name to join the conversation. Leave blank for a random name.
+              Enter a name to join the tavern, or jump straight to the Studio Assistant.
+              Leave blank for a random name.
             </p>
-            <div className="space-y-4">
+            <div className="space-y-3">
               <Input
                 value={usernameInput}
                 onChange={(e) => setUsernameInput(e.target.value)}
@@ -186,8 +192,15 @@ export default function Chat() {
                 className="bg-[hsl(225,25%,15%)] border-[hsl(43,60%,30%)]/30 text-[hsl(45,30%,90%)] placeholder:text-[hsl(45,15%,35%)] text-center"
                 maxLength={30}
               />
-              <Button onClick={handleJoin} className="w-full gilded-button">
+              <Button onClick={() => handleJoin("tavern")} className="w-full gilded-button">
                 Enter the Tavern
+              </Button>
+              <Button
+                onClick={() => handleJoin("assistant")}
+                variant="outline"
+                className="w-full border-[hsl(43,60%,30%)]/40 text-[hsl(43,85%,60%)] hover:bg-[hsl(43,85%,55%)]/10"
+              >
+                <Sparkles className="w-4 h-4 mr-2" /> Ask the Studio Assistant
               </Button>
             </div>
           </div>
@@ -201,6 +214,36 @@ export default function Chat() {
       <div className="flex-1 flex max-w-7xl mx-auto w-full px-2 sm:px-4 py-4 gap-3 min-h-0">
 
         <div className="hidden md:flex flex-col w-56 shrink-0 gap-3">
+          <div className="fantasy-panel p-3">
+            <h3 className="text-xs font-heading text-[hsl(43,85%,55%)] uppercase tracking-wider mb-3" style={{ WebkitTextFillColor: "unset" }}>
+              Mode
+            </h3>
+            <div className="space-y-1">
+              <button
+                onClick={() => setMode("tavern")}
+                className={`w-full text-left px-3 py-2 rounded text-sm transition-colors flex items-center gap-2 ${
+                  mode === "tavern"
+                    ? "bg-[hsl(43,85%,55%)]/10 text-[hsl(43,85%,55%)] border border-[hsl(43,60%,30%)]/30"
+                    : "text-[hsl(45,15%,60%)] hover:bg-[hsl(225,25%,15%)] hover:text-[hsl(45,30%,80%)]"
+                }`}
+              >
+                <MessageSquare className="w-3.5 h-3.5" /> <span className="font-body">Tavern</span>
+              </button>
+              <button
+                onClick={() => setMode("assistant")}
+                className={`w-full text-left px-3 py-2 rounded text-sm transition-colors flex items-center gap-2 ${
+                  mode === "assistant"
+                    ? "bg-[hsl(43,85%,55%)]/10 text-[hsl(43,85%,55%)] border border-[hsl(43,60%,30%)]/30"
+                    : "text-[hsl(45,15%,60%)] hover:bg-[hsl(225,25%,15%)] hover:text-[hsl(45,30%,80%)]"
+                }`}
+              >
+                <Sparkles className="w-3.5 h-3.5" /> <span className="font-body">Studio AI</span>
+              </button>
+            </div>
+          </div>
+
+          {mode === "tavern" && (
+          <>
           <div className="fantasy-panel p-3">
             <h3 className="text-xs font-heading text-[hsl(43,85%,55%)] uppercase tracking-wider mb-3" style={{ WebkitTextFillColor: "unset" }}>
               <Hash className="w-3 h-3 inline mr-1" /> Rooms
@@ -235,9 +278,38 @@ export default function Chat() {
               ))}
             </div>
           </div>
+          </>
+          )}
         </div>
 
         <div className="flex-1 flex flex-col min-h-0">
+          <div className="md:hidden fantasy-panel px-2 py-2 mb-3 flex gap-2 shrink-0">
+            <button
+              onClick={() => setMode("tavern")}
+              className={`flex-1 px-3 py-1.5 rounded text-xs flex items-center justify-center gap-1.5 transition-colors ${
+                mode === "tavern"
+                  ? "bg-[hsl(43,85%,55%)]/15 text-[hsl(43,85%,55%)] border border-[hsl(43,60%,30%)]/30"
+                  : "text-[hsl(45,15%,60%)]"
+              }`}
+            >
+              <MessageSquare className="w-3 h-3" /> Tavern
+            </button>
+            <button
+              onClick={() => setMode("assistant")}
+              className={`flex-1 px-3 py-1.5 rounded text-xs flex items-center justify-center gap-1.5 transition-colors ${
+                mode === "assistant"
+                  ? "bg-[hsl(43,85%,55%)]/15 text-[hsl(43,85%,55%)] border border-[hsl(43,60%,30%)]/30"
+                  : "text-[hsl(45,15%,60%)]"
+              }`}
+            >
+              <Sparkles className="w-3 h-3" /> Studio AI
+            </button>
+          </div>
+
+          {mode === "assistant" ? (
+            <StudioAssistant />
+          ) : (
+          <>
           <div className="fantasy-panel px-4 py-2 mb-3 flex items-center justify-between shrink-0">
             <div className="flex items-center gap-3">
               <h2 className="text-sm font-heading text-[hsl(43,85%,65%)]" style={{ WebkitTextFillColor: "unset" }}>
@@ -345,6 +417,8 @@ export default function Chat() {
               </div>
             </div>
           </div>
+          </>
+          )}
         </div>
       </div>
     </div>
