@@ -498,14 +498,29 @@ function loginOAuth(provider) {
   window.location.href = `${ID_API}/api/auth/${provider}/start?redirect_uri=${redirect}`;
 }
 
+function puterAuthErr(e) {
+  const code = e?.error || e?.code;
+  if (code === 'popup_blocked') return 'Browser blocked the sign-in popup. Allow popups and try again.';
+  if (code === 'auth_window_closed') return 'Sign-in cancelled.';
+  return e?.msg || e?.message || 'Puter sign-in failed';
+}
 async function loginPuter() {
   try {
-    if (typeof puter !== 'undefined' && puter.auth) {
-      await puter.auth.signIn();
-      const pu = await puter.auth.getUser();
-      await puterSSO(pu.uuid, pu.username);
-    } else { showAuthErr('Puter SDK not loaded'); }
-  } catch (e) { showAuthErr('Puter sign-in failed: ' + e.message); }
+    if (typeof puter === 'undefined' || !puter.auth) { showAuthErr('Puter SDK not loaded'); return; }
+    let pu;
+    if (puter.auth.isSignedIn()) {
+      pu = await puter.auth.getUser();
+    } else {
+      const result = await puter.auth.signIn();
+      if (result && result.success === false) throw result;
+      pu = await puter.auth.getUser();
+    }
+    if (!pu?.uuid || !pu?.username) { showAuthErr('Could not read your Puter account.'); return; }
+    await puterSSO(pu.uuid, pu.username);
+  } catch (e) {
+    const code = e?.error || e?.code;
+    if (code !== 'auth_window_closed') showAuthErr(puterAuthErr(e));
+  }
 }
 
 async function puterSSO(puterId, puterUsername) {

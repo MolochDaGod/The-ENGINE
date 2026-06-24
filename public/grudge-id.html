@@ -298,18 +298,69 @@ function afterAuth(user, puterEmail){
   handoff(user);
 }
 
-/* ══════════ PUTER (primary) ══════════ */
+/* ══════════ PUTER — https://docs.puter.com/Auth/ ══════════ */
+function puterReady(){
+  return typeof window.puter !== "undefined" && puter.auth
+    && typeof puter.auth.signIn === "function"
+    && typeof puter.auth.getUser === "function";
+}
+function puterAuthMessage(err){
+  if (!err) return "Grudge sign-in was cancelled.";
+  if (typeof err === "string") return err;
+  const code = err.error || err.code;
+  const msg = err.msg || err.message;
+  if (code === "popup_blocked") return "Your browser blocked the sign-in window. Allow popups for this site and try again.";
+  if (code === "auth_window_closed") return "Sign-in was cancelled.";
+  return msg || "Grudge sign-in failed.";
+}
+/** Playground pattern: signIn() from a click, then getUser() for uuid/username. */
+async function resolvePuterUser(fromClick){
+  if (!puterReady()) throw { msg: "Grudge sign-in is still loading — try again in a second." };
+  if (puter.auth.isSignedIn()){
+    const existing = await puter.auth.getUser();
+    if (existing?.uuid && existing?.username) return existing;
+  }
+  if (!fromClick) return null;
+  const result = await puter.auth.signIn();
+  if (result && result.success === false) throw result;
+  const pu = await puter.auth.getUser();
+  if (!pu?.uuid || !pu?.username) throw { msg: "Could not read your Puter account." };
+  return pu;
+}
+async function linkPuterToGrudge(pu){
+  const user = await api("/api/auth/puter-sso", {
+    method:"POST",
+    body: JSON.stringify({ puterId: pu.uuid, puterUsername: pu.username, email: pu.email || undefined }),
+  });
+  afterAuth(user, pu.email || "");
+}
+function refreshPuterButton(){
+  const lead = $("btn-puter")?.querySelector(".lead");
+  const small = $("btn-puter")?.querySelector("small");
+  if (!lead || !small || !puterReady()) return;
+  if (!puter.auth.isSignedIn()){
+    lead.textContent = "Continue with Grudge";
+    small.textContent = "Secure Grudge ID — one tap sign-in";
+    return;
+  }
+  puter.auth.getUser().then((pu) => {
+    if (!pu?.username) return;
+    lead.textContent = "Continue as @" + pu.username;
+    small.textContent = "Puter signed in — tap to link your Grudge ID";
+  }).catch(() => {});
+}
 $("btn-puter").addEventListener("click", async () => {
   const btn = $("btn-puter");
-  if (typeof window.puter === "undefined"){ toast("Grudge sign-in is still loading — try again in a second.", "error"); return; }
-  busy(btn, true, "Opening Grudge…");
+  if (!puterReady()){ toast("Grudge sign-in is still loading — try again in a second.", "error"); return; }
+  const already = puter.auth.isSignedIn();
+  busy(btn, true, already ? "Linking Grudge ID…" : "Opening Grudge…");
   try {
-    if (!puter.auth.isSignedIn()) await puter.auth.signIn();
-    const pu = await puter.auth.getUser();
-    const user = await api("/api/auth/puter-sso", { method:"POST", body: JSON.stringify({ puterId: pu.uuid, puterUsername: pu.username, email: pu.email || undefined }) });
-    afterAuth(user, pu.email || "");
-  } catch (e){ toast(e.message || "Grudge sign-in was cancelled.", "error"); }
-  finally { busy(btn, false); }
+    const pu = await resolvePuterUser(true);
+    await linkPuterToGrudge(pu);
+  } catch (e){
+    const code = e?.error || e?.code;
+    if (code !== "auth_window_closed") toast(puterAuthMessage(e), "error");
+  } finally { busy(btn, false); refreshPuterButton(); }
 });
 
 /* ══════════ OAuth (Google / Discord / GitHub) — FIX #3: added GitHub ══════════ */
@@ -481,6 +532,7 @@ async function boot(){
       } catch {}
     }
     show("choose");
+    refreshPuterButton();
   }
 }
 boot();

@@ -160,12 +160,32 @@ function AuthModalDialog({ isOpen, onClose, options }: { isOpen: boolean; onClos
       return { ok: false, error: "Puter SDK not loaded — please refresh and try again." };
     }
     try {
-      await puter.auth.signIn();
-      const u = await puter.auth.getUser();
-      if (!u?.uuid) return { ok: false, error: "Sign-in did not return a user." };
+      let u: { uuid?: string; username?: string; email?: string } | null = null;
+      if (puter.auth.isSignedIn()) {
+        u = await puter.auth.getUser();
+      } else {
+        const result = await puter.auth.signIn();
+        if (result && (result as { success?: boolean }).success === false) {
+          const r = result as { error?: string; msg?: string };
+          if (r.error === "popup_blocked") {
+            return { ok: false, error: "Browser blocked the sign-in popup. Allow popups and try again." };
+          }
+          if (r.error === "auth_window_closed") {
+            return { ok: false, error: "Sign-in cancelled." };
+          }
+          return { ok: false, error: r.msg || r.error || "Sign-in failed" };
+        }
+        u = await puter.auth.getUser();
+      }
+      if (!u?.uuid || !u?.username) return { ok: false, error: "Sign-in did not return a user." };
       return await puterSSO({ puterId: u.uuid, puterUsername: u.username, email: u.email });
     } catch (err: any) {
-      return { ok: false, error: err?.message || "Sign-in failed" };
+      const code = err?.error || err?.code;
+      if (code === "popup_blocked") {
+        return { ok: false, error: "Browser blocked the sign-in popup. Allow popups and try again." };
+      }
+      if (code === "auth_window_closed") return { ok: false, error: "Sign-in cancelled." };
+      return { ok: false, error: err?.msg || err?.message || "Sign-in failed" };
     }
   });
 
