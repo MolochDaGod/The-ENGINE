@@ -79,6 +79,28 @@ export function verifyLaunchToken(token: string): LaunchTokenClaims | null {
 }
 
 /** Origins allowed to host the modal / consume launch tokens. Defaults to CORS_ORIGINS. */
+/** Public auth hostname — never expose Railway default URLs in OAuth flows. */
+export function getPublicAuthOrigin(): string {
+  const candidate = (process.env.AUTH_PUBLIC_URL || process.env.AUTH_POPUP_HOST || "").replace(/\/$/, "");
+  if (candidate && !/railway\.app/i.test(candidate)) return candidate;
+  return "https://id.grudge-studio.com";
+}
+
+export type OAuthProvider = "discord" | "github" | "google";
+
+/** Canonical OAuth callback on our controlled domain (id.grudge-studio.com). */
+export function oauthCallbackUrl(provider: OAuthProvider): string {
+  const envMap: Record<OAuthProvider, string | undefined> = {
+    discord: process.env.DISCORD_REDIRECT_URI,
+    github: process.env.GITHUB_REDIRECT_URI,
+    google: process.env.GOOGLE_REDIRECT_URI,
+  };
+  const fromEnv = envMap[provider];
+  if (fromEnv && !/railway\.app/i.test(fromEnv)) return fromEnv;
+  // /auth/* is aliased to /api/auth/* in server/index.ts — matches Discord portal registrations.
+  return `${getPublicAuthOrigin()}/auth/${provider}/callback`;
+}
+
 export function allowedAuthOrigins(): string[] {
   const source = process.env.AUTH_ALLOWED_ORIGINS || process.env.CORS_ORIGINS || "";
   if (source) {

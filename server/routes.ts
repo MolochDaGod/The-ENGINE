@@ -19,7 +19,7 @@ import {
   createPlayerToken, setPlayerCookie, clearPlayerCookie, verifyPlayerToken,
   parseCookies as parsePlayerCookies, PLAYER_COOKIE,
   createLaunchToken, verifyLaunchToken, LAUNCH_TOKEN_TTL_MS,
-  allowedAuthOrigins, isOriginAllowed,
+  allowedAuthOrigins, isOriginAllowed, oauthCallbackUrl,
 } from "./auth";
 import { sendDiscordWebhook, DiscordEmbedType, trackNowPlaying } from "./discord-webhooks";
 import { onScoreSubmitted, startRewardWorker, getRewardQueueStatus } from "./web3/reward-worker";
@@ -594,9 +594,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/auth/google/start", (req, res) => {
     const clientId = process.env.GOOGLE_CLIENT_ID;
-    const redirectUri = process.env.GOOGLE_REDIRECT_URI;
-    if (!clientId || !redirectUri) {
-      return res.status(501).json({ error: "Google OAuth not configured. Set GOOGLE_CLIENT_ID and GOOGLE_REDIRECT_URI." });
+    const redirectUri = oauthCallbackUrl("google");
+    if (!clientId) {
+      return res.status(501).json({ error: "Google OAuth not configured. Set GOOGLE_CLIENT_ID." });
     }
     pruneMap(googleOauthState);
     const state = crypto.randomBytes(16).toString("hex");
@@ -617,8 +617,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const clientId = process.env.GOOGLE_CLIENT_ID;
       const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-      const redirectUri = process.env.GOOGLE_REDIRECT_URI;
-      if (!clientId || !clientSecret || !redirectUri) {
+      const redirectUri = oauthCallbackUrl("google");
+      if (!clientId || !clientSecret) {
         return res.status(501).json({ error: "Google OAuth not configured." });
       }
       const code = typeof req.query.code === "string" ? req.query.code : "";
@@ -705,9 +705,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/auth/github/start", (req, res) => {
     const clientId = process.env.GITHUB_CLIENT_ID;
-    const redirectUri = process.env.GITHUB_REDIRECT_URI;
-    if (!clientId || !redirectUri) {
-      return res.status(501).json({ error: "GitHub OAuth not configured. Set GITHUB_CLIENT_ID and GITHUB_REDIRECT_URI." });
+    const redirectUri = oauthCallbackUrl("github");
+    if (!clientId) {
+      return res.status(501).json({ error: "GitHub OAuth not configured. Set GITHUB_CLIENT_ID." });
     }
     pruneMap(githubOauthState);
     const state = crypto.randomBytes(16).toString("hex");
@@ -725,8 +725,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const clientId = process.env.GITHUB_CLIENT_ID;
       const clientSecret = process.env.GITHUB_CLIENT_SECRET;
-      const redirectUri = process.env.GITHUB_REDIRECT_URI;
-      if (!clientId || !clientSecret || !redirectUri) {
+      const redirectUri = oauthCallbackUrl("github");
+      if (!clientId || !clientSecret) {
         return res.status(501).json({ error: "GitHub OAuth not configured." });
       }
       const code = typeof req.query.code === "string" ? req.query.code : "";
@@ -825,9 +825,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Discord OAuth -------------------------------------------------
   app.get("/api/auth/discord/start", (req, res) => {
     const clientId = process.env.DISCORD_CLIENT_ID;
-    const redirectUri = process.env.DISCORD_REDIRECT_URI;
-    if (!clientId || !redirectUri) {
-      return res.status(501).json({ error: "Discord OAuth not configured. Set DISCORD_CLIENT_ID and DISCORD_REDIRECT_URI." });
+    const redirectUri = oauthCallbackUrl("discord");
+    if (!clientId) {
+      return res.status(501).json({ error: "Discord OAuth not configured. Set DISCORD_CLIENT_ID." });
     }
     pruneMap(discordOauthState);
     const state = crypto.randomBytes(16).toString("hex");
@@ -846,8 +846,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const clientId = process.env.DISCORD_CLIENT_ID;
       const clientSecret = process.env.DISCORD_CLIENT_SECRET;
-      const redirectUri = process.env.DISCORD_REDIRECT_URI;
-      if (!clientId || !clientSecret || !redirectUri) {
+      const redirectUri = oauthCallbackUrl("discord");
+      if (!clientId || !clientSecret) {
         return res.status(501).json({ error: "Discord OAuth not configured." });
       }
       const code = typeof req.query.code === "string" ? req.query.code : "";
