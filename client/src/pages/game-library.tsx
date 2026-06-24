@@ -58,7 +58,13 @@ async function fetchGamesPage(params: {
 
   const resp = await fetch(`/api/games?${qs.toString()}`);
   if (!resp.ok) throw new Error("Failed to load games");
-  return resp.json();
+  const data = await resp.json();
+  // Backward compat until Railway ships paginated API
+  if (Array.isArray(data)) {
+    const offset = (params.page - 1) * GAMES_PER_PAGE;
+    return { games: data.slice(offset, offset + GAMES_PER_PAGE), total: data.length };
+  }
+  return data as PaginatedGames;
 }
 
 export default function GameLibrary() {
