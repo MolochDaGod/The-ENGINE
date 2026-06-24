@@ -23,6 +23,10 @@
       "destination": "https://the-engine.up.railway.app/api/auth/:path*"
     },
     {
+      "source": "/api/admin/:path*",
+      "destination": "https://the-engine.up.railway.app/api/admin/:path*"
+    },
+    {
       "source": "/api/status",
       "destination": "https://api.grudge-studio.com/api/fleet/status"
     },
@@ -35,7 +39,7 @@
       "destination": "https://assets.grudge-studio.com/:path*"
     },
     {
-      "source": "/api/:path((?!games$|games/|platforms$|rom-proxy$|health$).*)",
+      "source": "/api/:path((?!games$|games/|platforms$|rom-proxy$|health$|admin/).*)",
       "destination": "https://api.grudge-studio.com/api/:path"
     },
     {
@@ -89,7 +93,7 @@
         { "key": "X-Content-Type-Options", "value": "nosniff" },
         { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
         { "key": "Cross-Origin-Resource-Policy", "value": "cross-origin" },
-        { "key": "Content-Security-Policy", "value": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.puter.com https://*.grudge-studio.com https://*.vercel.app https://vercel.live; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https: http:; connect-src 'self' https: wss:; frame-src 'self' https://*.puter.com https://grudge-studio.com https://grudgewarlords.com https://*.grudge-studio.com https://*.vercel.app; media-src 'self' https://assets.grudge-studio.com blob:; worker-src 'self' blob:" }
+        { "key": "Content-Security-Policy", "value": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.puter.com https://*.grudge-studio.com https://grudachain-rho.vercel.app https://*.vercel.app https://vercel.live; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https: http:; connect-src 'self' https: wss:; frame-src 'self' https://*.puter.com https://*.puter.site https://grudge-studio.com https://grudgewarlords.com https://*.grudge-studio.com https://*.vercel.app https://vercel.live; media-src 'self' https://assets.grudge-studio.com blob:; worker-src 'self' blob:" }
       ]
     }
   ]

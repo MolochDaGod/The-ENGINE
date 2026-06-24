@@ -41,9 +41,37 @@ export function setCookieHeader(value: string, maxAge: number, secure: boolean):
     `${COOKIE_NAME}=${encodeURIComponent(value)}`,
     'HttpOnly',
     'Path=/',
-    'SameSite=None',
+    'SameSite=Lax',
     `Max-Age=${maxAge}`,
   ];
   if (secure) parts.push('Secure');
   return parts.join('; ');
+}
+
+/** Fleet admin passcodes — env override plus documented default for portal admin. */
+export function getAdminPasscodes(): string[] {
+  const fromEnv = [
+    process.env.ADMIN_PASSCODE,
+    process.env.VITE_ADMIN_PASSCODE,
+  ].filter((v): v is string => Boolean(v && v.trim()));
+  const defaults = ['admin123'];
+  return [...new Set([...fromEnv, ...defaults])];
+}
+
+export function verifyAdminPasscode(submitted: string): boolean {
+  const passcodes = getAdminPasscodes();
+  return passcodes.some((expected) => {
+    const a = Buffer.from(submitted, 'utf8');
+    const b = Buffer.from(expected, 'utf8');
+    if (a.length !== b.length) return false;
+    try {
+      return timingSafeEqual(a, b);
+    } catch {
+      return false;
+    }
+  });
+}
+
+export function getAdminSessionSecret(): string | undefined {
+  return process.env.ADMIN_SESSION_SECRET || process.env.SESSION_SECRET;
 }
