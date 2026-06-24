@@ -19,7 +19,7 @@ export interface PortalProduct {
   image?: string;
 }
 
-const _PORTAL_PRODUCTS_RAW: PortalProduct[] = [
+const _PORTAL_PRODUCTS_RAW = [
   {
     id: "warlords",
     name: "Grudge Warlords",
@@ -626,7 +626,7 @@ const _PORTAL_PRODUCTS_RAW: PortalProduct[] = [
   },
 ].map(syncProductHref);
 
-export const PORTAL_PRODUCTS: PortalProduct[] = _PORTAL_PRODUCTS_RAW;
+export const PORTAL_PRODUCTS: PortalProduct[] = _PORTAL_PRODUCTS_RAW as PortalProduct[];
 
 export const featuredProducts = PORTAL_PRODUCTS.filter((product) => product.section === "featured");
 export const playProducts = PORTAL_PRODUCTS.filter((product) => product.section === "play");

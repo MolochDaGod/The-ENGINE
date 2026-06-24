@@ -137,7 +137,7 @@ export class AbilitySystem {
     const state = this._registry.get(characterId)?.get(abilityId);
     if (!state) return false;
     const cd = Date.now() - state.lastCastMs >= state.def.cooldownMs;
-    const mp = stats.mana >= state.def.def?.manaCost ?? 0;
+    const mp = stats.mana >= (state.def.manaCost ?? 0);
     return cd && mp;
   }
 

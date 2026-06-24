@@ -47,6 +47,7 @@ import AdminLogin from "@/pages/admin-login";
 import NotFound from "@/pages/not-found";
 import MageArena from "@/pages/mage-arena";
 import AnnihilateDemo from "@/pages/annihilate-demo";
+import GrudgeControllerDemo from "@/pages/grudge-controller-demo";
 import WargusDefault from "@/pages/wargus-default";
 import AssetPipeline from "@/pages/asset-pipeline";
 import ComingSoon from "@/pages/coming-soon";
@@ -113,6 +114,7 @@ function Router() {
       <Route path="/chat" component={Chat} />
       <Route path="/mage-arena" component={MageArena} />
       <Route path="/annihilate-demo" component={AnnihilateDemo} />
+      <Route path="/grudge-controller" component={GrudgeControllerDemo} />
       <Route path="/asset-pipeline" component={withAdminGuard(AssetPipeline)} />
       <Route path="/admin-login" component={AdminLogin} />
       <Route path="/voxel-sandbox" component={VoxelSandbox} />

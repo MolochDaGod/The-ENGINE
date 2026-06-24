@@ -65,3 +65,23 @@ export { Mounting, Dismounting, Emoting } from './character/states/_stateLibrary
 
 // ── AI ─────────────────────────────────────────────────────────────────────────────
 export { BaseAi }                        from './ai/BaseAi';
+
+// ── Unified player controller (grudge-control + artifact animator) ─────────────
+export {
+  GrudgePlayerController,
+  GrudgeFighterAi,
+  GRUDGE_CHARACTERS,
+  GRUDGE_CDN,
+  meleeStrike,
+  buildOWR,
+  loadControlSettings,
+  InputState,
+  LocomotionBlend,
+} from './controller';
+export type {
+  GrudgePlayerControllerOptions,
+  GrudgeCharacterEntry,
+  AiTarget,
+  ControlSettings,
+  LocoBlendInput,
+} from './controller';

@@ -11,10 +11,10 @@ export async function loadRetroCatalog(): Promise<Game[]> {
     if (!fallback.ok) throw new Error("Failed to load game catalog");
     const data = await fallback.json();
     catalogCache = Array.isArray(data) ? data : (data.games ?? []);
-    return catalogCache;
+    return catalogCache ?? [];
   }
   catalogCache = await res.json();
-  return catalogCache;
+  return catalogCache ?? [];
 }
 
 export async function loadFeaturedRetroGames(): Promise<Game[]> {

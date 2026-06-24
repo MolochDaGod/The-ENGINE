@@ -11,7 +11,9 @@ export default defineConfig({
       "@": path.resolve(import.meta.dirname, "client", "src"),
       "@shared": path.resolve(import.meta.dirname, "shared"),
       "@assets": path.resolve(import.meta.dirname, "attached_assets"),
+      "grudge-control": path.resolve(import.meta.dirname, "..", "grudgecontrol", "src", "index.ts"),
     },
+    dedupe: ["three", "@types/three"],
   },
   root: path.resolve(import.meta.dirname, "client"),
   build: {

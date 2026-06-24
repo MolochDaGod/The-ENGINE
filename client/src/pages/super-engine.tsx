@@ -2,7 +2,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Play, X, Maximize2, Minimize2, Cpu, Gamepad, Swords, Users, Zap, Globe, Box, Brain, Monitor } from "lucide-react";
+import { ArrowLeft, Play, X, Maximize2, Minimize2, Cpu, Gamepad, Swords, Users, Zap, Globe, Box, Brain, Monitor, Check, Minus } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import superEngineBg from "@assets/IqGYJJe_1773841545953.png";

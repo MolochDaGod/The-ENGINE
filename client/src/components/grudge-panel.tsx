@@ -55,6 +55,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
 import { useAuthModal } from "@/components/auth-modal";
+import { GameCover } from "@/components/game-cover";
 import { completeProfile } from "@/lib/player-auth";
 
 // ── Context ──────────────────────────────────────────────────────

@@ -230,6 +230,16 @@ export const FLEET_REGISTRY: FleetRegistryEntry[] = [
     forge: true,
   },
   {
+    id: "grudge-controller",
+    name: "Grudge Controller",
+    description: "Third-person grudge6 locomotion — BVH capsule, artifact animator combat/OWR, grudge-control + CDN races.",
+    canonicalUrl: "/grudge-controller",
+    status: "beta",
+    tags: ["solo", "pvpve"],
+    forge: true,
+    repo: "grudgecontrol",
+  },
+  {
     id: "voxel-sandbox",
     name: "Voxel Chaos Sandbox",
     description: "3D physics sandbox with 23 tools, ragdoll characters, NPC/zombie AI, scripting, vehicles.",

@@ -207,6 +207,15 @@ const FORGE_CARD_META: Record<string, ForgeCardMeta> = {
     capabilities: ["3D", "Physics", "AI", "Particles"],
     previewType: "threejs",
   },
+  "grudge-controller": {
+    type: "Character Controller",
+    emoji: "🎮",
+    color: "from-amber-900/60 to-yellow-800/30",
+    gradientBorder: "from-amber-500 via-yellow-500 to-orange-500",
+    icon: Gamepad,
+    capabilities: ["3D", "Physics", "AI"],
+    previewType: "threejs",
+  },
   "voxel-sandbox": {
     type: "Sandbox / Physics",
     emoji: "🧱",
@@ -285,6 +294,7 @@ const FORGE_ORDER = [
   "final-fighter",
   "grudge-mech-forge",
   "annihilate-demo",
+  "grudge-controller",
   "voxel-sandbox",
   "terraforge",
   "grudge-brawl",
