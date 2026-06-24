@@ -35,8 +35,12 @@ export function resolveGameLaunch(game: LaunchableGame): ResolvedLaunch {
     return { playUrl: game.route, embedUrl: null, mode: "tab" };
   }
 
-  const embedUrl = game.embedRoute ?? game.route;
-  return { playUrl: game.route, embedUrl, mode: "embed" };
+  const embedCandidate = game.embedRoute ?? game.route;
+  if (prefersTabLaunch(embedCandidate)) {
+    return { playUrl: game.route, embedUrl: null, mode: "tab" };
+  }
+
+  return { playUrl: game.route, embedUrl: embedCandidate, mode: "embed" };
 }
 
 export function openGameTab(url: string): void {

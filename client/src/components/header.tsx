@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Anchor, ChevronRight, Cloud, ExternalLink, Flame, Home, Layers3, Library, LogIn, LogOut, Menu, Rocket, Shield, Sparkles, Swords, Trophy, UserCircle, Wrench, X } from "lucide-react";
+import { Anchor, ChevronRight, Cloud, ExternalLink, Flame, Gamepad, Home, Layers3, Library, LogIn, LogOut, Menu, Rocket, Shield, Sparkles, Swords, Trophy, UserCircle, Wrench, X } from "lucide-react";
 import grudgeLogo from "@assets/uXpJmRe_1773828784729.png";
 import { useAuth } from "@/components/auth-provider";
 import { useAuthModal } from "@/components/auth-modal";

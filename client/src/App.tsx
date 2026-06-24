@@ -56,6 +56,7 @@ import TerraForge from "@/pages/terraforge";
 import GrudgeBrawl from "@/pages/grudge-brawl";
 import AdminGuard from "@/components/admin-guard";
 import AdminEntryButton from "@/components/admin-entry-button";
+import { FleetConnectInit } from "@/components/fleet-connect-init";
 
 const withAdminGuard = (Component: ComponentType) => {
   return function GuardedComponent() {
@@ -140,6 +141,7 @@ function App() {
               <Router />
               <GrudgePanelTab />
               <AdminEntryButton />
+              <FleetConnectInit />
             </TooltipProvider>
           </GrudgePanelProvider>
         </AuthModalProvider>

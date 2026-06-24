@@ -1,10 +1,5 @@
 /**
- * Canonical fleet game registry for Grudge Studio Forge (super-engine).
- *
- * Naming rules:
- * - `betta-warlords` = Betta Warlords RPG (repo: rpg-modular). NOT `/rpg-maker-studio`.
- * - `rpg-maker-studio` = portal demo page only (PS1 RPG Maker retro + studio mock).
- * - Prefer grudge-studio.com subdomains over bare *.vercel.app when listed in fleet map.
+ * Super-engine (/super-engine) card presentation — URLs come from fleetRegistry.ts.
  */
 
 import gameImgWargus from "@assets/game_wargus_rts.png";
@@ -14,40 +9,64 @@ import gameImgAvernusArena from "@assets/game_avernus_arena.png";
 import gameImgDecay from "@assets/game_decay_survival.png";
 import gameImgOverdrive from "@assets/game_overdrive_3d.png";
 import gameImgRpgMaker from "@assets/game_rpg_maker.png";
-import { Car, Cpu, Gamepad, Globe, Shield, Swords } from "lucide-react";
+import { Car, Cpu, Gamepad, Globe, Shield, Swords, type LucideIcon } from "lucide-react";
+import { FORGE_REGISTRY, LEGACY_FLEET_IDS, resolveFleetId, type FleetRegistryEntry } from "./fleetRegistry";
 
 export type Capability = "3D" | "Physics" | "Multiplayer" | "AI" | "2D" | "Particles";
 
 export interface FleetGameCard {
   id: string;
   name: string;
-  /** Clarifies similarly-named products (shown in UI when set). */
   disambiguation?: string;
   description: string;
   type: string;
   engine: string;
-  /** Canonical full-page URL */
   route: string;
-  /** Optional embed-safe URL for portal iframes */
   embedRoute?: string;
   allowEmbed?: boolean;
   emoji: string;
   color: string;
   gradientBorder: string;
-  icon: typeof Gamepad;
+  icon: LucideIcon;
   capabilities: Capability[];
   previewType: "threejs" | "canvas2d" | "static";
   cardImage?: string;
 }
 
-export const FORGE_GAMES: FleetGameCard[] = [
-  {
-    id: "rts-grudge",
-    name: "Grudge Warlords RTS",
-    route: "https://rts-grudge.vercel.app",
-    description: "Full 3D real-time strategy with base building, unit production, hero mech, biome zones, AI squads, and wave-based combat.",
+interface ForgeCardMeta {
+  type: string;
+  emoji: string;
+  color: string;
+  gradientBorder: string;
+  icon: LucideIcon;
+  capabilities: Capability[];
+  previewType: "threejs" | "canvas2d" | "static";
+  cardImage?: string;
+}
+
+const DEFAULT_META: ForgeCardMeta = {
+  type: "Grudge Game",
+  emoji: "🎮",
+  color: "from-slate-900/60 to-slate-800/30",
+  gradientBorder: "from-slate-500 via-gray-500 to-zinc-500",
+  icon: Gamepad,
+  capabilities: ["3D"],
+  previewType: "threejs",
+};
+
+const FORGE_CARD_META: Record<string, ForgeCardMeta> = {
+  warlords: {
+    type: "MMO / RPG",
+    emoji: "⚔️",
+    color: "from-amber-900/60 to-amber-800/30",
+    gradientBorder: "from-amber-500 via-yellow-500 to-orange-500",
+    icon: Swords,
+    capabilities: ["3D", "Multiplayer", "AI", "Particles"],
+    previewType: "threejs",
+    cardImage: gameImgWargus,
+  },
+  "rts-grudge": {
     type: "RTS",
-    engine: "Grudge Studio Forge",
     emoji: "⚔️",
     color: "from-red-900/60 to-red-800/30",
     gradientBorder: "from-red-500 via-orange-500 to-yellow-500",
@@ -56,13 +75,8 @@ export const FORGE_GAMES: FleetGameCard[] = [
     previewType: "threejs",
     cardImage: gameImgWargus,
   },
-  {
-    id: "survival",
-    name: "Grudges — Survival ARPG",
-    route: "https://grudges.grudge-studio.com",
-    description: "Sci-fi survival action RPG. Bind a grudge, bear it forward. Crafting, combat, exploration in a hostile world.",
+  "survival-game": {
     type: "Survival ARPG",
-    engine: "Grudge Studio Forge",
     emoji: "🔥",
     color: "from-orange-900/60 to-orange-800/30",
     gradientBorder: "from-orange-500 via-red-500 to-pink-500",
@@ -71,13 +85,8 @@ export const FORGE_GAMES: FleetGameCard[] = [
     previewType: "threejs",
     cardImage: gameImgAvernus3d,
   },
-  {
-    id: "grudge-arena",
-    name: "Grudge Arena — PvP Combat",
-    route: "https://grudge-arena.grudge-studio.com",
-    description: "3D PvP combat arena with 6 playable races, WoW-style targeting, Socket.IO multiplayer, and Grudge ID authentication.",
+  "grudge-arena": {
     type: "Arena PvP",
-    engine: "Grudge Studio Forge",
     emoji: "🗡️",
     color: "from-purple-900/60 to-purple-800/30",
     gradientBorder: "from-purple-500 via-pink-500 to-red-500",
@@ -86,13 +95,8 @@ export const FORGE_GAMES: FleetGameCard[] = [
     previewType: "threejs",
     cardImage: gameImgAvernusArena,
   },
-  {
-    id: "grudge-drive",
-    name: "Grudge Drive — Vehicular Combat",
-    route: "https://drive.grudge-studio.com",
-    description: "High-speed vehicular combat arena brawler. BabylonJS + Havok physics, destructible environments, boost pads.",
+  "grudge-drive": {
     type: "Racing / Combat",
-    engine: "Grudge Studio Forge",
     emoji: "🏎️",
     color: "from-blue-900/60 to-blue-800/30",
     gradientBorder: "from-blue-500 via-cyan-500 to-teal-500",
@@ -101,13 +105,8 @@ export const FORGE_GAMES: FleetGameCard[] = [
     previewType: "threejs",
     cardImage: gameImgOverdrive,
   },
-  {
-    id: "grudge-fishing",
-    name: "Grudge Fishing",
-    route: "https://grudge-fishing-game.vercel.app",
-    description: "3D fishing game with procedural island, animated water shaders, 35 fish species, 5 tiered rods, and tension minigame.",
+  "grudge-fishing": {
     type: "Fishing / Casual",
-    engine: "Grudge Studio Forge",
     emoji: "🎣",
     color: "from-cyan-900/60 to-cyan-800/30",
     gradientBorder: "from-cyan-500 via-blue-500 to-indigo-500",
@@ -115,13 +114,8 @@ export const FORGE_GAMES: FleetGameCard[] = [
     capabilities: ["3D", "Physics", "Particles"],
     previewType: "threejs",
   },
-  {
-    id: "dungeon-crawler",
-    name: "Dungeon Crawler Quest",
-    route: "https://dcq.grudge-studio.com",
-    description: "Voxel MOBA and dungeon crawler with procedural generation, AI enemies, loot system, and map editor.",
+  "dungeon-crawler": {
     type: "Dungeon Crawler",
-    engine: "Grudge Studio Forge",
     emoji: "🐉",
     color: "from-green-900/60 to-green-800/30",
     gradientBorder: "from-green-500 via-emerald-500 to-teal-500",
@@ -130,13 +124,8 @@ export const FORGE_GAMES: FleetGameCard[] = [
     previewType: "threejs",
     cardImage: gameImgDecay,
   },
-  {
-    id: "final-fighter",
-    name: "Final Fighter",
-    route: "https://final-fighter.vercel.app",
-    description: "3D fighting game with GLTF characters, Box3 hitbox/hurtbox collision, combo system, and AI opponent.",
+  "final-fighter": {
     type: "3D Fighting",
-    engine: "Grudge Studio Forge",
     emoji: "🥊",
     color: "from-amber-900/60 to-amber-800/30",
     gradientBorder: "from-amber-500 via-yellow-500 to-orange-500",
@@ -145,15 +134,8 @@ export const FORGE_GAMES: FleetGameCard[] = [
     previewType: "threejs",
     cardImage: gameImgTowerDef,
   },
-  {
-    id: "betta-warlords",
-    name: "Betta Warlords",
-    disambiguation: "Freshwater RPG — not RPG Maker Studio",
-    description: "Underwater freshwater adventure RPG. 8 betta breeds, 4 classes, 32 Warlord combinations. Modular skill trees and faction warfare.",
+  "betta-warlords": {
     type: "RPG / Adventure",
-    engine: "Grudge Studio Forge",
-    route: "https://grudgewarlords.com/betta",
-    embedRoute: "https://rpg-modular.vercel.app/embed/betta-embed.html",
     emoji: "🐟",
     color: "from-indigo-900/60 to-indigo-800/30",
     gradientBorder: "from-indigo-500 via-violet-500 to-purple-500",
@@ -162,13 +144,8 @@ export const FORGE_GAMES: FleetGameCard[] = [
     previewType: "canvas2d",
     cardImage: gameImgRpgMaker,
   },
-  {
-    id: "grim-armada",
-    name: "Grim Armada",
-    route: "https://armada.grudge-studio.com",
-    description: "SWG-inspired tactical combat web game. Three.js + React with Grudge Backend integration. Space fleet battles and ground combat.",
+  "grim-armada": {
     type: "Tactical Combat",
-    engine: "Grudge Studio Forge",
     emoji: "🚀",
     color: "from-slate-900/60 to-slate-800/30",
     gradientBorder: "from-slate-500 via-gray-500 to-zinc-500",
@@ -176,13 +153,53 @@ export const FORGE_GAMES: FleetGameCard[] = [
     capabilities: ["3D", "AI", "Physics"],
     previewType: "threejs",
   },
-  {
-    id: "annihilate-demo",
-    name: "Grudge Engine Core",
-    route: "/annihilate-demo",
-    description: "Three.js + Cannon-ES + CharacterFSM. Full combo FSM, capsule physics, animation blending, and RoleControls.",
+  "grudge-space-rts": {
+    type: "Space RTS",
+    emoji: "🛸",
+    color: "from-indigo-900/60 to-blue-800/30",
+    gradientBorder: "from-indigo-500 via-blue-500 to-cyan-500",
+    icon: Globe,
+    capabilities: ["3D", "AI", "Multiplayer"],
+    previewType: "threejs",
+  },
+  "mage-arena": {
+    type: "Dungeon Crawler",
+    emoji: "🔮",
+    color: "from-violet-900/60 to-purple-800/30",
+    gradientBorder: "from-violet-500 via-purple-500 to-fuchsia-500",
+    icon: Shield,
+    capabilities: ["3D", "AI", "Multiplayer", "Particles"],
+    previewType: "threejs",
+  },
+  "nemesis-tcg": {
+    type: "Trading Card",
+    emoji: "🃏",
+    color: "from-rose-900/60 to-rose-800/30",
+    gradientBorder: "from-rose-500 via-red-500 to-orange-500",
+    icon: Gamepad,
+    capabilities: ["2D", "Multiplayer", "AI"],
+    previewType: "canvas2d",
+  },
+  "grudge-metaverse": {
+    type: "MMO Hub",
+    emoji: "🌐",
+    color: "from-teal-900/60 to-teal-800/30",
+    gradientBorder: "from-teal-500 via-cyan-500 to-blue-500",
+    icon: Globe,
+    capabilities: ["3D", "Multiplayer"],
+    previewType: "threejs",
+  },
+  "grudge-mech-forge": {
+    type: "Mech Combat",
+    emoji: "🤖",
+    color: "from-zinc-900/60 to-zinc-800/30",
+    gradientBorder: "from-zinc-500 via-slate-500 to-gray-500",
+    icon: Cpu,
+    capabilities: ["3D", "Physics", "AI"],
+    previewType: "threejs",
+  },
+  "annihilate-demo": {
     type: "3D Engine Demo",
-    engine: "Grudge Studio Forge",
     emoji: "⚙️",
     color: "from-violet-900/60 to-purple-800/30",
     gradientBorder: "from-violet-500 via-purple-500 to-pink-500",
@@ -190,13 +207,8 @@ export const FORGE_GAMES: FleetGameCard[] = [
     capabilities: ["3D", "Physics", "AI", "Particles"],
     previewType: "threejs",
   },
-  {
-    id: "voxel-sandbox",
-    name: "Voxel Chaos Sandbox",
-    route: "/voxel-sandbox",
-    description: "3D physics sandbox with 23 tools, ragdoll voxel characters, NPC/zombie AI, scripting, vehicles, and world save/load.",
+  "voxel-sandbox": {
     type: "Sandbox / Physics",
-    engine: "Grudge Studio Forge",
     emoji: "🧱",
     color: "from-emerald-900/60 to-emerald-800/30",
     gradientBorder: "from-emerald-500 via-green-500 to-lime-500",
@@ -204,13 +216,8 @@ export const FORGE_GAMES: FleetGameCard[] = [
     capabilities: ["3D", "Physics", "AI", "Particles"],
     previewType: "threejs",
   },
-  {
-    id: "terraforge",
-    name: "TerraForge",
-    route: "/terraforge",
-    description: "Open-world voxel sandbox with FPS combat, city builder, castle fortress, NPC AI, item shop, and world editor.",
+  terraforge: {
     type: "Open World Sandbox",
-    engine: "Grudge Studio Forge",
     emoji: "🌍",
     color: "from-lime-900/60 to-green-800/30",
     gradientBorder: "from-lime-500 via-green-500 to-emerald-500",
@@ -218,13 +225,8 @@ export const FORGE_GAMES: FleetGameCard[] = [
     capabilities: ["3D", "Physics", "AI", "Particles"],
     previewType: "threejs",
   },
-  {
-    id: "grudge-brawl",
-    name: "Grudge Brawl",
-    route: "/grudge-brawl",
-    description: "Third-person arena combat with body-tracks-crosshair aiming, WASD movement, AI opponents, and mobile touch support.",
+  "grudge-brawl": {
     type: "Arena Combat",
-    engine: "Grudge Studio Forge",
     emoji: "⚔️",
     color: "from-red-900/60 to-orange-800/30",
     gradientBorder: "from-red-500 via-orange-500 to-yellow-500",
@@ -232,13 +234,8 @@ export const FORGE_GAMES: FleetGameCard[] = [
     capabilities: ["3D", "Physics", "AI", "Particles"],
     previewType: "threejs",
   },
-  {
-    id: "polyfighter",
-    name: "Grudge Fighter",
-    route: "/polyfighter",
-    description: "3D fighting game with custom character creator, level editor, HD city stages, voxel characters, and trimesh combat.",
+  polyfighter: {
     type: "3D Fighting",
-    engine: "Grudge Studio Forge",
     emoji: "🥊",
     color: "from-pink-900/60 to-rose-800/30",
     gradientBorder: "from-pink-500 via-red-500 to-rose-500",
@@ -246,13 +243,63 @@ export const FORGE_GAMES: FleetGameCard[] = [
     capabilities: ["3D", "Physics", "AI"],
     previewType: "threejs",
   },
-];
-
-/** @deprecated Use `betta-warlords` — kept for deep links / bookmarks */
-export const LEGACY_GAME_IDS: Record<string, string> = {
-  "rpg-modular": "betta-warlords",
 };
 
+function entryToCard(entry: FleetRegistryEntry): FleetGameCard {
+  const meta = FORGE_CARD_META[entry.id] ?? DEFAULT_META;
+  return {
+    id: entry.id,
+    name: entry.name,
+    disambiguation: entry.disambiguation,
+    description: entry.description,
+    type: meta.type,
+    engine: "Grudge Studio Forge",
+    route: entry.canonicalUrl,
+    embedRoute: entry.embedUrl,
+    allowEmbed: entry.allowEmbed,
+    emoji: meta.emoji,
+    color: meta.color,
+    gradientBorder: meta.gradientBorder,
+    icon: meta.icon,
+    capabilities: meta.capabilities,
+    previewType: meta.previewType,
+    cardImage: meta.cardImage,
+  };
+}
+
+/** Ordered forge grid — flagship first, then live fleet, then portal demos. */
+const FORGE_ORDER = [
+  "warlords",
+  "survival-game",
+  "betta-warlords",
+  "grudge-arena",
+  "rts-grudge",
+  "grim-armada",
+  "grudge-drive",
+  "dungeon-crawler",
+  "grudge-space-rts",
+  "mage-arena",
+  "nemesis-tcg",
+  "grudge-metaverse",
+  "grudge-fishing",
+  "final-fighter",
+  "grudge-mech-forge",
+  "annihilate-demo",
+  "voxel-sandbox",
+  "terraforge",
+  "grudge-brawl",
+  "polyfighter",
+] as const;
+
+export const FORGE_GAMES: FleetGameCard[] = FORGE_ORDER.map((id) => {
+  const entry = FORGE_REGISTRY.find((e) => e.id === id);
+  if (!entry) throw new Error(`Missing forge registry entry: ${id}`);
+  return entryToCard(entry);
+});
+
+/** @deprecated Use resolveFleetId from fleetRegistry */
+export const LEGACY_GAME_IDS = LEGACY_FLEET_IDS;
+
 export function resolveFleetGameId(id: string): string {
-  return LEGACY_GAME_IDS[id] ?? id;
+  return resolveFleetId(id);
 }

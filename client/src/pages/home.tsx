@@ -97,7 +97,7 @@ const ERAS: { key: EraKey; name: string; tagline: string; description: string; i
     bgImage: "/assets/store/mmo_development.png",
     accent: "hsl(0,70%,55%)",
     accentBorder: "hsl(0,60%,35%)",
-    productIds: ["betta-warlords", "nemesis-tcg", "wargus", "multiplayer-racing", "annihilate-demo", "grudge-fighter", "grudge-brawl", "voxel-sandbox", "terraforge"],
+    productIds: ["super-engine", "betta-warlords", "nemesis-tcg", "grudge-arena", "rts-grudge", "wargus", "multiplayer-racing", "annihilate-demo", "grudge-fighter", "grudge-brawl", "voxel-sandbox", "terraforge"],
   },
   {
     key: "armada",
@@ -108,7 +108,7 @@ const ERAS: { key: EraKey; name: string; tagline: string; description: string; i
     bgImage: "/assets/store/scifi_environment.png",
     accent: "hsl(200,70%,55%)",
     accentBorder: "hsl(200,60%,30%)",
-    productIds: ["starway-gruda", "rts-star-armada", "mech-armada", "star-rts", "survival-game"],
+    productIds: ["survival-game", "grim-armada", "grudge-space-rts", "starway-gruda", "rts-star-armada", "mech-armada", "star-rts"],
   },
 ];
 

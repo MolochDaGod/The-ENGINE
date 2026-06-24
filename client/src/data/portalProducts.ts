@@ -1,3 +1,5 @@
+import { syncProductHref } from "./fleetRegistry";
+
 export type PortalProductStatus = "live" | "planned" | "beta" | "admin";
 export type PortalProductSection = "featured" | "play" | "studio" | "legacy";
 export type PortalProductTag = "pvp" | "pvpve" | "coop" | "solo" | "retro" | "arena" | "mmo" | "rts";
@@ -17,7 +19,7 @@ export interface PortalProduct {
   image?: string;
 }
 
-export const PORTAL_PRODUCTS: PortalProduct[] = [
+const _PORTAL_PRODUCTS_RAW: PortalProduct[] = [
   {
     id: "warlords",
     name: "Grudge Warlords",
@@ -33,13 +35,13 @@ export const PORTAL_PRODUCTS: PortalProduct[] = [
   {
     id: "launcher",
     name: "Grudge Launcher",
-    href: "https://grudgedot-launcher.vercel.app",
+    href: "https://launcher.grudge-studio.com",
     description: "Single entry launcher for Grudge products, entitlements, updates, and client handoff.",
-    status: "planned",
+    status: "beta",
     section: "featured",
     external: true,
     authRequired: true,
-    note: "Mission-phase target — launcher build in progress",
+    note: "launcher.grudge-studio.com",
     image: "/assets/store/grudge_launcher.png",
   },
   {
@@ -235,13 +237,13 @@ export const PORTAL_PRODUCTS: PortalProduct[] = [
   {
     id: "betta-warlords",
     name: "Betta Warlords",
-    href: "https://betta-grudgedev.replit.app/",
-    description: "Completed Nexus-era competitive game with Discord & Puter login. Full PvP gameplay loop.",
+    href: "https://grudgewarlords.com/betta",
+    description: "Freshwater adventure RPG — 8 betta breeds, 4 classes, faction warfare. Not RPG Maker Studio.",
     status: "live",
     section: "play",
     external: true,
     authRequired: true,
-    note: "Replit",
+    note: "rpg-modular · embed on /super-engine",
     tags: ["pvp", "arena"],
   },
   {
@@ -278,11 +280,13 @@ export const PORTAL_PRODUCTS: PortalProduct[] = [
   },
   {
     id: "survival-game",
-    name: "Survival: Deep Space",
-    href: "/survival",
-    description: "Open-world survival in the Armada era. Scavenge, craft, build outposts, and survive hostile space.",
-    status: "planned",
+    name: "Grudges — Survival ARPG",
+    href: "https://grudges.grudge-studio.com",
+    description: "Sci-fi survival action RPG. Bind a grudge, bear it forward — crafting, combat, and exploration.",
+    status: "live",
     section: "play",
+    external: true,
+    authRequired: true,
     tags: ["solo", "coop", "pvpve"],
     image: "/assets/armada/survival-card.png",
   },
@@ -368,7 +372,7 @@ export const PORTAL_PRODUCTS: PortalProduct[] = [
   {
     id: "grim-armada",
     name: "Grim Armada",
-    href: "https://grim-armada-web.vercel.app",
+    href: "https://armada.grudge-studio.com",
     description: "SWG-inspired tactical combat web game. Three.js + React with Grudge Backend integration.",
     status: "live",
     section: "play",
@@ -379,7 +383,7 @@ export const PORTAL_PRODUCTS: PortalProduct[] = [
   {
     id: "grudge-drive",
     name: "Grudge Drive",
-    href: "https://grudge-drive.vercel.app",
+    href: "https://drive.grudge-studio.com",
     description: "Vehicular combat arena brawler. BabylonJS + Havok physics with destructible environments.",
     status: "live",
     section: "play",
@@ -457,7 +461,7 @@ export const PORTAL_PRODUCTS: PortalProduct[] = [
   {
     id: "dungeon-crawler",
     name: "Dungeon Crawler Quest",
-    href: "https://dungeon-crawler-quest.vercel.app",
+    href: "https://dcq.grudge-studio.com",
     description: "Voxel MOBA & Dungeon Crawler with 6 races, MOBA lanes, jungle bosses, and dungeon exploration.",
     status: "live",
     section: "play",
@@ -502,7 +506,7 @@ export const PORTAL_PRODUCTS: PortalProduct[] = [
   {
     id: "grudge-arena",
     name: "Grudge Arena",
-    href: "https://grudge-arena.vercel.app",
+    href: "https://grudge-arena.grudge-studio.com",
     description: "3D PvP combat arena with 6 playable races, WoW-style combat, and Socket.IO multiplayer.",
     status: "live",
     section: "play",
@@ -567,13 +571,36 @@ export const PORTAL_PRODUCTS: PortalProduct[] = [
   {
     id: "grudge-mech-forge",
     name: "Grudge Mech Forge",
-    href: "https://grudge-mech-forge.vercel.app",
+    href: "https://mech-playground.vercel.app",
     description: "Modular real-time mech builder + dust-arena combat sim. Vite + React 19 + R3F + Rapier3D.",
     status: "beta",
     section: "play",
+    external: true,
     tags: ["solo", "arena"],
-    note: "Needs Vercel deploy",
+    note: "mech-playground.vercel.app",
     image: "/assets/store/scifi_environment.png",
+  },
+  {
+    id: "super-engine",
+    name: "Grudge Studio Forge",
+    href: "/super-engine",
+    description: "Live fleet hub — preview and launch every Grudge game from one shell.",
+    status: "live",
+    section: "play",
+    tags: ["solo"],
+    image: "/assets/store/custom_development.png",
+  },
+  {
+    id: "wcs",
+    name: "WCS — Warlord Crafting Suite",
+    href: "https://wcs.grudge-studio.com",
+    description: "Character, island, and profession shell for the Warlords ecosystem.",
+    status: "live",
+    section: "play",
+    external: true,
+    authRequired: true,
+    tags: ["mmo", "coop"],
+    image: "/assets/store/character_sprites.png",
   },
   {
     id: "flare-boss-arena",
@@ -597,7 +624,9 @@ export const PORTAL_PRODUCTS: PortalProduct[] = [
     tags: ["solo", "pvp"],
     image: "/assets/games/tactical-rpg-card.png",
   },
-];
+].map(syncProductHref);
+
+export const PORTAL_PRODUCTS: PortalProduct[] = _PORTAL_PRODUCTS_RAW;
 
 export const featuredProducts = PORTAL_PRODUCTS.filter((product) => product.section === "featured");
 export const playProducts = PORTAL_PRODUCTS.filter((product) => product.section === "play");
