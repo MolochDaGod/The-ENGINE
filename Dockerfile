@@ -6,7 +6,7 @@ RUN apk add --no-cache git
 COPY package.json package-lock.json* ./
 RUN npm ci --legacy-peer-deps --ignore-scripts || npm install --legacy-peer-deps --ignore-scripts
 
-COPY tsconfig.json drizzle.config.ts ./
+COPY tsconfig.json drizzle.config.ts vite.config.ts ./
 COPY server ./server
 COPY shared ./shared
 
