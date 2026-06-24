@@ -12,6 +12,7 @@ import imgGbuxCoin from "@assets/image_1773869512711.png";
 import { FORGE_GAMES, resolveFleetGameId, type Capability } from "@/data/fleetGames";
 import { GamePreviewFrame } from "@/components/game-preview-frame";
 import { navigateGame } from "@/lib/game-launch";
+import { loadFeaturedRetroGames } from "@/lib/retro-catalog";
 
 const CAPABILITY_CONFIG: Record<Capability, { icon: typeof Zap; color: string; label: string }> = {
   '3D': { icon: Box, color: 'bg-blue-500/20 text-blue-400 border-blue-500/30', label: '3D' },
@@ -158,17 +159,9 @@ export default function SuperEngine() {
   const [fullscreenGame, setFullscreenGame] = useState<string | null>(null);
   const [hoveredGame, setHoveredGame] = useState<string | null>(null);
 
-  const { data: featuredGames } = useQuery<any[]>({
-    queryKey: ['/api/games/featured'],
-    queryFn: async () => {
-      try {
-        const res = await fetch('/api/games?featured=true');
-        if (!res.ok) return [];
-        return res.json();
-      } catch {
-        return [];
-      }
-    },
+  const { data: featuredGames } = useQuery({
+    queryKey: ["/catalog/games", "featured"],
+    queryFn: loadFeaturedRetroGames,
   });
 
   const handlePlay = useCallback((gameId: string) => {

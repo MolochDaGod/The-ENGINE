@@ -8,6 +8,7 @@ import type { Game } from "@shared/schema";
 import grudgeLogo from "@assets/uXpJmRe_1773828784729.png";
 import NotFound from "@/pages/not-found";
 import { GameCover } from "@/components/game-cover";
+import { loadRetroGameById } from "@/lib/retro-catalog";
 
 const PLATFORM_CORE_MAP: Record<string, string> = {
   nes: "nes",
@@ -88,6 +89,8 @@ export default function GamePlayer() {
   const { data: game, isLoading } = useQuery<Game>({
     queryKey: ["/api/games", gameId],
     queryFn: async () => {
+      const fromCatalog = await loadRetroGameById(gameId!);
+      if (fromCatalog) return fromCatalog;
       const resp = await fetch(`/api/games/${gameId}`);
       if (!resp.ok) throw new Error("Game not found");
       return resp.json();

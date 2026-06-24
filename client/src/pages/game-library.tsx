@@ -9,6 +9,7 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import type { Game, GamePlatform } from "@shared/schema";
 import libraryBg from "@assets/HRuOcD2_1773841538318.png";
 import { GameCover } from "@/components/game-cover";
+import { loadRetroCatalog } from "@/lib/retro-catalog";
 
 const PLATFORM_PAGES: Record<string, string> = {
   nes: "https://rec0ded88.com/play-nes-games/",
@@ -36,14 +37,6 @@ const PLATFORM_COLORS: Record<string, { bg: string; accent: string }> = {
   nds: { bg: 'linear-gradient(135deg, hsl(330,50%,22%), hsl(330,40%,12%))', accent: 'hsl(330,60%,55%)' },
 };
 
-/** Load full retro catalog once — served from Vercel edge cache / static JSON. */
-async function fetchFullCatalog(): Promise<Game[]> {
-  const resp = await fetch("/api/games", { credentials: "same-origin" });
-  if (!resp.ok) throw new Error("Failed to load game catalog");
-  const data = await resp.json();
-  return Array.isArray(data) ? data : (data.games ?? []);
-}
-
 export default function GameLibrary() {
   const [location, setLocation] = useLocation();
   const urlParams = new URLSearchParams(location.split("?")[1] || "");
@@ -59,8 +52,8 @@ export default function GameLibrary() {
   });
 
   const { data: allGames = [], isLoading: gamesLoading } = useQuery<Game[]>({
-    queryKey: ["/api/games", "catalog"],
-    queryFn: fetchFullCatalog,
+    queryKey: ["/catalog/games"],
+    queryFn: loadRetroCatalog,
     staleTime: 1000 * 60 * 60,
   });
 
