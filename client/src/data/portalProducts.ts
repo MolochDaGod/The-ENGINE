@@ -330,7 +330,7 @@ const _PORTAL_PRODUCTS_RAW = [
     section: "play",
     external: true,
     authRequired: true,
-    note: "Vercel mirror — primary Railway domain (grudgeplatform.io) pending DNS",
+    note: "Canonical: nemesis.grudge-studio.com — grudgeplatform.io pending registrar DNS → Railway",
     tags: ["pvp", "solo"],
     image: "/assets/store/scifi_environment.png",
   },
