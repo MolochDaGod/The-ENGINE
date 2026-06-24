@@ -324,8 +324,8 @@ const _PORTAL_PRODUCTS_RAW = [
   {
     id: "nemesis-tcg",
     name: "Nexus Nemesis TCG",
-    href: "https://nexus-nemesis-game.vercel.app",
-    description: "Season 0 TCG — 100K cNFT cards on Solana via Crossmint. 102 card templates, deckbuilder, ranked PvP via Socket.IO + Colyseus, pack redemption, beta migration. Full fullstack build (Express + Vite + Postgres).",
+    href: "https://nemesis.grudge-studio.com",
+    description: "Season 0 TCG — 100K cNFT cards on Solana via Crossmint. 102 card templates, deckbuilder, ranked PvP via Socket.IO, pack redemption, beta migration. Railway fullstack (Express + Vite + Postgres).",
     status: "live",
     section: "play",
     external: true,

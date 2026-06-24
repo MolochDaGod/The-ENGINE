@@ -1,6 +1,7 @@
 # ── Stage 1: Build ─────────────────────────────────────────────
 FROM node:22-alpine AS build
 WORKDIR /app
+RUN apk add --no-cache git
 
 COPY package.json package-lock.json* ./
 RUN npm ci || npm install
@@ -17,6 +18,7 @@ RUN npm run build
 # ── Stage 2: Production ────────────────────────────────────────
 FROM node:22-alpine
 WORKDIR /app
+RUN apk add --no-cache git
 
 COPY package.json package-lock.json* ./
 RUN npm ci --omit=dev || npm install --omit=dev
