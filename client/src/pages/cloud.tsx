@@ -5,63 +5,38 @@ import { useAuth } from "@/components/auth-provider";
 import { requestPopupToken } from "@/lib/player-auth";
 
 const NEXUS_LIVE = "https://grudachain-rho.vercel.app";
-const CLOUD_URL = "https://grudge-cloud.puter.site/";
-const CLOUD_ORIGIN = "https://grudge-cloud.puter.site";
 const PER_ACCOUNT_DASHBOARD = `${NEXUS_LIVE}/puter-cloud-dashboard.html`;
+const PUTER_ADMIN_CLOUD = "https://grudge-cloud.puter.site/";
+
+function buildDashboardUrl(player: { grudgeId: string; username: string } | null, token: string | null) {
+  const url = new URL(PER_ACCOUNT_DASHBOARD);
+  if (player && token) {
+    url.searchParams.set("token", token);
+    url.searchParams.set("username", player.username);
+    url.searchParams.set("grudge_id", player.grudgeId);
+  }
+  return url.toString();
+}
 
 export default function CloudPage() {
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const { player } = useAuth();
   const [iframeReady, setIframeReady] = useState(false);
+  const [dashboardUrl, setDashboardUrl] = useState(PER_ACCOUNT_DASHBOARD);
 
-  // When the iframe loads and a player is signed in, mint a 5-min launch token
-  // and postMessage the identity to the Puter cloud app. The cloud app listens
-  // for `{ type: "grudge:identity", grudgeId, username, displayName, token }`
-  // on trusted origins (grudge-studio.com is hard-coded in its allowlist) and
-  // persists the Puter ↔ Grudge ID link so it recognizes this user on its own
-  // origin from that point forward.
+  // Per-account Puter dashboard on Nexus (allowed by frame-src *.vercel.app today).
+  // Pass Grudge ID via query params so grudge-sso.js links the signed-in account.
   useEffect(() => {
-    if (!iframeReady || !player || !iframeRef.current) return;
+    if (!player) {
+      setDashboardUrl(PER_ACCOUNT_DASHBOARD);
+      return;
+    }
     (async () => {
       const mint = await requestPopupToken(window.location.origin);
-      iframeRef.current?.contentWindow?.postMessage(
-        {
-          type: "grudge:identity",
-          grudgeId: player.grudgeId,
-          username: player.username,
-          displayName: player.displayName,
-          role: player.role,
-          token: mint.ok ? mint.data.token : null,
-        },
-        CLOUD_ORIGIN,
+      setDashboardUrl(
+        buildDashboardUrl(player, mint.ok ? mint.data.token : null),
       );
     })();
-  }, [iframeReady, player]);
-
-  // Re-send identity when the cloud app announces it's ready (helps if the
-  // iframe loads before the postMessage listener is attached).
-  useEffect(() => {
-    function onMessage(event: MessageEvent) {
-      if (event.origin !== CLOUD_ORIGIN) return;
-      if (!event.data || event.data.type !== "grudge:cloud:ready") return;
-      if (!player || !iframeRef.current) return;
-      (async () => {
-        const mint = await requestPopupToken(window.location.origin);
-        iframeRef.current?.contentWindow?.postMessage(
-          {
-            type: "grudge:identity",
-            grudgeId: player.grudgeId,
-            username: player.username,
-            displayName: player.displayName,
-            role: player.role,
-            token: mint.ok ? mint.data.token : null,
-          },
-          CLOUD_ORIGIN,
-        );
-      })();
-    }
-    window.addEventListener("message", onMessage);
-    return () => window.removeEventListener("message", onMessage);
   }, [player]);
 
   return (
@@ -72,14 +47,14 @@ export default function CloudPage() {
           <div className="text-[11px] text-[hsl(45,15%,60%)] font-body">Personal Puter cloud · synced with your Grudge ID</div>
         </div>
         <div className="flex items-center gap-2">
-          <a href={PER_ACCOUNT_DASHBOARD} target="_blank" rel="noopener noreferrer">
+          <a href={dashboardUrl} target="_blank" rel="noopener noreferrer">
             <Button variant="outline" size="sm" className="border-[hsl(43,60%,30%)]/40 text-[hsl(45,30%,90%)]">
-              <ExternalLink className="w-3.5 h-3.5 mr-1" /> Per-account dashboard
+              <ExternalLink className="w-3.5 h-3.5 mr-1" /> Open in new tab
             </Button>
           </a>
-          <a href={CLOUD_URL} target="_blank" rel="noopener noreferrer">
+          <a href={PUTER_ADMIN_CLOUD} target="_blank" rel="noopener noreferrer">
             <Button variant="outline" size="sm" className="border-[hsl(43,60%,30%)]/40 text-[hsl(45,30%,90%)]">
-              <ExternalLink className="w-3.5 h-3.5 mr-1" /> Open cloud app
+              <ExternalLink className="w-3.5 h-3.5 mr-1" /> Puter admin app
             </Button>
           </a>
         </div>
@@ -92,7 +67,8 @@ export default function CloudPage() {
         )}
         <iframe
           ref={iframeRef}
-          src={CLOUD_URL}
+          key={dashboardUrl}
+          src={dashboardUrl}
           title="My Grudge Cloud"
           className="w-full h-full border-0"
           onLoad={() => setIframeReady(true)}

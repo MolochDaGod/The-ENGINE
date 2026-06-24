@@ -3,6 +3,11 @@
   "installCommand": "npm install --legacy-peer-deps",
   "buildCommand": "npm run build:client",
   "outputDirectory": "dist/public",
+  "build": {
+    "env": {
+      "NODE_OPTIONS": "--max-old-space-size=6144"
+    }
+  },
   "rewrites": [
     {
       "source": "/(.*)",
