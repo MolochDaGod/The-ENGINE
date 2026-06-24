@@ -6,8 +6,11 @@
  * Extra responsibilities:
  *  - Dynamic CORS for trusted origins (from ALLOWED_ORIGINS env var)
  *  - Path alias: /auth/* → /api/auth/*
+ *  - Serves canonical sign-in HTML at the edge (GET /api/auth/page)
  *  - Forwards cookies and credentials transparently
  */
+
+import { AUTH_PAGE_HTML } from "./auth-page-bundled";
 
 export interface Env {
   BACKEND_URL: string;       // https://the-engine.up.railway.app
@@ -20,7 +23,9 @@ const DEFAULT_ALLOWED_ORIGINS = [
   "https://grudgewarlords.com",
   "https://grudgeplatform.com",
   "https://dungeon-crawler-quest.vercel.app",
+  "https://warlord-crafting-suite.vercel.app",
   "https://grudgestudio.puter.site",
+  "https://grudge-studio.puter.site",
   "https://grudgeplatform.puter.site",
   "https://puter.com",
   "https://app.puter.com",
@@ -31,6 +36,10 @@ const DEFAULT_ALLOWED_ORIGINS = [
   "http://localhost:5173",
   "http://localhost:5000",
 ];
+
+function isAuthPagePath(pathname: string): boolean {
+  return pathname === "/api/auth/page" || pathname === "/api/auth/popup";
+}
 
 function getAllowedOrigins(env: Env): Set<string> {
   const raw = env.ALLOWED_ORIGINS || "";
@@ -80,6 +89,19 @@ export default {
           url.pathname = "/api/auth/page";
         }
       }
+    }
+
+    // Serve fixed sign-in HTML at the edge (Railway may still ship the broken regex build)
+    if (request.method === "GET" && isAuthPagePath(url.pathname)) {
+      return new Response(AUTH_PAGE_HTML, {
+        status: 200,
+        headers: {
+          "Content-Type": "text/html; charset=utf-8",
+          "Cache-Control": "public, max-age=60",
+          "X-Grudge-Auth-Page": "edge-v2",
+          ...corsHeaders(origin, allowed),
+        },
+      });
     }
 
     // Build the upstream URL
