@@ -8,6 +8,9 @@ export default function handler(req: any, res: any) {
     res.setHeader("Cache-Control", "s-maxage=3600, stale-while-revalidate");
     return res.json(featured);
   }
+  if (id === "top") {
+    return res.status(404).json({ error: "Use /api/games/top" });
+  }
   const numId = parseInt(id as string, 10);
   if (isNaN(numId)) return res.status(400).json({ error: "Invalid game ID" });
   const game = GAMES.find((g: any) => g.id === numId);
