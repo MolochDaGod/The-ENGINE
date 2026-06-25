@@ -1,0 +1,148 @@
+/**
+ * grudge-game-bootstrap.js — Fleet production bootstrap for Grudge Studio games
+ *
+ * Load early in <head> on every game / portal HTML entry point:
+ *   <script src="https://client.grudge-studio.com/grudge-game-bootstrap.js"></script>
+ *
+ * - Disables browser auto-translate (prevents Microsoft Translator 401 console noise)
+ * - Handles Grudge ID SSO return (?sso_token= & ?grudge_id=)
+ * - Listens for grudge-auth:success postMessage from id.grudge-studio.com popups
+ * - Exposes window.GRUDGE_FLEET endpoints + window.GrudgeGameBootstrap session helpers
+ */
+(function (global) {
+  'use strict';
+
+  try {
+    document.documentElement.setAttribute('translate', 'no');
+    document.documentElement.classList.add('notranslate');
+    if (!document.querySelector('meta[name="google"][content="notranslate"]')) {
+      var meta = document.createElement('meta');
+      meta.name = 'google';
+      meta.content = 'notranslate';
+      (document.head || document.documentElement).appendChild(meta);
+    }
+  } catch (e) {}
+
+  var TOKEN_KEY = 'grudge_auth_token';
+  var ID_KEY = 'grudge_id';
+  var USER_KEY = 'grudge_username';
+
+  var FLEET = {
+    auth: 'https://id.grudge-studio.com',
+    api: 'https://api.grudge-studio.com',
+    account: 'https://account.grudge-studio.com',
+    assets: 'https://assets.grudge-studio.com',
+    objectstore: 'https://objectstore.grudge-studio.com',
+    ai: 'https://ai.grudge-studio.com',
+    ws: 'wss://ws.grudge-studio.com',
+    portal: 'https://client.grudge-studio.com',
+    puterSdk: 'https://js.puter.com/v2/'
+  };
+
+  function getSession() {
+    return {
+      token: localStorage.getItem(TOKEN_KEY),
+      grudgeId: localStorage.getItem(ID_KEY),
+      username: localStorage.getItem(USER_KEY),
+      signedIn: !!localStorage.getItem(TOKEN_KEY)
+    };
+  }
+
+  function saveSession(data) {
+    if (!data) return;
+    var token = data.token || data.access_token || data.sso_token;
+    if (token) localStorage.setItem(TOKEN_KEY, token);
+    var gid = data.grudge_id || data.grudgeId;
+    if (gid) localStorage.setItem(ID_KEY, gid);
+    if (data.username) localStorage.setItem(USER_KEY, data.username);
+  }
+
+  function clearSession() {
+    [TOKEN_KEY, ID_KEY, USER_KEY, 'grudge_user'].forEach(function (k) {
+      localStorage.removeItem(k);
+    });
+  }
+
+  function buildLoginUrl(app, returnUrl) {
+    return FLEET.auth + '/api/auth/page?app=' +
+      encodeURIComponent(app || 'grudge-game') +
+      '&redirect=' + encodeURIComponent(returnUrl || location.href);
+  }
+
+  function openLogin(app) {
+    var url = buildLoginUrl(app);
+    var w = 480;
+    var h = 640;
+    var left = Math.max(0, (screen.width - w) / 2);
+    var top = Math.max(0, (screen.height - h) / 2);
+    global.open(url, 'grudge-id-login',
+      'width=' + w + ',height=' + h + ',left=' + left + ',top=' + top + ',noopener');
+  }
+
+  function handleSsoCallback() {
+    try {
+      var params = new URLSearchParams(location.search);
+      var token = params.get('sso_token') || params.get('token');
+      if (!token) return false;
+      saveSession({
+        token: token,
+        grudge_id: params.get('grudge_id') || params.get('grudgeId'),
+        username: params.get('username')
+      });
+      ['sso_token', 'token', 'grudge_id', 'grudgeId', 'username'].forEach(function (k) {
+        params.delete(k);
+      });
+      var qs = params.toString();
+      history.replaceState(null, '', location.pathname + (qs ? '?' + qs : '') + location.hash);
+      global.dispatchEvent(new CustomEvent('grudge-auth:success', { detail: getSession() }));
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function listenAuthPopup() {
+    global.addEventListener('message', function (ev) {
+      var data = ev.data;
+      if (!data) return;
+      if (data.type !== 'grudge-auth:success' && data.type !== 'GRUDGE_AUTH_SUCCESS') return;
+      try {
+        var origin = ev.origin || '';
+        if (origin &&
+            origin.indexOf('grudge-studio.com') < 0 &&
+            origin.indexOf('grudgewarlords.com') < 0 &&
+            origin.indexOf('vercel.app') < 0 &&
+            origin.indexOf('puter.site') < 0) {
+          return;
+        }
+      } catch (e) {}
+      saveSession(data.payload || data);
+      global.dispatchEvent(new CustomEvent('grudge-auth:success', { detail: getSession() }));
+    });
+  }
+
+  function apiFetch(path, opts) {
+    opts = opts || {};
+    opts.headers = Object.assign({}, opts.headers || {});
+    var sess = getSession();
+    if (sess.token && !opts.headers.Authorization) {
+      opts.headers.Authorization = 'Bearer ' + sess.token;
+    }
+    var url = path.indexOf('http') === 0 ? path : '/api' + (path.charAt(0) === '/' ? path : '/' + path);
+    return fetch(url, opts);
+  }
+
+  handleSsoCallback();
+  listenAuthPopup();
+
+  global.GRUDGE_FLEET = FLEET;
+  global.GrudgeGameBootstrap = {
+    fleet: FLEET,
+    getSession: getSession,
+    saveSession: saveSession,
+    clearSession: clearSession,
+    buildLoginUrl: buildLoginUrl,
+    openLogin: openLogin,
+    apiFetch: apiFetch
+  };
+})(typeof window !== 'undefined' ? window : this);
