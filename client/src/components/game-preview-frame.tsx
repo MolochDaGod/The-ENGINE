@@ -39,7 +39,10 @@ export function GamePreviewFrame({ game, className = "", title }: GamePreviewFra
       src={launch.embedUrl}
       className={className}
       title={title ?? game.name}
-      allow="autoplay; fullscreen; gamepad"
+      allow="autoplay; fullscreen; gamepad; xr-spatial-tracking; accelerometer; gyroscope; clipboard-write"
+      allowFullScreen
+      referrerPolicy="strict-origin-when-cross-origin"
+      loading="lazy"
       onError={() => setBlocked(true)}
     />
   );

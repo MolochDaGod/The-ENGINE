@@ -9,10 +9,18 @@ import superEngineBg from "@assets/IqGYJJe_1773841545953.png";
 import imgGrudgeStudio from "@assets/19aec67671d8b_1773869463362.png";
 import imgCloudPilot from "@assets/a17ae3c8-1237-463c-89d7-ad1708b48929_1773869467486.png";
 import imgGbuxCoin from "@assets/image_1773869512711.png";
-import { FORGE_GAMES, resolveFleetGameId, type Capability } from "@/data/fleetGames";
+import coverCastlevania from "@assets/game_covers/castlevania.png";
+import coverContra from "@assets/game_covers/contra.png";
+import coverMegaMan2 from "@assets/game_covers/mega_man_2.png";
+import coverMetroid from "@assets/game_covers/metroid.png";
+import coverMarioBros from "@assets/game_covers/super_mario_bros.png";
+import coverZelda from "@assets/game_covers/legend_of_zelda.png";
+import { FORGE_GAMES, resolveFleetGameId, type Capability, type FleetGameCard } from "@/data/fleetGames";
 import { GamePreviewFrame } from "@/components/game-preview-frame";
+import { GameCover } from "@/components/game-cover";
 import { navigateGame } from "@/lib/game-launch";
 import { loadFeaturedRetroGames } from "@/lib/retro-catalog";
+import type { Game } from "@shared/schema";
 
 const CAPABILITY_CONFIG: Record<Capability, { icon: typeof Zap; color: string; label: string }> = {
   '3D': { icon: Box, color: 'bg-blue-500/20 text-blue-400 border-blue-500/30', label: '3D' },
@@ -45,81 +53,61 @@ const ENGINE_TABLE: EngineRow[] = [
   { name: 'Custom RPG Engine', rendering: '2D Canvas', physics: false, multiplayer: true, ai: true, particles: true, scriptLanguage: 'TypeScript', platforms: 'Web' },
 ];
 
-function MiniThreeJSPreview({ color, seed }: { color: string; seed: number }) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const animFrameRef = useRef<number>(0);
+const RETRO_FALLBACK_COVERS: Record<string, string> = {
+  "castlevania": coverCastlevania,
+  "contra": coverContra,
+  "mega-man-2": coverMegaMan2,
+  "metroid": coverMetroid,
+  "super-mario-bros": coverMarioBros,
+  "legend-of-zelda": coverZelda,
+};
 
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+const RETRO_FALLBACK_TITLES: { title: string; slug: string; platform: string }[] = [
+  { title: "Super Mario Bros", slug: "super-mario-bros", platform: "NES" },
+  { title: "Legend of Zelda", slug: "legend-of-zelda", platform: "NES" },
+  { title: "Contra", slug: "contra", platform: "NES" },
+  { title: "Mega Man 2", slug: "mega-man-2", platform: "NES" },
+  { title: "Castlevania", slug: "castlevania", platform: "NES" },
+  { title: "Metroid", slug: "metroid", platform: "NES" },
+];
 
-    const w = canvas.width;
-    const h = canvas.height;
-    let t = 0;
-
-    const hueBase = (seed * 60) % 360;
-
-    const draw = () => {
-      t += 0.02;
-      ctx.fillStyle = `hsl(${hueBase}, 30%, 8%)`;
-      ctx.fillRect(0, 0, w, h);
-
-      for (let i = 0; i < 20; i++) {
-        const x = ((Math.sin(t * 0.5 + i * 1.3) + 1) / 2) * w;
-        const y = ((Math.cos(t * 0.7 + i * 0.9) + 1) / 2) * h;
-        const r = 2 + Math.sin(t + i) * 1.5;
-        ctx.beginPath();
-        ctx.arc(x, y, r, 0, Math.PI * 2);
-        ctx.fillStyle = `hsla(${(hueBase + i * 15) % 360}, 70%, 60%, 0.6)`;
-        ctx.fill();
-      }
-
-      const cx = w / 2;
-      const cy = h / 2;
-      const size = 20 + Math.sin(t) * 5;
-
-      ctx.save();
-      ctx.translate(cx, cy);
-      ctx.rotate(t * 0.5);
-
-      ctx.strokeStyle = `hsla(${hueBase + 30}, 80%, 60%, 0.8)`;
-      ctx.lineWidth = 2;
-      ctx.strokeRect(-size / 2, -size / 2, size, size);
-
-      ctx.strokeStyle = `hsla(${hueBase + 60}, 80%, 60%, 0.5)`;
-      ctx.beginPath();
-      ctx.arc(0, 0, size * 0.8, 0, Math.PI * 2);
-      ctx.stroke();
-
-      ctx.restore();
-
-      ctx.fillStyle = `hsla(${hueBase}, 60%, 50%, 0.1)`;
-      for (let i = 0; i < 5; i++) {
-        const gx = (Math.sin(t * 0.3 + i * 2) + 1) / 2 * w;
-        const gy = (Math.cos(t * 0.4 + i * 1.5) + 1) / 2 * h;
-        ctx.beginPath();
-        ctx.arc(gx, gy, 30, 0, Math.PI * 2);
-        ctx.fill();
-      }
-
-      animFrameRef.current = requestAnimationFrame(draw);
-    };
-
-    draw();
-
-    return () => {
-      cancelAnimationFrame(animFrameRef.current);
-    };
-  }, [color, seed]);
+function ForgeCardArt({ game }: { game: FleetGameCard }) {
+  if (game.cardImage) {
+    return (
+      <img
+        src={game.cardImage}
+        alt={game.name}
+        className="absolute inset-0 w-full h-full object-cover"
+        loading="lazy"
+        draggable={false}
+      />
+    );
+  }
 
   return (
-    <canvas
-      ref={canvasRef}
-      width={200}
-      height={120}
-      className="w-full h-full rounded-lg"
+    <div className={`absolute inset-0 bg-gradient-to-br ${game.color} flex flex-col items-center justify-center gap-2 p-4`}>
+      <span className="text-5xl drop-shadow-lg">{game.emoji}</span>
+      <span className="text-white/90 font-bold text-sm text-center leading-tight">{game.name}</span>
+    </div>
+  );
+}
+
+function RetroCover({ game }: { game: Game }) {
+  const local = RETRO_FALLBACK_COVERS[game.slug];
+  return (
+    <GameCover
+      src={game.thumbnailUrl ?? local}
+      alt={game.title}
+      className="w-full aspect-square object-cover rounded"
+      placeholder={
+        local ? (
+          <img src={local} alt={game.title} className="w-full aspect-square object-cover rounded" loading="lazy" />
+        ) : (
+          <div className="w-full aspect-square bg-gradient-to-br from-purple-900/50 to-pink-900/50 rounded flex items-center justify-center">
+            <Gamepad className="w-8 h-8 text-purple-400" />
+          </div>
+        )
+      }
     />
   );
 }
@@ -244,10 +232,9 @@ export default function SuperEngine() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-          {GAMES.map((game, index) => {
+          {GAMES.map((game) => {
             const isExpanded = expandedGame === game.id;
             const isHovered = hoveredGame === game.id;
-            const Icon = game.icon;
 
             return (
               <div
@@ -326,11 +313,7 @@ export default function SuperEngine() {
                           className="aspect-video bg-black/40 rounded-lg mb-4 relative overflow-hidden cursor-pointer"
                           onClick={() => handlePlay(game.id)}
                         >
-                          {game.cardImage ? (
-                            <img src={game.cardImage} alt={game.name} className="absolute inset-0 w-full h-full object-cover" />
-                          ) : (
-                            <MiniThreeJSPreview color={game.color} seed={index} />
-                          )}
+                          <ForgeCardArt game={game} />
 
                           <div className="absolute inset-0 bg-black/60 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
                             <div className="w-16 h-16 rounded-full bg-gradient-to-r from-orange-500 to-red-500 flex items-center justify-center shadow-lg shadow-orange-500/30 transform group-hover:scale-110 transition-transform duration-300">
@@ -420,18 +403,12 @@ export default function SuperEngine() {
               Play classic console games right in your browser — NES, SNES, Genesis, and more via embedded emulators.
             </p>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-              {featuredGames.slice(0, 12).map((game: any) => (
+              {featuredGames.slice(0, 12).map((game) => (
                 <Link key={game.id} href={`/play/${game.id}`}>
                   <div className="group relative cursor-pointer">
                     <div className="absolute -inset-[1px] rounded-lg bg-gradient-to-r from-purple-500 to-pink-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                     <div className="relative bg-gray-800 rounded-lg p-3 flex flex-col items-center gap-2 transition-transform duration-200 group-hover:scale-[1.02]">
-                      {game.coverUrl ? (
-                        <img src={game.coverUrl} alt={game.title} className="w-full aspect-square object-cover rounded" />
-                      ) : (
-                        <div className="w-full aspect-square bg-gradient-to-br from-purple-900/50 to-pink-900/50 rounded flex items-center justify-center">
-                          <Gamepad className="w-8 h-8 text-purple-400" />
-                        </div>
-                      )}
+                      <RetroCover game={game} />
                       <span className="text-white text-xs font-medium text-center line-clamp-2">{game.title}</span>
                       <Badge className="text-[10px] bg-gray-700 text-gray-300 border-gray-600">
                         {game.platform || 'Retro'}
@@ -464,16 +441,20 @@ export default function SuperEngine() {
               Play classic console games right in your browser — NES, SNES, Genesis, and more via embedded emulators.
             </p>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-              {['Super Mario Bros', 'Legend of Zelda', 'Contra', 'Mega Man 2', 'Castlevania', 'Metroid'].map((title) => (
-                <Link key={title} href="/games">
+              {RETRO_FALLBACK_TITLES.map(({ title, slug, platform }) => (
+                <Link key={slug} href="/games">
                   <div className="group relative cursor-pointer">
                     <div className="absolute -inset-[1px] rounded-lg bg-gradient-to-r from-purple-500 to-pink-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                     <div className="relative bg-gray-800 rounded-lg p-3 flex flex-col items-center gap-2 transition-transform duration-200 group-hover:scale-[1.02]">
-                      <div className="w-full aspect-square bg-gradient-to-br from-purple-900/50 to-pink-900/50 rounded flex items-center justify-center">
-                        <Gamepad className="w-8 h-8 text-purple-400" />
-                      </div>
+                      {RETRO_FALLBACK_COVERS[slug] ? (
+                        <img src={RETRO_FALLBACK_COVERS[slug]} alt={title} className="w-full aspect-square object-cover rounded" loading="lazy" />
+                      ) : (
+                        <div className="w-full aspect-square bg-gradient-to-br from-purple-900/50 to-pink-900/50 rounded flex items-center justify-center">
+                          <Gamepad className="w-8 h-8 text-purple-400" />
+                        </div>
+                      )}
                       <span className="text-white text-xs font-medium text-center line-clamp-2">{title}</span>
-                      <Badge className="text-[10px] bg-gray-700 text-gray-300 border-gray-600">NES</Badge>
+                      <Badge className="text-[10px] bg-gray-700 text-gray-300 border-gray-600">{platform}</Badge>
                     </div>
                   </div>
                 </Link>
