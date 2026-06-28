@@ -5,6 +5,9 @@
   "license": "MIT",
   "scripts": {
     "dev": "cross-env NODE_ENV=development tsx server/index.ts",
+    "dev:setup": "powershell -ExecutionPolicy Bypass -File scripts/dev-setup.ps1",
+    "dev:db": "docker compose -f docker-compose.dev.yml up -d",
+    "dev:db:push": "cross-env NODE_ENV=development drizzle-kit push",
     "build": "vite build && esbuild server/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist",
     "build:client": "node scripts/copy-catalog.mjs && vite build",
     "build:server": "esbuild server/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist",
