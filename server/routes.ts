@@ -2,6 +2,15 @@ import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
 import { setupArenaRooms } from "./arena-rooms";
+import { setupEngineSocket } from "./engine-socket";
+import {
+  TREATY_ROOMS,
+  normalizeRoomId,
+  normalizeSender,
+  toTreatyMessage,
+  toWsPayload,
+  shareUrl as treatyShareUrl,
+} from "./treaty-chat";
 import { storage } from "./storage";
 import { insertScrapingJobSchema, insertOrderSchema, insertGameSchema, insertArticleSchema, gameLibrary, scores, users, walletConnections } from "@shared/schema";
 import { z } from "zod";
@@ -3462,13 +3471,79 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.get("/api/chat/rooms", (_req, res) => {
-    const rooms = [
-      { id: "general", name: "General", description: "Main chat for everyone" },
-      { id: "retro-gaming", name: "Retro Gaming", description: "NES, SNES, N64 and classic games" },
-      { id: "custom-engines", name: "Custom Engines", description: "Wargus, Avernus, Tower Defense talk" },
-      { id: "trading", name: "Trading Post", description: "Buy, sell, trade GBUX and assets" },
-    ];
-    res.json(rooms);
+    res.json(TREATY_ROOMS);
+  });
+
+  // Treaty Chat HTTP — GrudaNode / Grudge ID parity (polling + shareable rooms)
+  app.get("/api/treaty/rooms", (_req, res) => {
+    res.json({ rooms: TREATY_ROOMS });
+  });
+
+  app.get("/api/treaty/config", (req, res) => {
+    const room = normalizeRoomId(String(req.query.room || "general"));
+    const portal = (process.env.PORTAL_ORIGIN || "https://grudge-studio.com").replace(/\/$/, "");
+    res.json({
+      rooms: TREATY_ROOMS,
+      room,
+      shareUrl: treatyShareUrl(portal, room),
+      mode: "account-room",
+    });
+  });
+
+  app.get("/api/treaty/room/:id/messages", async (req, res) => {
+    try {
+      const roomId = normalizeRoomId(req.params.id);
+      const rows = await storage.listChatMessages(roomId, 100);
+      const grudgeIds = new Map<number, string>();
+      for (const row of rows) {
+        if (row.userId && !grudgeIds.has(row.userId)) {
+          const u = await storage.getUser(row.userId);
+          if (u) grudgeIds.set(row.userId, u.grudgeId);
+        }
+      }
+      const messages = rows.reverse().map((row) =>
+        toTreatyMessage(row, row.userId ? grudgeIds.get(row.userId) : null),
+      );
+      res.json({ roomId, messages });
+    } catch {
+      res.status(500).json({ error: "Failed to fetch treaty messages" });
+    }
+  });
+
+  app.post("/api/treaty/room/:id/send", async (req, res) => {
+    try {
+      const roomId = normalizeRoomId(req.params.id);
+      const text = String(req.body?.text || req.body?.message || "").trim().slice(0, 500);
+      if (!text) return res.status(400).json({ error: "text required" });
+
+      let sender = normalizeSender(req.body);
+      let userId: number | null = null;
+
+      const cookies = parsePlayerCookies(req.headers.cookie);
+      const token = cookies[PLAYER_COOKIE];
+      if (token) {
+        const resolvedId = verifyPlayerToken(token);
+        if (resolvedId !== null) {
+          const player = await storage.getUser(resolvedId);
+          if (player) {
+            sender = normalizeSender(undefined, player);
+            userId = player.id;
+          }
+        }
+      }
+
+      const saved = await storage.createChatMessage({
+        username: sender.displayName || sender.username,
+        message: text,
+        room: roomId,
+        userId,
+      });
+
+      const message = toTreatyMessage(saved, sender.grudgeId);
+      res.json({ ok: true, message });
+    } catch {
+      res.status(500).json({ error: "Failed to send treaty message" });
+    }
   });
 
   // ═══════════════════════════════════════════════════════════════
@@ -3676,7 +3751,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
 
   const wss = new WebSocketServer({ server: httpServer, path: "/ws/chat" });
-  const clients = new Map<WebSocket, { username: string; room: string; userId: number | null }>();
+  const clients = new Map<WebSocket, { username: string; displayName: string; grudgeId: string | null; room: string; userId: number | null }>();
 
   function broadcastToRoom(room: string, data: object) {
     const msg = JSON.stringify(data);
@@ -3691,7 +3766,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const users: string[] = [];
     for (const [ws, info] of clients) {
       if (info.room === room && ws.readyState === WebSocket.OPEN) {
-        users.push(info.username);
+        users.push(info.displayName || info.username);
       }
     }
     return [...new Set(users)];
@@ -3704,10 +3779,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         if (data.type === "join") {
           let username = (data.username || "Anonymous").slice(0, 30);
+          let displayName = username;
+          let grudgeId: string | null = String(data.grudgeId || "").trim() || null;
           let userId: number | null = null;
-          const room = (data.room || "general").slice(0, 50);
+          const room = normalizeRoomId(data.room || "general").slice(0, 50);
 
-          // If the client has a player session cookie, prefer real account
+          // Grudge ID session cookie overrides client-supplied identity
           const cookies = parsePlayerCookies(req.headers.cookie);
           const token = cookies[PLAYER_COOKIE];
           if (token) {
@@ -3715,15 +3792,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
             if (resolvedId !== null) {
               const player = await storage.getUser(resolvedId);
               if (player) {
-                username = player.displayName || player.username;
+                username = player.username;
+                displayName = player.displayName || player.username;
+                grudgeId = player.grudgeId;
                 userId = player.id;
               }
             }
           }
 
-          clients.set(ws, { username, room, userId });
+          clients.set(ws, { username, displayName, grudgeId, room, userId });
           broadcastToRoom(room, { type: "users", users: getRoomUsers(room) });
-          broadcastToRoom(room, { type: "system", message: `${username} joined the room` });
+          broadcastToRoom(room, { type: "system", message: `${displayName} joined the room` });
         }
 
         if (data.type === "message") {
@@ -3733,20 +3812,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           if (!text) return;
 
           const saved = await storage.createChatMessage({
-            username: info.username,
+            username: info.displayName || info.username,
             message: text,
             room: info.room,
             userId: info.userId,
           });
 
-          broadcastToRoom(info.room, {
-            type: "message",
-            id: saved.id,
-            username: saved.username,
-            message: saved.message,
-            room: saved.room,
-            createdAt: saved.createdAt,
-          });
+          broadcastToRoom(info.room, toWsPayload(saved, info.grudgeId));
         }
 
         if (data.type === "switch_room") {
@@ -3754,10 +3826,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           if (!info) return;
           const oldRoom = info.room;
           const newRoom = (data.room || "general").slice(0, 50);
-          broadcastToRoom(oldRoom, { type: "system", message: `${info.username} left the room` });
+          broadcastToRoom(oldRoom, { type: "system", message: `${info.displayName} left the room` });
           info.room = newRoom;
           broadcastToRoom(newRoom, { type: "users", users: getRoomUsers(newRoom) });
-          broadcastToRoom(newRoom, { type: "system", message: `${info.username} joined the room` });
+          broadcastToRoom(newRoom, { type: "system", message: `${info.displayName} joined the room` });
         }
       } catch (e) {}
     });
@@ -3767,12 +3839,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (info) {
         clients.delete(ws);
         broadcastToRoom(info.room, { type: "users", users: getRoomUsers(info.room) });
-        broadcastToRoom(info.room, { type: "system", message: `${info.username} left the room` });
+        broadcastToRoom(info.room, { type: "system", message: `${info.displayName} left the room` });
       }
     });
   });
 
   setupArenaRooms(httpServer);
+  setupEngineSocket(httpServer);
 
   return httpServer;
 }

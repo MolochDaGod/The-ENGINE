@@ -15,6 +15,7 @@ import { AUTH_PAGE_HTML } from "./auth-page-bundled";
 export interface Env {
   BACKEND_URL: string;       // https://the-engine.up.railway.app
   ALLOWED_ORIGINS: string;   // comma-separated list of trusted origins
+  PORTAL_ORIGIN?: string;    // Vercel SPA — grudge-studio.com
 }
 
 const DEFAULT_ALLOWED_ORIGINS = [
@@ -78,8 +79,22 @@ export default {
       url.pathname = "/api" + url.pathname;
     }
 
-    // id.grudge-studio.com — send humans to the sign-in page (Railway deploy may lag)
+    // id.grudge-studio.com — auth only; portal SPA lives on grudge-studio.com (Vercel)
     if (url.host === "id.grudge-studio.com") {
+      const portal = (env.PORTAL_ORIGIN || "https://grudge-studio.com").replace(/\/$/, "");
+      const isApi = url.pathname.startsWith("/api/");
+      const isAuth =
+        url.pathname === "/" ||
+        url.pathname === "/index.html" ||
+        url.pathname === "/login" ||
+        url.pathname === "/auth" ||
+        url.pathname.startsWith("/auth/") ||
+        url.pathname.startsWith("/api/auth");
+
+      if (!isApi && !isAuth) {
+        return Response.redirect(`${portal}${url.pathname}${url.search}`, 302);
+      }
+
       if (url.pathname === "/" || url.pathname === "/index.html") {
         url.pathname = "/api/auth/page";
       } else if (url.pathname === "/api/auth" || url.pathname === "/auth") {

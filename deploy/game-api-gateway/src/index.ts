@@ -22,6 +22,7 @@
 export interface Env {
   BACKEND_URL: string;
   ALLOWED_ORIGINS: string;
+  GAME_SERVERS?: Fetcher;
 }
 
 const DEFAULT_ALLOWED_ORIGINS = [
@@ -51,6 +52,13 @@ function getAllowedOrigins(env: Env): Set<string> {
   return new Set(list.length > 0 ? list : DEFAULT_ALLOWED_ORIGINS);
 }
 
+const CANONICAL_BACKEND = "https://the-engine.up.railway.app";
+
+function resolveBackend(env: Env): string {
+  const raw = (env.BACKEND_URL || CANONICAL_BACKEND).replace(/\/$/, "");
+  return raw.includes("grudge-api-production") ? CANONICAL_BACKEND : raw;
+}
+
 function corsHeaders(origin: string | null, allowed: Set<string>): Record<string, string> {
   if (!origin || !allowed.has(origin)) return {};
   return {
@@ -76,13 +84,43 @@ export default {
       });
     }
 
+    // Lobby + matchmake — grudge-game-servers worker (not Railway)
+    const isGameServersPath =
+      url.pathname === "/lobbies" ||
+      url.pathname === "/lobby" ||
+      url.pathname.startsWith("/lobby/");
+    if (isGameServersPath) {
+      if (!env.GAME_SERVERS) {
+        return new Response(
+          JSON.stringify({ error: "Lobby service unavailable — GAME_SERVERS binding missing" }),
+          {
+            status: 503,
+            headers: { "Content-Type": "application/json", ...corsHeaders(origin, allowed) },
+          },
+        );
+      }
+      const lobbyResponse = await env.GAME_SERVERS.fetch(request);
+      const headers = new Headers(lobbyResponse.headers);
+      for (const [k, v] of Object.entries(corsHeaders(origin, allowed))) {
+        headers.set(k, v);
+      }
+      return new Response(lobbyResponse.body, {
+        status: lobbyResponse.status,
+        statusText: lobbyResponse.statusText,
+        headers,
+        webSocket: lobbyResponse.webSocket,
+      });
+    }
+
+    const upstreamBase = resolveBackend(env);
+
     // Edge health check — responds without hitting Railway
     if (url.pathname === "/__edge/health") {
       return new Response(
         JSON.stringify({
           ok: true,
           worker: "grudge-game-api",
-          backend: env.BACKEND_URL,
+          backend: upstreamBase,
           time: new Date().toISOString(),
         }),
         {
@@ -95,12 +133,11 @@ export default {
     }
 
     // Build upstream URL — forward path + query as-is to Railway
-    const backendBase = (env.BACKEND_URL || "https://the-engine.up.railway.app").replace(/\/$/, "");
-    const upstreamUrl = backendBase + url.pathname + url.search;
+    const upstreamUrl = upstreamBase + url.pathname + url.search;
 
     // Forward request with proper headers
     const upstreamHeaders = new Headers(request.headers);
-    upstreamHeaders.set("Host", new URL(backendBase).host);
+    upstreamHeaders.set("Host", new URL(upstreamBase).host);
     upstreamHeaders.set("X-Forwarded-Host", url.host);
     upstreamHeaders.set("X-Forwarded-Proto", "https");
     upstreamHeaders.set("X-Gateway", "grudge-game-api");

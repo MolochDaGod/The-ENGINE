@@ -57,6 +57,8 @@ import { useAuth } from "@/components/auth-provider";
 import { useAuthModal } from "@/components/auth-modal";
 import { GameCover } from "@/components/game-cover";
 import { completeProfile } from "@/lib/player-auth";
+import { buildJoinPayload, getTreatyWsUrl, identityFromPlayer, TREATY_CHANNELS } from "@/lib/treaty-chat";
+import TreatyChannelPicker, { treatyChannelById } from "@/components/treaty/TreatyChannelPicker";
 
 // ── Context ──────────────────────────────────────────────────────
 
@@ -449,25 +451,25 @@ function GamesTab() {
 function SocialTab() {
   const { player } = useAuth();
   const { close } = useGrudgePanel();
+  const [chatRoom, setChatRoom] = useState("general");
   const [chatInput, setChatInput] = useState("");
   const [chatMessages, setChatMessages] = useState<any[]>([]);
+  const [chatConnected, setChatConnected] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const activeChannel = treatyChannelById(chatRoom) ?? TREATY_CHANNELS[0];
 
-  // Mini Treaty Chat — connects to the same WS as the chat page
+  // Mini Treaty Chat — Grudge ID + channel picker
   useEffect(() => {
     if (!player) return;
 
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const wsBase = import.meta.env.VITE_WS_URL
-      ? String(import.meta.env.VITE_WS_URL).replace(/\/$/, "")
-      : `${protocol}//${window.location.host}`;
-
-    const ws = new WebSocket(`${wsBase}/ws/chat`);
+    const identity = identityFromPlayer(player);
+    const ws = new WebSocket(getTreatyWsUrl());
     wsRef.current = ws;
 
     ws.onopen = () => {
-      ws.send(JSON.stringify({ type: "join", username: player.displayName || player.username, room: "general" }));
+      setChatConnected(true);
+      ws.send(JSON.stringify(buildJoinPayload(identity, chatRoom)));
     };
 
     ws.onmessage = (event) => {
@@ -478,6 +480,7 @@ function SocialTab() {
     };
 
     ws.onclose = () => {
+      setChatConnected(false);
       wsRef.current = null;
     };
 
@@ -485,7 +488,7 @@ function SocialTab() {
       ws.close();
       wsRef.current = null;
     };
-  }, [player]);
+  }, [player, chatRoom]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -506,17 +509,32 @@ function SocialTab() {
           <span className="text-xs font-heading text-[hsl(43,85%,55%)] uppercase tracking-wider">
             <MessageCircle className="w-3 h-3 inline mr-1" />
             Treaty Chat
+            <span className="ml-1.5 text-[9px] font-normal normal-case text-[hsl(45,15%,45%)]">
+              {activeChannel.icon} #{activeChannel.name}
+            </span>
           </span>
-          <Link href="/chat" onClick={close}>
-            <span className="text-[10px] text-[hsl(43,85%,55%)] hover:underline font-body">Full Chat</span>
+          <Link href={`/chat?room=${chatRoom}`} onClick={close}>
+            <span className="text-[10px] text-[hsl(43,85%,55%)] hover:underline font-body">Open full chat</span>
           </Link>
+        </div>
+        <div className="mb-2 overflow-x-auto">
+          <TreatyChannelPicker
+            currentRoom={chatRoom}
+            onSelect={(id) => {
+              setChatMessages([]);
+              setChatRoom(id);
+            }}
+            layout="bar"
+          />
         </div>
         <div
           className="rounded border border-[hsl(225,20%,15%)] bg-[hsl(225,30%,6%)] h-48 flex flex-col"
         >
           <div className="flex-1 overflow-y-auto px-3 py-2 space-y-1 text-xs">
             {chatMessages.length === 0 && (
-              <p className="text-[hsl(45,15%,40%)] font-body text-center pt-6">Listening to #general…</p>
+              <p className="text-[hsl(45,15%,40%)] font-body text-center pt-6">
+                {chatConnected ? `No messages in #${activeChannel.name} yet.` : "Connecting…"}
+              </p>
             )}
             {chatMessages.map((msg, i) =>
               msg.type === "system" ? (
@@ -535,7 +553,7 @@ function SocialTab() {
               value={chatInput}
               onChange={(e) => setChatInput(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && sendChat()}
-              placeholder="Message #general…"
+              placeholder={`Message #${activeChannel.name}…`}
               className="h-7 text-xs bg-[hsl(225,25%,10%)] border-[hsl(43,60%,30%)]/20"
             />
             <Button size="sm" className="h-7 w-7 p-0 dark-button" onClick={sendChat}>

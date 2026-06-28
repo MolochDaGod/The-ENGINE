@@ -10,9 +10,14 @@
   },
   "rewrites": [
     {
-      "source": "/(.*)",
+      "source": "/",
       "has": [{ "type": "host", "value": "fleet.grudge-studio.com" }],
-      "destination": "/admin-harbor.html"
+      "destination": "https://grudge-fleet-harbor.grudge.workers.dev/"
+    },
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "fleet.grudge-studio.com" }],
+      "destination": "https://grudge-fleet-harbor.grudge.workers.dev/:path*"
     },
     {
       "source": "/",
@@ -26,6 +31,34 @@
     {
       "source": "/api/auth/:path*",
       "destination": "https://the-engine.up.railway.app/api/auth/:path*"
+    },
+    {
+      "source": "/api/me/:path*",
+      "destination": "https://the-engine.up.railway.app/api/me/:path*"
+    },
+    {
+      "source": "/api/web3/:path*",
+      "destination": "https://the-engine.up.railway.app/api/web3/:path*"
+    },
+    {
+      "source": "/api/challenges/:path*",
+      "destination": "https://the-engine.up.railway.app/api/challenges/:path*"
+    },
+    {
+      "source": "/api/friends/:path*",
+      "destination": "https://the-engine.up.railway.app/api/friends/:path*"
+    },
+    {
+      "source": "/api/transactions",
+      "destination": "https://the-engine.up.railway.app/api/transactions"
+    },
+    {
+      "source": "/api/chat/:path*",
+      "destination": "https://the-engine.up.railway.app/api/chat/:path*"
+    },
+    {
+      "source": "/api/treaty/:path*",
+      "destination": "https://the-engine.up.railway.app/api/treaty/:path*"
     },
     {
       "source": "/api/portal-admin/:path*",
@@ -103,7 +136,7 @@
         { "key": "X-Content-Type-Options", "value": "nosniff" },
         { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
         { "key": "Cross-Origin-Resource-Policy", "value": "cross-origin" },
-        { "key": "Content-Security-Policy", "value": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.puter.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://*.grudge-studio.com https://grudachain-rho.vercel.app https://*.vercel.app https://vercel.live; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https: http:; connect-src 'self' https: wss:; frame-src 'self' https://*.puter.com https://*.puter.site https://grudge-studio.com https://grudgewarlords.com https://browse.grudge-studio.com https://*.grudge-studio.com https://*.vercel.app https://vercel.live; media-src 'self' https://assets.grudge-studio.com blob:; worker-src 'self' blob:" }
+        { "key": "Content-Security-Policy", "value": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.puter.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://*.grudge-studio.com https://grudachain-rho.vercel.app https://*.vercel.app https://vercel.live https://phantom.app https://*.phantom.app; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https: http:; connect-src 'self' https: wss: https://api.phantom.app https://*.phantom.app; frame-src 'self' https://*.puter.com https://*.puter.site https://grudge-studio.com https://grudgewarlords.com https://browse.grudge-studio.com https://*.grudge-studio.com https://*.vercel.app https://vercel.live https://phantom.app https://*.phantom.app; media-src 'self' https://assets.grudge-studio.com blob:; worker-src 'self' blob:" }
       ]
     }
   ]

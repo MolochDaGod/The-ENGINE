@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Coins, Copy, ExternalLink, Loader2, Plus, Trash2, Wallet } from "lucide-react";
 import type { PlayerProfile } from "@/lib/player-auth";
+import { apiUrl, solanaExplorerAccountUrl } from "@/lib/api-config";
 
 interface WalletRow {
   id: number;
@@ -23,8 +24,8 @@ interface TransactionRow {
   createdAt: string;
 }
 
-async function fetchJSON<T>(url: string): Promise<T> {
-  const res = await fetch(url, { credentials: "include" });
+async function fetchJSON<T>(path: string): Promise<T> {
+  const res = await fetch(apiUrl(path), { credentials: "include" });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }
@@ -52,7 +53,7 @@ export default function AccountWallet({ player }: { player: PlayerProfile }) {
 
   const removeWallet = useMutation({
     mutationFn: async (walletId: number) => {
-      const res = await fetch(`/api/me/wallets/${walletId}`, { method: "DELETE", credentials: "include" });
+      const res = await fetch(apiUrl(`/api/me/wallets/${walletId}`), { method: "DELETE", credentials: "include" });
       if (!res.ok) throw new Error("Failed to remove wallet");
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/me/wallets"] }),
@@ -89,7 +90,7 @@ export default function AccountWallet({ player }: { player: PlayerProfile }) {
               <button onClick={() => copyText(player.solanaAddress!)} className="text-[hsl(45,15%,45%)] hover:text-[hsl(270,60%,70%)] transition p-1">
                 <Copy className="w-3.5 h-3.5" />
               </button>
-              <a href={`https://solscan.io/account/${player.solanaAddress}?cluster=devnet`} target="_blank" rel="noopener noreferrer" className="text-[hsl(45,15%,45%)] hover:text-[hsl(270,60%,70%)] transition p-1">
+              <a href={solanaExplorerAccountUrl(player.solanaAddress!)} target="_blank" rel="noopener noreferrer" className="text-[hsl(45,15%,45%)] hover:text-[hsl(270,60%,70%)] transition p-1">
                 <ExternalLink className="w-3.5 h-3.5" />
               </a>
             </div>

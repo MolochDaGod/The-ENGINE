@@ -69,20 +69,27 @@ export async function setupVite(app: Express, server: Server) {
 
 export function serveStatic(app: Express) {
   const distPath = path.resolve(import.meta.dirname, "public");
+  const indexPath = path.resolve(distPath, "index.html");
+  const portalOrigin = (process.env.PORTAL_ORIGIN || "https://grudge-studio.com").replace(/\/$/, "");
 
-  if (!fs.existsSync(distPath)) {
-    throw new Error(
-      `Could not find the build directory: ${distPath}, make sure to build the client first`,
-    );
+  // API-only Railway image (Dockerfile skips Vite client) — send browsers to Vercel portal
+  if (!fs.existsSync(indexPath)) {
+    app.use((req, res, next) => {
+      if (req.method !== "GET" && req.method !== "HEAD") return next();
+      if (req.path.startsWith("/api/") || req.path.startsWith("/ws/")) return next();
+      const qs = req.url.includes("?") ? req.url.slice(req.url.indexOf("?")) : "";
+      return res.redirect(302, `${portalOrigin}${req.path}${qs}`);
+    });
+    return;
   }
 
   app.use(express.static(distPath));
 
   // fall through to index.html — never swallow /api/* (auth routes register above)
-  app.use("*", (req, res) => {
+  app.use((req, res) => {
     if (req.path.startsWith("/api/")) {
       return res.status(404).json({ error: "API route not found", path: req.path });
     }
-    res.sendFile(path.resolve(distPath, "index.html"));
+    res.sendFile(indexPath);
   });
 }

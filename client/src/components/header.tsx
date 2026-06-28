@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Anchor, ChevronRight, Cloud, ExternalLink, Flame, Gamepad, Home, Layers3, Library, LogIn, LogOut, Menu, Rocket, Shield, Sparkles, Swords, Trophy, UserCircle, Wrench, X } from "lucide-react";
+import { Anchor, ChevronRight, Cloud, ExternalLink, Flame, Gamepad, Home, Layers3, Library, LogIn, LogOut, Menu, MessageSquare, Rocket, Shield, Sparkles, Swords, Trophy, UserCircle, Wrench, X } from "lucide-react";
 import grudgeLogo from "@assets/uXpJmRe_1773828784729.png";
 import { useAuth } from "@/components/auth-provider";
 import { useAuthModal } from "@/components/auth-modal";
@@ -91,6 +91,7 @@ export default function Header() {
     { name: "Nexus", href: "/#products", icon: Layers3 },
     { name: "Armada", href: "/#play", icon: Flame },
     { name: "Compete", href: "/leaderboards", icon: Trophy },
+    { name: "Treaty Chat", href: "/chat", icon: MessageSquare },
     { name: "Play", href: "/super-engine", icon: Gamepad },
     { name: "Games", href: "/games", icon: Library },
     { name: "Studio", href: "/#studio", icon: Wrench },
@@ -129,9 +130,11 @@ export default function Header() {
                     ? false
                     : link.href === "/games"
                       ? location.startsWith("/games")
-                      : link.href === "/leaderboards"
+                    : link.href === "/leaderboards"
                         ? location.startsWith("/leaderboards")
-                        : link.href.startsWith("/#")
+                        : link.href === "/chat"
+                          ? location.startsWith("/chat")
+                          : link.href.startsWith("/#")
                           ? isHome
                           : location === link.href;
                 const className = `transition-colors font-body text-sm ${active ? "text-[hsl(43,85%,55%)]" : "text-[hsl(45,30%,90%)] hover:text-[hsl(43,85%,55%)]"}`;
@@ -239,6 +242,29 @@ export default function Header() {
                   <Flame className="w-4 h-4 mr-2" /> PvP Hub
                 </Button>
               </Link>
+              <Link href="/chat">
+                <Button variant="ghost" className="w-full justify-start text-left text-[hsl(45,30%,90%)] hover:bg-[hsl(225,25%,20%)] hover:text-[hsl(43,85%,55%)]" onClick={() => setMenuOpen(false)}>
+                  <MessageSquare className="w-4 h-4 mr-2" /> Treaty Chat
+                </Button>
+              </Link>
+              <div className="grid grid-cols-3 gap-1.5 pt-1">
+                {[
+                  { id: "general", label: "💬 General" },
+                  { id: "builds", label: "🔨 Builds" },
+                  { id: "help", label: "🆘 Help" },
+                ].map((ch) => (
+                  <Link key={ch.id} href={`/chat?room=${ch.id}`}>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full text-[10px] h-7 border-[hsl(43,60%,30%)]/25 text-[hsl(45,15%,60%)] hover:text-[hsl(43,85%,55%)]"
+                      onClick={() => setMenuOpen(false)}
+                    >
+                      {ch.label}
+                    </Button>
+                  </Link>
+                ))}
+              </div>
               <Link href="/games">
                 <Button variant="ghost" className="w-full justify-start text-left text-[hsl(45,30%,90%)] hover:bg-[hsl(225,25%,20%)] hover:text-[hsl(43,85%,55%)]" onClick={() => setMenuOpen(false)}>
                   <Library className="w-4 h-4 mr-2" /> Retro Library

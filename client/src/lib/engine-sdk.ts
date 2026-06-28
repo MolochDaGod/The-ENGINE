@@ -10,8 +10,9 @@
  *  - Presence tracking
  */
 
-const WS_URL = import.meta.env.VITE_WS_URL || "https://ws.grudge-studio.com";
-const API_BASE = "";  // same origin
+import { WS_URL, apiUrl } from "./api-config";
+
+const API_BASE = "";  // same origin on portal; apiUrl() used where needed
 
 // ── Auth helpers (cookie-based, same session as /api/auth/*) ──
 interface CachedPlayer {
@@ -148,10 +149,12 @@ export async function connectEngine() {
     const player = await resolvePlayer();
 
     engineSocket = io(`${WS_URL}/engine`, {
+      path: "/socket.io",
       auth: player ? { grudgeId: player.grudgeId, username: player.username } : undefined,
       transports: ["websocket", "polling"],
       reconnection: true,
       reconnectionDelay: 2000,
+      withCredentials: true,
     });
 
     engineSocket.on("engine:presence", (data: any) => {

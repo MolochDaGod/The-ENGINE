@@ -29,10 +29,14 @@ export default defineConfig({
         manualChunks: {
           three: ["three"],
           cannon: ["cannon-es"],
+          phantom: ["@phantom/browser-sdk"],
           vendor: ["react", "react-dom", "wouter", "@tanstack/react-query"],
         },
       },
     },
+  },
+  optimizeDeps: {
+    include: ["@phantom/browser-sdk", "bs58", "socket.io-client"],
   },
   server: {
     fs: {
