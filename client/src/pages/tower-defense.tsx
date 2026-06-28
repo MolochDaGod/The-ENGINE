@@ -122,6 +122,9 @@ const EFFECT_DEFS: Record<string, SheetDef> = {
   magic5:    { src: "/td-assets/effects/magic5.png",       type: "hstrip", frameCount: 4,  frameW: 72,  frameH: 72 },
   archerHit: { src: "/td-assets/archer-tower/explosion2.png", type: "single", frameCount: 1, frameW: 124, frameH: 124 },
   cannonHit: { src: "/td-assets/archer-tower/explosion_big.png", type: "single", frameCount: 1, frameW: 231, frameH: 206 },
+  magicHit:  { src: "/td-assets/effects/magic3.png",       type: "hstrip", frameCount: 10, frameW: 72,  frameH: 72 },
+  sniperHit: { src: "/td-assets/archer-tower/explosion2.png", type: "single", frameCount: 1, frameW: 124, frameH: 124 },
+  frostHit:  { src: "/td-assets/effects/freeze.png",       type: "vstrip", frameCount: 8, frameW: 909, frameH: 300 },
 };
 
 const ARCHER_BASES = [

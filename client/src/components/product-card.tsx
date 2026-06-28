@@ -59,19 +59,19 @@ export function ProductCard({ product }: { product: PortalProduct }) {
   );
 
   if (product.external) {
-  if (product.authRequired) {
-    return (
-      <div
-          role= "link"
-    tabIndex = { 0}
-    className = "block h-full cursor-pointer"
-    onClick = {() => navigateExternal(product.href, true)
-  }
-  onKeyDown = {(e) => { if (e.key === "Enter") navigateExternal(product.href, true); }
-}
+    if (product.authRequired) {
+      return (
+        <div
+          role="link"
+          tabIndex={0}
+          className="block h-full cursor-pointer"
+          onClick={() => navigateExternal(product.href, true)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") navigateExternal(product.href, true);
+          }}
         >
-  { body }
-  </div>
+          {body}
+        </div>
       );
     }
     return (

@@ -135,6 +135,7 @@ const _PORTAL_PRODUCTS_RAW = [
     status: "beta",
     section: "play",
     tags: ["pvp", "solo", "arena"],
+    image: "/assets/games/final-fighter-card.png",
   },
   {
     id: "voxel-sandbox",
@@ -144,6 +145,7 @@ const _PORTAL_PRODUCTS_RAW = [
     status: "beta",
     section: "play",
     tags: ["solo", "coop"],
+    image: "/assets/pvp/pvp-bg-sandbox.jpg",
   },
   {
     id: "grudge-brawl",
@@ -153,6 +155,7 @@ const _PORTAL_PRODUCTS_RAW = [
     status: "beta",
     section: "play",
     tags: ["pvp", "arena"],
+    image: "/assets/games/arena-card.png",
   },
   {
     id: "terraforge",
@@ -162,6 +165,7 @@ const _PORTAL_PRODUCTS_RAW = [
     status: "beta",
     section: "play",
     tags: ["solo", "coop", "pvpve"],
+    image: "/assets/pvp/pvp-bg-sandbox.jpg",
   },
   {
     id: "grudge-crafting",
@@ -245,6 +249,7 @@ const _PORTAL_PRODUCTS_RAW = [
     authRequired: true,
     note: "rpg-modular · embed on /super-engine",
     tags: ["pvp", "arena"],
+    image: "/assets/games/game_rpg_maker.png",
   },
   {
     id: "grudge-angler",
@@ -256,6 +261,7 @@ const _PORTAL_PRODUCTS_RAW = [
     external: true,
     note: "Puter",
     tags: ["solo", "coop"],
+    image: "/assets/pvp/pvp-bg-fishing.jpg",
   },
   {
     id: "grudge-studio-app",
@@ -276,7 +282,7 @@ const _PORTAL_PRODUCTS_RAW = [
     status: "planned",
     section: "play",
     tags: ["rts", "pvp"],
-    image: "/assets/armada/star-rts-card.png",
+    image: "/assets/games/space-rts-card.webp",
   },
   {
     id: "survival-game",
@@ -288,7 +294,7 @@ const _PORTAL_PRODUCTS_RAW = [
     external: true,
     authRequired: true,
     tags: ["solo", "coop", "pvpve"],
-    image: "/assets/armada/survival-card.png",
+    image: "/assets/games/survival-card.png",
   },
   // ── Armada era ──
   {
@@ -332,7 +338,7 @@ const _PORTAL_PRODUCTS_RAW = [
     authRequired: true,
     note: "Canonical: nemesis.grudge-studio.com — grudgeplatform.io pending registrar DNS → Railway",
     tags: ["pvp", "solo"],
-    image: "/assets/store/scifi_environment.png",
+    image: "/assets/pvp/pvp-bg-tcg.jpg",
   },
   {
     id: "grudge-forge",
@@ -545,6 +551,7 @@ const _PORTAL_PRODUCTS_RAW = [
     external: true,
     note: "Puter",
     tags: ["solo", "pvpve"],
+    image: "/assets/games/tactical-rpg-card.png",
   },
   {
     id: "grudge-warlords-rts",
