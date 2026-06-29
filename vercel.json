@@ -22,7 +22,7 @@
     {
       "source": "/",
       "has": [{ "type": "host", "value": "character.grudge-studio.com" }],
-      "destination": "/viewer"
+      "destination": "/roster"
     },
     {
       "source": "/",

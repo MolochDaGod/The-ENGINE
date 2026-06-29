@@ -52,6 +52,7 @@ import WargusDefault from "@/pages/wargus-default";
 import AssetPipeline from "@/pages/asset-pipeline";
 import ComingSoon from "@/pages/coming-soon";
 import CharacterViewerPage from "@/pages/character-viewer";
+import CharacterRosterPage from "@/pages/character-roster";
 import VoxelSandbox from "@/pages/voxel-sandbox";
 import PolyFighter from "@/pages/polyfighter";
 import TerraForge from "@/pages/terraforge";
@@ -123,6 +124,7 @@ function Router() {
       <Route path="/terraforge" component={TerraForge} />
       <Route path="/grudge-brawl" component={GrudgeBrawl} />
       <Route path="/viewer" component={CharacterViewerPage} />
+      <Route path="/roster" component={CharacterRosterPage} />
       <Route path="/starway-gruda" component={ComingSoon} />
       <Route path="/rts-star-armada" component={ComingSoon} />
       <Route path="/mech-armada" component={ComingSoon} />
@@ -140,7 +142,9 @@ function AppShell() {
     hostname === "character.grudge-studio.com" ||
     hostname === "characters.grudge-studio.com" ||
     hostname === "grudge6.grudge-studio.com";
-  const isViewerRoute = location === "/viewer" || location.startsWith("/viewer?");
+  const isViewerRoute =
+    location === "/viewer" || location.startsWith("/viewer?") ||
+    location === "/roster" || location.startsWith("/roster?");
   const minimalChrome = isViewerHost || isViewerRoute;
 
   return (

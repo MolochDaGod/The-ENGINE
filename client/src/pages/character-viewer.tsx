@@ -9,7 +9,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Sparkles, Users, ExternalLink, ArrowLeft } from "lucide-react";
+import { Sparkles, Users, ExternalLink, ArrowLeft, Swords } from "lucide-react";
 import CharacterViewport from "@/components/character-viewport";
 import {
   CHARACTER_PREFABS,
@@ -146,6 +146,11 @@ export default function CharacterViewerPage() {
               <Sparkles className="w-3.5 h-3.5 mr-1" />
               VFX {vfxMode ? "on" : "off"}
             </Button>
+            <Link href="/roster">
+              <Button variant="outline" size="sm" className="border-[hsl(43,60%,30%)]/40">
+                <Swords className="w-3.5 h-3.5 mr-1" /> Roster
+              </Button>
+            </Link>
             <a
               href="https://github.com/Grudge-Warlords/The-ENGINE"
               target="_blank"

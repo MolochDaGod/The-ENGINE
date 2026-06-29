@@ -7,9 +7,11 @@ import { Loader2, RotateCcw, Swords, Footprints, Heart, Skull, Zap } from "lucid
 import {
   AnimatedUnit,
   createAnimatedUnit,
+  GrudgeAssets,
   type UnitAnimState,
 } from "@/lib/grudge-assets";
 import { getEquipmentMeshNames, type CharacterPrefab } from "@shared/character-prefabs";
+import { applyLaneMeshVisibility, applyUnarmedMeshVisibility } from "@shared/game-roster";
 
 const CDN_BASE = "https://assets.grudge-studio.com";
 
@@ -29,15 +31,22 @@ function hexToNumber(hex: string): number {
 interface Props {
   prefab: CharacterPrefab;
   vfxMode?: boolean;
+  /** Player preview — hide class weapons from FBX */
+  unarmed?: boolean;
+  /** Lane unit preview — show full prefab equipment */
+  laneMode?: boolean;
+  /** CDN manifest keys for pregame weapon attach */
+  weaponManifestKeys?: string[];
 }
 
-export default function CharacterViewport({ prefab, vfxMode }: Props) {
+export default function CharacterViewport({ prefab, vfxMode, unarmed, laneMode, weaponManifestKeys }: Props) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const controlsRef = useRef<OrbitControls | null>(null);
   const unitRef = useRef<AnimatedUnit | null>(null);
+  const weaponRefs = useRef<THREE.Object3D[]>([]);
   const vfxRef = useRef<THREE.Points | null>(null);
   const rafRef = useRef(0);
   const clockRef = useRef(new THREE.Clock());
@@ -52,6 +61,10 @@ export default function CharacterViewport({ prefab, vfxMode }: Props) {
       unitRef.current.dispose();
       unitRef.current = null;
     }
+    for (const w of weaponRefs.current) {
+      scene.remove(w);
+    }
+    weaponRefs.current = [];
     if (vfxRef.current) {
       scene.remove(vfxRef.current);
       vfxRef.current.geometry.dispose();
@@ -119,6 +132,8 @@ export default function CharacterViewport({ prefab, vfxMode }: Props) {
     }
 
     unit.root.position.set(0, 0, 0);
+    if (unarmed) applyUnarmedMeshVisibility(unit.root);
+    else if (laneMode) applyLaneMeshVisibility(unit.root, prefab);
     scene.add(unit.root);
     unitRef.current = unit;
 
@@ -132,8 +147,24 @@ export default function CharacterViewport({ prefab, vfxMode }: Props) {
     controlsRef.current?.update();
 
     if (vfxMode) spawnVfx(scene, prefab.classColor);
+
+    if (weaponManifestKeys?.length) {
+      const assets = GrudgeAssets.getInstance();
+      let offset = 0;
+      for (const key of weaponManifestKeys) {
+        const gltf = await assets.loadModel(key);
+        if (!gltf) continue;
+        const w = gltf.scene.clone();
+        w.scale.setScalar(0.35);
+        w.position.set(0.35 + offset * 0.15, 1.0, 0.1);
+        scene.add(w);
+        weaponRefs.current.push(w);
+        offset += 1;
+      }
+    }
+
     setLoading(false);
-  }, [prefab, vfxMode, clearScene, spawnVfx]);
+  }, [prefab, vfxMode, unarmed, laneMode, weaponManifestKeys, clearScene, spawnVfx]);
 
   useEffect(() => {
     if (!hostRef.current) return;
@@ -237,7 +268,10 @@ export default function CharacterViewport({ prefab, vfxMode }: Props) {
     <div className="flex flex-col h-full min-h-0 rounded-lg border border-[hsl(43,60%,30%)]/30 bg-[hsl(225,25%,8%)] overflow-hidden">
       <div className="flex items-center gap-2 px-3 py-2 border-b border-[hsl(43,60%,30%)]/20 shrink-0">
         <span className="text-sm font-heading text-[hsl(43,85%,55%)]">{prefab.name}</span>
-        <span className="text-[10px] text-[hsl(45,15%,55%)]">{prefab.animationPack}</span>
+        <span className="text-[10px] text-[hsl(45,15%,55%)]">
+          {unarmed ? "unarmed" : prefab.animationPack}
+          {laneMode ? " · lane" : ""}
+        </span>
         {loading && <Loader2 size={12} className="animate-spin text-[hsl(43,85%,55%)] ml-auto" />}
       </div>
       <div className="flex-1 min-h-[280px] relative" ref={hostRef} />
@@ -261,6 +295,12 @@ export default function CharacterViewport({ prefab, vfxMode }: Props) {
         <span>Faction {prefab.faction}</span>
         <span>·</span>
         <span>{equipment.length} equipment meshes</span>
+        {weaponManifestKeys && weaponManifestKeys.length > 0 && (
+          <>
+            <span>·</span>
+            <span className="text-[hsl(43,85%,55%)]">{weaponManifestKeys.length} pregame weapon(s)</span>
+          </>
+        )}
         {vfxMode && (
           <>
             <span>·</span>
