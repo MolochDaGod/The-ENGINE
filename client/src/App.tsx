@@ -1,4 +1,4 @@
-import { Switch, Route } from "wouter";
+import { Switch, Route, useLocation } from "wouter";
 import type { ComponentType } from "react";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -51,6 +51,7 @@ import GrudgeControllerDemo from "@/pages/grudge-controller-demo";
 import WargusDefault from "@/pages/wargus-default";
 import AssetPipeline from "@/pages/asset-pipeline";
 import ComingSoon from "@/pages/coming-soon";
+import CharacterViewerPage from "@/pages/character-viewer";
 import VoxelSandbox from "@/pages/voxel-sandbox";
 import PolyFighter from "@/pages/polyfighter";
 import TerraForge from "@/pages/terraforge";
@@ -121,6 +122,7 @@ function Router() {
       <Route path="/polyfighter" component={PolyFighter} />
       <Route path="/terraforge" component={TerraForge} />
       <Route path="/grudge-brawl" component={GrudgeBrawl} />
+      <Route path="/viewer" component={CharacterViewerPage} />
       <Route path="/starway-gruda" component={ComingSoon} />
       <Route path="/rts-star-armada" component={ComingSoon} />
       <Route path="/mech-armada" component={ComingSoon} />
@@ -131,20 +133,39 @@ function Router() {
   );
 }
 
+function AppShell() {
+  const [location] = useLocation();
+  const hostname = typeof window !== "undefined" ? window.location.hostname : "";
+  const isViewerHost =
+    hostname === "character.grudge-studio.com" ||
+    hostname === "characters.grudge-studio.com" ||
+    hostname === "grudge6.grudge-studio.com";
+  const isViewerRoute = location === "/viewer" || location.startsWith("/viewer?");
+  const minimalChrome = isViewerHost || isViewerRoute;
+
+  return (
+    <TooltipProvider>
+      <Toaster />
+      {!minimalChrome && <Header />}
+      <Router />
+      {!minimalChrome && (
+        <>
+          <GrudgePanelTab />
+          <AdminEntryButton />
+        </>
+      )}
+      <FleetConnectInit />
+    </TooltipProvider>
+  );
+}
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <AuthModalProvider>
           <GrudgePanelProvider>
-            <TooltipProvider>
-              <Toaster />
-              <Header />
-              <Router />
-              <GrudgePanelTab />
-              <AdminEntryButton />
-              <FleetConnectInit />
-            </TooltipProvider>
+            <AppShell />
           </GrudgePanelProvider>
         </AuthModalProvider>
       </AuthProvider>

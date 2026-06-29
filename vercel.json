@@ -21,6 +21,21 @@
     },
     {
       "source": "/",
+      "has": [{ "type": "host", "value": "character.grudge-studio.com" }],
+      "destination": "/viewer"
+    },
+    {
+      "source": "/",
+      "has": [{ "type": "host", "value": "characters.grudge-studio.com" }],
+      "destination": "/viewer"
+    },
+    {
+      "source": "/",
+      "has": [{ "type": "host", "value": "grudge6.grudge-studio.com" }],
+      "destination": "/viewer"
+    },
+    {
+      "source": "/",
       "has": [{ "type": "host", "value": "id.grudge-studio.com" }],
       "destination": "/api/auth/page"
     },
