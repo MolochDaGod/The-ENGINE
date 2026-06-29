@@ -21,6 +21,11 @@
     },
     {
       "source": "/",
+      "has": [{ "type": "host", "value": "conan.grudge-studio.com" }],
+      "destination": "/conan"
+    },
+    {
+      "source": "/",
       "has": [{ "type": "host", "value": "character.grudge-studio.com" }],
       "destination": "/roster"
     },

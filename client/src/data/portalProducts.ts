@@ -457,8 +457,8 @@ const _PORTAL_PRODUCTS_RAW = [
   {
     id: "conan-admin",
     name: "Grudge Exiles",
-    href: "https://conan-admin.vercel.app",
-    description: "Conan Exiles server admin panel, Discord bot, and RCON management for the Grudge Exiles community server.",
+    href: "https://conan.grudge-studio.com",
+    description: "Conan Exiles community server — connect info, rules, and Discord. Staff admin: admin.conan4869.com.",
     status: "live",
     section: "studio",
     external: true,
