@@ -16,6 +16,8 @@ const isProd = process.env.NODE_ENV === "production";
 const allowedOrigins = (process.env.CORS_ORIGINS || [
   "https://grudge-studio.com",
   "https://grudgewarlords.com",
+  "https://forge.grudge-studio.com",
+  "https://studio-forge.vercel.app",
   "https://id.grudge-studio.com",
   "https://client.grudge-studio.com",
   "https://dash.grudge-studio.com",
