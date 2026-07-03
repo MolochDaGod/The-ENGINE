@@ -34,6 +34,7 @@ const DEFAULT_ALLOWED_ORIGINS = [
   "https://dash.grudge-studio.com",
   "https://wallet.grudge-studio.com",
   "https://client.grudge-studio.com",
+  "https://nexus.grudge-studio.com",
   "http://localhost:5173",
   "http://localhost:5000",
 ];

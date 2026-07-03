@@ -315,7 +315,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const token = createPlayerToken(user.id);
       setPlayerCookie(res, token);
 
-      return res.json(publicPlayer(user, true));
+      return res.json(publicPlayer(user, true, token));
     } catch (error) {
       console.error("Register error:", error);
       return res.status(500).json({ error: "Registration failed" });
@@ -346,7 +346,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const token = createPlayerToken(user.id);
       setPlayerCookie(res, token);
 
-      return res.json(publicPlayer(user, false));
+      return res.json(publicPlayer(user, false, token));
     } catch (error) {
       console.error("Login error:", error);
       return res.status(500).json({ error: "Login failed" });
@@ -477,8 +477,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     return `${target}${sep}${tag}`;
   }
 
-  function publicPlayer(user: any, isNew = false) {
-    return {
+  function publicPlayer(user: any, isNew = false, token?: string) {
+    const profile = {
       id: user.id,
       username: user.username,
       grudgeId: user.grudgeId,
@@ -489,6 +489,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       needsProfile: !!user.needsProfile,
       isNew,
     };
+    return token ? { ...profile, token } : profile;
   }
 
   // Guest sign-in -------------------------------------------------
@@ -519,7 +520,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       const token = createPlayerToken(user.id);
       setPlayerCookie(res, token);
-      return res.json(publicPlayer(user, true));
+      return res.json(publicPlayer(user, true, token));
     } catch (error) {
       console.error("Guest sign-in error:", error);
       return res.status(500).json({ error: "Guest sign-in failed" });
@@ -625,7 +626,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const token = createPlayerToken(user.id);
       setPlayerCookie(res, token);
-      return res.json(publicPlayer(user, isNew));
+      return res.json(publicPlayer(user, isNew, token));
     } catch (error) {
       console.error("Phantom verify error:", error);
       return res.status(500).json({ error: "Wallet auth failed" });
@@ -1079,7 +1080,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const token = createPlayerToken(user.id);
       setPlayerCookie(res, token);
-      return res.json(publicPlayer(user, isNew));
+      return res.json(publicPlayer(user, isNew, token));
     } catch (error) {
       console.error("Twilio verify error:", error);
       return res.status(500).json({ error: "Failed to verify code" });
@@ -1324,7 +1325,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         await storage.updateUser(user.id, { lastLoginAt: new Date() });
         const token = createPlayerToken(user.id);
         setPlayerCookie(res, token);
-        return res.json(publicPlayer(user, false));
+        return res.json(publicPlayer(user, false, token));
       }
 
       // Smart link: if Puter gave us an email that matches an existing account,
@@ -1336,7 +1337,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           user = (await storage.getUser(emailMatch.id))!;
           const token = createPlayerToken(user.id);
           setPlayerCookie(res, token);
-          return res.json(publicPlayer(user, false));
+          return res.json(publicPlayer(user, false, token));
         }
       }
 
@@ -1369,7 +1370,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const token = createPlayerToken(user.id);
       setPlayerCookie(res, token);
-      return res.json(publicPlayer(user, isNew));
+      return res.json(publicPlayer(user, isNew, token));
     } catch (error) {
       console.error("Puter SSO error:", error);
       return res.status(500).json({ error: "SSO failed" });
