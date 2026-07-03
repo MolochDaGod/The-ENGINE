@@ -1,22 +1,20 @@
 /**
  * Grudge Auth Gateway – Cloudflare Worker
  *
- * Proxies all requests from id.grudge-studio.com → the-engine.up.railway.app
- *
- * Extra responsibilities:
- *  - Dynamic CORS for trusted origins (from ALLOWED_ORIGINS env var)
- *  - Path alias: /auth/* → /api/auth/*
- *  - Serves canonical sign-in HTML at the edge (GET /api/auth/page)
- *  - Forwards cookies and credentials transparently
+ * id.grudge-studio.com → canonical Grudge ID API (grudge-api-production).
+ * One login surface for the whole fleet — no split-brain with The-ENGINE.
  */
 
-import { AUTH_PAGE_HTML } from "./auth-page-bundled";
-
 export interface Env {
-  BACKEND_URL: string;       // https://the-engine.up.railway.app
-  ALLOWED_ORIGINS: string;   // comma-separated list of trusted origins
-  PORTAL_ORIGIN?: string;    // Vercel SPA — grudge-studio.com
+  /** Canonical auth API (grudge-builder Railway) */
+  AUTH_UPSTREAM: string;
+  /** Legacy fallback — unused for id host auth routes */
+  BACKEND_URL: string;
+  ALLOWED_ORIGINS: string;
+  PORTAL_ORIGIN?: string;
 }
+
+const DEFAULT_AUTH_UPSTREAM = "https://grudge-api-production-0d46.up.railway.app";
 
 const DEFAULT_ALLOWED_ORIGINS = [
   "https://grudge-studio.com",
@@ -39,14 +37,6 @@ const DEFAULT_ALLOWED_ORIGINS = [
   "http://localhost:5000",
 ];
 
-function isAuthPagePath(pathname: string): boolean {
-  return (
-    pathname === "/api/auth/page" ||
-    pathname === "/api/auth/popup" ||
-    pathname === "/account"
-  );
-}
-
 function getAllowedOrigins(env: Env): Set<string> {
   const raw = env.ALLOWED_ORIGINS || "";
   const list = raw.split(",").map((s) => s.trim()).filter(Boolean);
@@ -65,13 +55,40 @@ function corsHeaders(origin: string | null, allowed: Set<string>): HeadersInit {
   };
 }
 
+function isAuthRoute(pathname: string): boolean {
+  return (
+    pathname === "/" ||
+    pathname === "/index.html" ||
+    pathname === "/login" ||
+    pathname === "/account" ||
+    pathname === "/auth" ||
+    pathname.startsWith("/auth/") ||
+    pathname.startsWith("/api/auth") ||
+    pathname.startsWith("/api/me")
+  );
+}
+
+function normalizeIdHostPath(url: URL): void {
+  if (url.pathname === "/" || url.pathname === "/index.html") {
+    url.pathname = "/api/auth/page";
+    return;
+  }
+  if (url.pathname === "/api/auth" || url.pathname === "/auth") {
+    url.pathname = "/api/auth/page";
+    return;
+  }
+  // Legacy fleet bootstrap: /auth/sso-check → grudge-api alias
+  if (url.pathname.startsWith("/auth/")) {
+    url.pathname = "/api" + url.pathname;
+  }
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
     const origin = request.headers.get("Origin");
     const allowed = getAllowedOrigins(env);
 
-    // Handle CORS pre-flight
     if (request.method === "OPTIONS") {
       return new Response(null, {
         status: 204,
@@ -79,62 +96,34 @@ export default {
       });
     }
 
-    // Path alias: /auth/* → /api/auth/*
-    if (url.pathname.startsWith("/auth/") && url.pathname !== "/auth") {
-      url.pathname = "/api" + url.pathname;
-    }
+    const portal = (env.PORTAL_ORIGIN || "https://grudge-studio.com").replace(/\/$/, "");
 
-    // id.grudge-studio.com — auth only; portal SPA lives on grudge-studio.com (Vercel)
     if (url.host === "id.grudge-studio.com") {
-      const portal = (env.PORTAL_ORIGIN || "https://grudge-studio.com").replace(/\/$/, "");
       const isApi = url.pathname.startsWith("/api/");
-      const isAuth =
-        url.pathname === "/" ||
-        url.pathname === "/index.html" ||
-        url.pathname === "/login" ||
-        url.pathname === "/account" ||
-        url.pathname === "/auth" ||
-        url.pathname.startsWith("/auth/") ||
-        url.pathname.startsWith("/api/auth");
+      const isAuth = isAuthRoute(url.pathname);
 
       if (!isApi && !isAuth) {
         return Response.redirect(`${portal}${url.pathname}${url.search}`, 302);
       }
 
-      if (url.pathname === "/" || url.pathname === "/index.html") {
-        url.pathname = "/api/auth/page";
-      } else if (url.pathname === "/api/auth" || url.pathname === "/auth") {
-        const accept = request.headers.get("accept") || "";
-        const wantsJson = accept.includes("application/json") && !accept.includes("text/html");
-        if (!wantsJson) {
-          url.pathname = "/api/auth/page";
-        }
-      }
+      normalizeIdHostPath(url);
+    } else if (url.pathname.startsWith("/auth/") && url.pathname !== "/auth") {
+      url.pathname = "/api" + url.pathname;
     }
 
-    // Serve fixed sign-in HTML at the edge (Railway may still ship the broken regex build)
-    if (request.method === "GET" && isAuthPagePath(url.pathname)) {
-      return new Response(AUTH_PAGE_HTML, {
-        status: 200,
-        headers: {
-          "Content-Type": "text/html; charset=utf-8",
-          "Cache-Control": "public, max-age=60",
-          "X-Grudge-Auth-Page": "edge-v2",
-          ...corsHeaders(origin, allowed),
-        },
-      });
-    }
+    const authUpstream = (env.AUTH_UPSTREAM || DEFAULT_AUTH_UPSTREAM).replace(/\/$/, "");
+    const upstreamBase =
+      url.host === "id.grudge-studio.com" && isAuthRoute(url.pathname)
+        ? authUpstream
+        : (env.BACKEND_URL || "https://the-engine.up.railway.app").replace(/\/$/, "");
 
-    // Build the upstream URL
-    const backendBase = (env.BACKEND_URL || "https://the-engine.up.railway.app").replace(/\/$/, "");
-    const upstreamUrl = backendBase + url.pathname + url.search;
+    const upstreamUrl = upstreamBase + url.pathname + url.search;
 
-    // Forward the request – clone headers and strip host so Railway accepts it
     const upstreamHeaders = new Headers(request.headers);
-    upstreamHeaders.set("Host", new URL(backendBase).host);
-    // Let Railway know the real origin domain
-    upstreamHeaders.set("X-Forwarded-Host", url.host);
+    upstreamHeaders.set("Host", new URL(upstreamBase).host);
+    upstreamHeaders.set("X-Forwarded-Host", "id.grudge-studio.com");
     upstreamHeaders.set("X-Forwarded-Proto", "https");
+    upstreamHeaders.set("X-Grudge-Auth-Gateway", "identity-v3");
 
     let upstreamResponse: Response;
     try {
@@ -142,19 +131,21 @@ export default {
         method: request.method,
         headers: upstreamHeaders,
         body: ["GET", "HEAD"].includes(request.method) ? null : request.body,
-        redirect: "manual", // pass 3xx through to the browser
+        redirect: "manual",
       });
     } catch (err) {
-      return new Response(JSON.stringify({ error: "Gateway error", detail: String(err) }), {
-        status: 502,
-        headers: {
-          "Content-Type": "application/json",
-          ...corsHeaders(origin, allowed),
+      return new Response(
+        JSON.stringify({ error: "Grudge ID gateway error", detail: String(err) }),
+        {
+          status: 502,
+          headers: {
+            "Content-Type": "application/json",
+            ...corsHeaders(origin, allowed),
+          },
         },
-      });
+      );
     }
 
-    // Build response with merged CORS headers
     const responseHeaders = new Headers(upstreamResponse.headers);
     for (const [k, v] of Object.entries(corsHeaders(origin, allowed))) {
       responseHeaders.set(k, v);
