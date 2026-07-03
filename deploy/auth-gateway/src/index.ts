@@ -64,7 +64,11 @@ function isAuthRoute(pathname: string): boolean {
     pathname === "/auth" ||
     pathname.startsWith("/auth/") ||
     pathname.startsWith("/api/auth") ||
-    pathname.startsWith("/api/me")
+    pathname.startsWith("/api/me") ||
+    pathname === "/grudge-auth-modal.js" ||
+    pathname === "/grudge-auth-modal.css" ||
+    pathname === "/grudge-game-bootstrap.js" ||
+    pathname === "/embed/auth.js"
   );
 }
 
