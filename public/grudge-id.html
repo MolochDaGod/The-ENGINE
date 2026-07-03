@@ -327,6 +327,90 @@ body {
 }
 .foot .trust svg { width: 12px; height: 12px; opacity: 0.7; }
 .back-link { display: block; text-align: center; margin-top: 14px; }
+.context-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 18px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: rgba(201, 162, 39, 0.08);
+  border: 1px solid rgba(201, 162, 39, 0.2);
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+}
+.context-banner strong { color: var(--text); font-weight: 600; }
+.context-banner[hidden] { display: none !important; }
+.returning-icon {
+  width: 52px; height: 52px;
+  margin: 0 auto 16px;
+  border-radius: 14px;
+  background: rgba(201, 162, 39, 0.12);
+  border: 1px solid rgba(201, 162, 39, 0.25);
+  display: grid; place-items: center;
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  color: var(--gold-bright);
+}
+.account-avatar {
+  width: 56px; height: 56px;
+  margin: 0 auto 14px;
+  border-radius: 50%;
+  background: linear-gradient(145deg, rgba(201,162,39,0.2), rgba(201,162,39,0.05));
+  border: 1px solid var(--border);
+  display: grid; place-items: center;
+  font-weight: 600;
+  font-size: 1.125rem;
+  color: var(--gold-bright);
+  text-transform: uppercase;
+}
+.account-meta { text-align: center; margin-bottom: 18px; }
+.account-meta .name { font-size: 1.05rem; font-weight: 600; }
+.account-meta .handle { font-size: 0.8125rem; color: var(--text-muted); margin-top: 2px; }
+.stat-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 11px 14px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  margin-bottom: 8px;
+  font-size: 0.875rem;
+}
+.stat-row span:last-child { color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.conn-list { margin: 14px 0 18px; }
+.conn-list h3 {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+.conn-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-bottom: 6px;
+  font-size: 0.8125rem;
+}
+.conn-item .on { color: var(--success); font-size: 0.75rem; }
+.conn-item .off { color: var(--text-muted); font-size: 0.75rem; }
+.btn-copy {
+  background: none; border: none;
+  color: var(--gold);
+  font-size: 0.75rem;
+  cursor: pointer;
+  margin-left: 8px;
+}
+.btn-copy:hover { text-decoration: underline; }
+.foot-links { margin-top: 8px; }
+.foot-links a { margin: 0 6px; }
 @media (max-width: 440px) {
   body { padding: 0; align-items: stretch; }
   .card { min-height: 100vh; border-radius: 0; border: none; padding: 40px 24px 28px; display: flex; flex-direction: column; justify-content: center; }
@@ -346,11 +430,14 @@ body {
       <svg viewBox="0 0 32 32" fill="none"><path d="M16 2l11 5v8c0 7-4.7 12.4-11 15-6.3-2.6-11-8-11-15V7l11-5z" stroke="url(#g)" stroke-width="1.6" stroke-linejoin="round"/><path d="M16 9.5l2.2 4.6 5 .6-3.7 3.4 1 5-4.5-2.5L11.5 23l1-5L8.8 14.7l5-.6L16 9.5z" fill="url(#g)"/><defs><linearGradient id="g" x1="5" y1="2" x2="27" y2="30"><stop stop-color="#e8c547"/><stop offset="1" stop-color="#8c7420"/></linearGradient></defs></svg>
     </div>
     <h1>Grudge Studio</h1>
-    <p>One account for every game</p>
+    <p id="brand-sub">One account for every game</p>
   </header>
 
   <section class="view active" id="view-choose">
-    <p class="choose-lead">Sign in to sync progress, characters, and purchases across the fleet.</p>
+    <div class="context-banner" id="context-banner" hidden>
+      Continuing to <strong id="context-app">your app</strong>
+    </div>
+    <p class="choose-lead" id="choose-lead">Sign in to sync progress, characters, and purchases across the fleet.</p>
     <button class="btn btn-primary" id="btn-puter" type="button">
       <span style="text-align:left;flex:1">
         <span class="lead" id="puter-lead">Continue with Grudge ID</span>
@@ -406,12 +493,38 @@ body {
     <button class="btn-link back-link" id="ph-back" type="button">← Back</button>
   </section>
 
+  <section class="view" id="view-returning">
+    <div class="returning-icon" id="returning-icon" aria-hidden="true">→</div>
+    <div class="view-title">Returning you now</div>
+    <div class="view-sub">Signed in successfully. Taking you back to <strong id="returning-app-name">your app</strong>…</div>
+    <div style="text-align:center;padding:12px 0"><span class="spin"></span></div>
+  </section>
+
   <section class="view" id="view-done">
     <div class="success-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
     <div class="view-title" id="done-title">Signed in</div>
+    <div class="view-sub" id="done-sub" style="display:none"></div>
     <div class="identity"><div class="name" id="done-name">—</div><div class="gid" id="done-gid">—</div></div>
-    <button class="btn btn-primary" id="done-continue" type="button"><span class="lead">Continue</span></button>
+    <button class="btn btn-primary" id="done-continue" type="button"><span class="lead" id="done-continue-label">Continue</span></button>
     <div style="text-align:center;margin-top:14px"><button class="btn-link" id="done-switch" type="button">Use a different account</button></div>
+  </section>
+
+  <section class="view" id="view-account">
+    <div class="account-avatar" id="acct-avatar" aria-hidden="true">?</div>
+    <div class="account-meta">
+      <div class="name" id="acct-name">—</div>
+      <div class="handle" id="acct-handle">@—</div>
+    </div>
+    <div class="stat-row"><span>Grudge ID</span><span id="acct-gid-wrap"><span id="acct-gid">—</span><button type="button" class="btn-copy" id="acct-copy">Copy</button></span></div>
+    <div class="stat-row" id="acct-gbux-row" style="display:none"><span>GBux balance</span><span id="acct-gbux">0</span></div>
+    <div class="stat-row"><span>Account type</span><span id="acct-role">Player</span></div>
+    <div class="conn-list">
+      <h3>Connected sign-in methods</h3>
+      <div id="acct-connections"></div>
+    </div>
+    <a class="btn btn-secondary" id="acct-nexus" href="https://nexus.grudge-studio.com" style="text-decoration:none;margin-bottom:8px">Open Nexus Hub</a>
+    <button class="btn btn-ghost" id="acct-signout" type="button">Sign out everywhere</button>
+    <button class="btn-link back-link" id="acct-back" type="button">← Sign in page</button>
   </section>
 
   <section class="view" id="view-loading">
@@ -424,6 +537,7 @@ body {
   <footer class="foot">
     By continuing you agree to our <a href="https://grudgewarlords.com/tos" target="_blank" rel="noopener">Terms</a> and <a href="https://grudgewarlords.com/privacy" target="_blank" rel="noopener">Privacy Policy</a>.
     <div class="trust"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg> Encrypted sign-in</div>
+    <div class="foot-links"><a href="/account">Manage account</a></div>
   </footer>
 </main>
 </div>
@@ -457,6 +571,8 @@ const CONFIG = { apiBase: resolveApiBase() };
 const qs = new URLSearchParams(location.search);
 const isPopup = (() => { try { return !!window.opener && window.opener !== window; } catch { return false; } })();
 const returnTo = qs.get("redirect") || qs.get("return_to") || null;
+const appKey = (qs.get("app") || "").toLowerCase();
+const isAccountMode = location.pathname === "/account" || qs.get("view") === "account";
 let openerOrigin = qs.get("origin") || qs.get("audience") || null;
 if (!openerOrigin && document.referrer) { try { openerOrigin = new URL(document.referrer).origin; } catch {} }
 const isHandoffReturn = qs.get("handoff") === "1";
@@ -464,8 +580,87 @@ const urlLaunchToken = qs.get("grudge_token");
 window.addEventListener("message", (e) => { if (e?.data?.type === "grudge-auth:init" && typeof e.data.origin === "string") openerOrigin = e.data.origin; });
 if (isPopup) { try { window.opener.postMessage({ type: "grudge-auth:ready" }, "*"); } catch {} }
 
+const APP_LABELS = {
+  nexus: "Nexus Hub",
+  warlords: "Grudge Warlords",
+  wcs: "Warlord Crafting Suite",
+  dash: "Dashboard",
+  fleet: "Fleet",
+  game: "Grudge Tactics",
+  client: "Grudge Portal",
+  grudgedot: "grudgeDot",
+  coder: "grudgeDot",
+  platform: "Grudge Platform",
+  apps: "Grudge Platform",
+  ai: "Legion AI",
+  legion: "Legion AI",
+  character: "Character Hub",
+  wallet: "Wallet",
+  puter: "Puter Cloud",
+};
+const HOST_LABELS = {
+  "nexus.grudge-studio.com": "Nexus Hub",
+  "grudachain.grudge-studio.com": "Nexus Hub",
+  "grudgewarlords.com": "Grudge Warlords",
+  "www.grudgewarlords.com": "Grudge Warlords",
+  "client.grudge-studio.com": "Grudge Portal",
+  "wcs.grudge-studio.com": "Warlord Crafting Suite",
+  "dash.grudge-studio.com": "Dashboard",
+  "game.grudge-studio.com": "Grudge Tactics",
+  "coder.grudge-studio.com": "grudgeDot",
+  "apps.grudge-studio.com": "Grudge Platform",
+  "ai.grudge-studio.com": "Legion AI",
+};
+
+function resolveAppLabel(){
+  if (appKey && APP_LABELS[appKey]) return APP_LABELS[appKey];
+  if (returnTo) {
+    try {
+      const host = new URL(returnTo).hostname.toLowerCase();
+      if (HOST_LABELS[host]) return HOST_LABELS[host];
+      if (host.endsWith(".grudge-studio.com")) {
+        const slug = host.replace(".grudge-studio.com", "");
+        if (APP_LABELS[slug]) return APP_LABELS[slug];
+        return slug.split("-").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+      }
+      if (host.endsWith(".vercel.app")) return "Grudge App";
+    } catch {}
+  }
+  if (isPopup && openerOrigin) {
+    try {
+      const host = new URL(openerOrigin).hostname.toLowerCase();
+      if (HOST_LABELS[host]) return HOST_LABELS[host];
+    } catch {}
+  }
+  return null;
+}
+
+function applyContextBanner(){
+  const label = resolveAppLabel();
+  if (!label) return;
+  const banner = $("context-banner");
+  const lead = $("choose-lead");
+  if (banner) {
+    $("context-app").textContent = label;
+    banner.hidden = false;
+  }
+  if (lead && (returnTo || isPopup)) {
+    lead.textContent = "Sign in to continue to " + label + ".";
+  }
+  if (label && (returnTo || isPopup)) {
+    document.title = "Sign in to " + label + " · Grudge Studio";
+  }
+}
+if (isAccountMode) {
+  document.title = "Your account · Grudge Studio";
+  const sub = $("brand-sub");
+  if (sub) sub.textContent = "Account settings";
+} else {
+  applyContextBanner();
+}
+
 const $ = (id) => document.getElementById(id);
-const views = ["choose","profile","email","phone","done","loading"];
+const views = ["choose","profile","email","phone","returning","done","account","loading"];
 function show(name){ views.forEach(v => $("view-"+v).classList.toggle("active", v === name)); }
 
 let toastTimer;
@@ -517,32 +712,54 @@ function postAuthToOpener(targetOrigin, token, user){
   try { window.opener.postMessage(modern, origin); } catch {}
   try { window.opener.postMessage(legacy, origin); } catch {}
 }
+function showReturning(label){
+  $("returning-app-name").textContent = label || "your app";
+  const icon = $("returning-icon");
+  if (icon && label) icon.textContent = label.charAt(0).toUpperCase();
+  show("returning");
+}
 async function handoff(user){
+  const destLabel = resolveAppLabel();
   if (isPopup && window.opener){
     const audience = openerOrigin || qs.get("audience") || qs.get("origin") || null;
     const token = await mintLaunchToken(audience || undefined);
     postAuthToOpener(audience, token, user);
-    renderDone(user, true); return;
+    renderDone(user, true, destLabel); return;
   }
   if (returnTo){
     let dest = returnTo;
     if (/^https?:\/\//i.test(returnTo)){
       const origin = new URL(returnTo).origin;
       if (origin !== location.origin){
+        if (destLabel) showReturning(destLabel);
         const token = await mintLaunchToken(origin);
         const sep = returnTo.includes("?") ? "&" : "?";
         dest = returnTo + sep + "grudge_token=" + encodeURIComponent(token);
+        await new Promise((r) => setTimeout(r, destLabel ? 650 : 0));
       }
     }
     (window.top || window).location.replace(dest); return;
   }
-  renderDone(user, false);
+  renderDone(user, false, destLabel);
 }
-function renderDone(user, autoClose){
+function renderDone(user, autoClose, destLabel){
   $("done-name").textContent = user.displayName || user.username || "Player";
   $("done-gid").textContent = user.grudgeId || "";
   if (user.isNew){ const pill = document.createElement("span"); pill.className = "new-pill"; pill.textContent = "New"; $("done-name").appendChild(pill); }
-  $("done-title").textContent = autoClose ? "Signed in — returning…" : "Signed in";
+  const sub = $("done-sub");
+  const continueLabel = $("done-continue-label");
+  if (autoClose) {
+    $("done-title").textContent = "Signed in";
+    if (sub && destLabel) { sub.textContent = "Returning to " + destLabel + "…"; sub.style.display = "block"; }
+  } else if (destLabel) {
+    $("done-title").textContent = "Signed in";
+    if (sub) { sub.textContent = "You can return to " + destLabel + " or manage your account."; sub.style.display = "block"; }
+    if (continueLabel) continueLabel.textContent = "Back to " + destLabel;
+  } else {
+    $("done-title").textContent = "Signed in";
+    if (sub) sub.style.display = "none";
+    if (continueLabel) continueLabel.textContent = "Continue";
+  }
   $("done-continue").style.display = (isPopup || returnTo) ? "flex" : "none";
   show("done");
   if (autoClose) setTimeout(() => { try { window.close(); } catch {} }, 900);
@@ -753,27 +970,112 @@ $("pf-username").addEventListener("keydown", (e) => { if (e.key === "Enter") $("
 
 $("done-continue").addEventListener("click", async () => { try { const me = await api("/api/auth/me"); handoff(normalizeMe(me)); } catch {} });
 $("done-switch").addEventListener("click", async () => {
-  try { await api("/api/auth/logout", { method:"POST", body:"{}" }); } catch {}
-  if (typeof window.puter !== "undefined"){ try { await puter.auth.signOut(); } catch {} }
+  await signOutAll();
   show("choose");
+  applyContextBanner();
 });
 
 function normalizeMe(me){ return { id: me.id, username: me.username, displayName: me.displayName, grudgeId: me.grudgeId, needsProfile: !!me.needsProfile, isNew: false, role: me.role }; }
+
+async function signOutAll(){
+  try { await api("/api/auth/logout", { method:"POST", body:"{}" }); } catch {}
+  if (typeof window.puter !== "undefined"){ try { await puter.auth.signOut(); } catch {} }
+}
+
+function initialsFor(name){
+  const parts = String(name || "?").trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return "?";
+  if (parts.length === 1) return parts[0].slice(0, 2);
+  return (parts[0][0] || "") + (parts[1][0] || "");
+}
+
+function renderConnectionList(conn){
+  const el = $("acct-connections");
+  if (!el) return;
+  const rows = [
+    ["Email", conn.email],
+    ["Google", conn.google],
+    ["Discord", conn.discord],
+    ["GitHub", conn.github],
+    ["Grudge ID (Puter)", conn.puter],
+    ["Phone", conn.phone],
+    ["Solana wallet", conn.solana],
+  ];
+  el.innerHTML = rows.map(([label, on]) =>
+    '<div class="conn-item"><span>' + label + '</span><span class="' + (on ? "on" : "off") + '">' + (on ? "Connected" : "Not linked") + '</span></div>'
+  ).join("");
+}
+
+async function renderAccount(me){
+  const name = me.displayName || me.username || "Player";
+  $("acct-avatar").textContent = initialsFor(name);
+  $("acct-name").textContent = name;
+  $("acct-handle").textContent = "@" + (me.username || "player");
+  $("acct-gid").textContent = me.grudgeId || "—";
+  $("acct-role").textContent = (me.role || "player").charAt(0).toUpperCase() + (me.role || "player").slice(1);
+  if (me.gbuxBalance != null) {
+    $("acct-gbux-row").style.display = "flex";
+    $("acct-gbux").textContent = String(me.gbuxBalance);
+  }
+  try {
+    const conn = await api("/api/me/connections");
+    renderConnectionList(conn);
+  } catch {
+    renderConnectionList({
+      email: me.email,
+      google: me.googleId,
+      discord: me.discordId,
+      github: me.githubId,
+      puter: me.puterId,
+      phone: me.phone,
+      solana: me.solanaAddress,
+    });
+  }
+  show("account");
+}
+
+$("acct-copy").addEventListener("click", async () => {
+  const gid = $("acct-gid").textContent;
+  if (!gid || gid === "—") return;
+  try {
+    await navigator.clipboard.writeText(gid);
+    toast("Grudge ID copied.", "success");
+  } catch {
+    toast("Could not copy.", "error");
+  }
+});
+$("acct-signout").addEventListener("click", async () => {
+  await signOutAll();
+  toast("Signed out.", "success");
+  if (isAccountMode) { show("choose"); applyContextBanner(); }
+  else location.href = "/api/auth/page";
+});
+$("acct-back").addEventListener("click", () => { location.href = "/api/auth/page"; });
+
 async function boot(){
   show("loading");
   try {
     const me = await api("/api/auth/me"); const user = normalizeMe(me);
+    if (isAccountMode) return renderAccount(me);
     if (isHandoffReturn) return handoff(user);
     if (user.needsProfile) return openProfileStep(user, me.email || "");
-    return renderDone(user, false);
+    if (returnTo || isPopup) return handoff(user);
+    return renderDone(user, false, resolveAppLabel());
   } catch {
     if (urlLaunchToken){
       try {
         await api("/api/auth/session/exchange", { method:"POST", body: JSON.stringify({ token: urlLaunchToken }) });
         const me = await api("/api/auth/me"); const user = normalizeMe(me);
+        if (isAccountMode) return renderAccount(me);
         if (isHandoffReturn) return handoff(user);
-        return renderDone(user, false);
+        if (returnTo || isPopup) return handoff(user);
+        return renderDone(user, false, resolveAppLabel());
       } catch {}
+    }
+    if (isAccountMode) {
+      const sub = $("brand-sub");
+      if (sub) sub.textContent = "Sign in to view your account";
+      $("choose-lead").textContent = "Sign in to manage your Grudge Studio profile and connections.";
     }
     show("choose");
     refreshPuterButton();

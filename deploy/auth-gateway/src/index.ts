@@ -40,7 +40,11 @@ const DEFAULT_ALLOWED_ORIGINS = [
 ];
 
 function isAuthPagePath(pathname: string): boolean {
-  return pathname === "/api/auth/page" || pathname === "/api/auth/popup";
+  return (
+    pathname === "/api/auth/page" ||
+    pathname === "/api/auth/popup" ||
+    pathname === "/account"
+  );
 }
 
 function getAllowedOrigins(env: Env): Set<string> {
@@ -88,6 +92,7 @@ export default {
         url.pathname === "/" ||
         url.pathname === "/index.html" ||
         url.pathname === "/login" ||
+        url.pathname === "/account" ||
         url.pathname === "/auth" ||
         url.pathname.startsWith("/auth/") ||
         url.pathname.startsWith("/api/auth");

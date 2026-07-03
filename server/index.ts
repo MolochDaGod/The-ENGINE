@@ -85,6 +85,7 @@ function sendAuthPage(_req: Request, res: Response) {
 }
 app.get("/api/auth/page", sendAuthPage);
 app.get("/api/auth/popup", sendAuthPage);
+app.get("/account", sendAuthPage);
 
 // Bare /api/auth — discovery JSON for API clients; browsers → sign-in page
 function sendAuthDiscovery(req: Request, res: Response) {
@@ -100,6 +101,7 @@ function sendAuthDiscovery(req: Request, res: Response) {
     service: "Grudge ID",
     version: "2.0.0",
     authPage: `${idHost}/api/auth/page`,
+    accountPage: `${idHost}/account`,
     embedScript: `${idHost}/embed/auth.js`,
     endpoints: {
       register: "POST /api/auth/register",
