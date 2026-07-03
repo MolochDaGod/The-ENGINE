@@ -123,7 +123,7 @@ export default {
     const authUpstream = (env.AUTH_UPSTREAM || DEFAULT_AUTH_UPSTREAM).replace(/\/$/, "");
     const backendUrl = (env.BACKEND_URL || "https://the-engine.up.railway.app").replace(/\/$/, "");
     const upstreamBase =
-      url.host === "id.grudge-studio.com" && EMBED_PORTAL_ASSETS.has(url.pathname)
+      url.host === "id.grudge-studio.com" && isEmbedAsset(url.pathname)
         ? portal
         : url.host === "id.grudge-studio.com" && isAuthRoute(url.pathname)
           ? authUpstream
