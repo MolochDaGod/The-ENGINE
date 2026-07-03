@@ -9,6 +9,7 @@ import { fileURLToPath } from "url";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { AUTH_PAGE_HTML } from "./auth-page-html";
+import { mountAuthUpstreamProxy } from "./auth-upstream";
 
 const app = express();
 const isProd = process.env.NODE_ENV === "production";
@@ -63,7 +64,14 @@ app.use(cors({
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
 }));
-// ── Grudge ID auth page ──────────────────────────────────────────────────────
+
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: false, limit: "10mb" }));
+
+// id.grudge-studio.com → canonical Grudge API auth (sso-check, login page, tokens)
+mountAuthUpstreamProxy(app);
+
+// ── Grudge ID auth page (non-identity hosts / fallback) ─────────────────────
 // Prefer public/grudge-id.html on disk (no regex-escape corruption in bundles).
 function loadAuthPageHtml(): string {
   const here = path.dirname(fileURLToPath(import.meta.url));
@@ -168,9 +176,6 @@ app.use((req, _res, next) => {
 
 // ── Favicon ────────────────────────────────────────────────────
 app.get("/favicon.ico", (_req, res) => res.redirect(301, "/favicon.png"));
-
-app.use(express.json({ limit: "10mb" }));
-app.use(express.urlencoded({ extended: false, limit: "10mb" }));
 
 app.use((req, res, next) => {
   const start = Date.now();
