@@ -719,9 +719,10 @@ export default function TowerDefense() {
             const hitScale = tgt.isBoss ? 1.5 : 1;
 
             if (p.type === 0 || p.type === 3) {
-              addEffect(tgt.x, tgt.y, "archerHit", hitScale);
+              addFx(tgt.x, tgt.y, "explosion", hitScale * (p.type === 3 ? 1.1 : 0.9));
               addEffect(tgt.x, tgt.y, "damage", hitScale * 0.7);
-              spark(tgt.x, tgt.y, "#cc8800", 5);
+              spark(tgt.x, tgt.y, "#ff8800", p.type === 3 ? 8 : 6);
+              spark(tgt.x, tgt.y, "#ffcc44", 4);
             } else if (p.type === 1) {
               addFx(tgt.x, tgt.y, "explosion", hitScale * 1.2);
               addFx(tgt.x, tgt.y, "fire", hitScale);
