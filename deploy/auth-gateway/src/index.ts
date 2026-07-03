@@ -55,6 +55,14 @@ function corsHeaders(origin: string | null, allowed: Set<string>): HeadersInit {
   };
 }
 
+const EMBED_MODAL_ASSETS = new Set(["/grudge-auth-modal.js", "/grudge-auth-modal.css"]);
+const EMBED_PORTAL_ASSETS = new Set(["/grudge-game-bootstrap.js", "/embed/auth.js"]);
+
+/** Fleet embed scripts on id host (not auth API JSON routes). */
+function isEmbedAsset(pathname: string): boolean {
+  return EMBED_MODAL_ASSETS.has(pathname) || EMBED_PORTAL_ASSETS.has(pathname);
+}
+
 function isAuthRoute(pathname: string): boolean {
   return (
     pathname === "/" ||
@@ -65,10 +73,7 @@ function isAuthRoute(pathname: string): boolean {
     pathname.startsWith("/auth/") ||
     pathname.startsWith("/api/auth") ||
     pathname.startsWith("/api/me") ||
-    pathname === "/grudge-auth-modal.js" ||
-    pathname === "/grudge-auth-modal.css" ||
-    pathname === "/grudge-game-bootstrap.js" ||
-    pathname === "/embed/auth.js"
+    isEmbedAsset(pathname)
   );
 }
 
@@ -116,10 +121,13 @@ export default {
     }
 
     const authUpstream = (env.AUTH_UPSTREAM || DEFAULT_AUTH_UPSTREAM).replace(/\/$/, "");
+    const backendUrl = (env.BACKEND_URL || "https://the-engine.up.railway.app").replace(/\/$/, "");
     const upstreamBase =
-      url.host === "id.grudge-studio.com" && isAuthRoute(url.pathname)
-        ? authUpstream
-        : (env.BACKEND_URL || "https://the-engine.up.railway.app").replace(/\/$/, "");
+      url.host === "id.grudge-studio.com" && EMBED_PORTAL_ASSETS.has(url.pathname)
+        ? portal
+        : url.host === "id.grudge-studio.com" && isAuthRoute(url.pathname)
+          ? authUpstream
+          : backendUrl;
 
     const upstreamUrl = upstreamBase + url.pathname + url.search;
 
