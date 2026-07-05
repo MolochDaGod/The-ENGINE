@@ -1,7 +1,7 @@
 /**
  * Grudge Auth Gateway – Cloudflare Worker
  *
- * id.grudge-studio.com → canonical Grudge ID API (grudge-api-production).
+ * id.grudge-studio.com → canonical Grudge ID API (The-ENGINE Railway).
  * One login surface for the whole fleet — no split-brain with The-ENGINE.
  */
 
@@ -14,7 +14,7 @@ export interface Env {
   PORTAL_ORIGIN?: string;
 }
 
-const DEFAULT_AUTH_UPSTREAM = "https://grudge-api-production-0d46.up.railway.app";
+const DEFAULT_AUTH_UPSTREAM = "https://the-engine.up.railway.app";
 
 const DEFAULT_ALLOWED_ORIGINS = [
   "https://grudge-studio.com",

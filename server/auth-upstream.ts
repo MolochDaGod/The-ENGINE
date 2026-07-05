@@ -1,12 +1,12 @@
 /**
- * id.grudge-studio.com → canonical Grudge ID (grudge-api-production).
+ * id.grudge-studio.com → canonical Grudge ID (The-ENGINE Railway).
  * Prevents split-brain auth when the identity domain points at The-ENGINE Railway.
  */
 import type { Express, Request, Response } from "express";
 
 export const GRUDGE_AUTH_UPSTREAM =
   process.env.GRUDGE_AUTH_UPSTREAM ||
-  "https://grudge-api-production-0d46.up.railway.app";
+  "https://the-engine.up.railway.app";
 
 const LOGO_URL = "https://grudge-studio.com/grudge-logo.png";
 

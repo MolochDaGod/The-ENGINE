@@ -40,6 +40,9 @@ const SERVICES: ServiceDef[] = [
 
   // Cloudflare Workers / Proxied backends
   { id: 'cf-grudge-studio-site', name: 'grudge-studio.com', region: 'cloudflare', url: 'https://grudge-studio.com/', timeoutMs: 8000, warnThresholdMs: 2000 },
+  { id: 'cf-game-api', name: 'api.grudge-studio.com', region: 'cloudflare', url: 'https://api.grudge-studio.com/api/health', timeoutMs: 8000, warnThresholdMs: 2000 },
+  { id: 'cf-coder', name: 'Grudge Coder', region: 'cloudflare', url: 'https://coder.grudge-studio.com/', timeoutMs: 8000, warnThresholdMs: 2000 },
+  { id: 'cf-fleet', name: 'Fleet Harbor', region: 'cloudflare', url: 'https://fleet.grudge-studio.com/', timeoutMs: 8000, warnThresholdMs: 2000 },
   { id: 'cf-auth-gateway', name: 'auth-gateway', region: 'cloudflare', url: 'https://auth.grudge-studio.com/health', timeoutMs: 5000, warnThresholdMs: 1000 },
   { id: 'cf-identity-api', name: 'identity-api (id)', region: 'cloudflare', url: 'https://id.grudge-studio.com/api/health', timeoutMs: 5000, warnThresholdMs: 1000 },
   { id: 'cf-game-api', name: 'game-api', region: 'cloudflare', url: 'https://api.grudge-studio.com/api/health', timeoutMs: 5000, warnThresholdMs: 1000 },
