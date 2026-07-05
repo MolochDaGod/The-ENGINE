@@ -60,7 +60,7 @@ const enhancedProjects: Project[] = [
     status: 'ready',
     enhanced: true,
     playable: true,
-    route: '/multiplayer-racing'
+    route: '/overdrive-racing'
   },
   {
     id: 'puzzle-platformer',

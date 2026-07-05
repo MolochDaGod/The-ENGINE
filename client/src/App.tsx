@@ -36,7 +36,6 @@ import CollaborationHub from "@/pages/collaboration-hub";
 import AdvancedEngines from "@/pages/advanced-engines";
 import AnalyticsDashboard from "@/pages/analytics-dashboard";
 import DecaySurvival from "@/pages/decay-survival";
-import OverdriveRacing from "@/pages/overdrive-racing";
 import Overdrive3D from "@/pages/overdrive-3d";
 import AvernusArena from "@/pages/avernus-arena";
 import Wargus from "@/pages/wargus";
@@ -109,7 +108,7 @@ function Router() {
       <Route path="/advanced-engines" component={withAdminGuard(AdvancedEngines)} />
       <Route path="/analytics-dashboard" component={withAdminGuard(AnalyticsDashboard)} />
       <Route path="/decay-survival" component={DecaySurvival} />
-      <Route path="/overdrive-racing" component={OverdriveRacing} />
+      <Route path="/overdrive-racing" component={Overdrive3D} />
       <Route path="/overdrive-3d" component={Overdrive3D} />
       <Route path="/avernus-arena" component={AvernusArena} />
       <Route path="/wargus" component={Wargus} />
@@ -154,7 +153,9 @@ function AppShell() {
     location === "/voxel-sandbox" || location.startsWith("/voxel-sandbox?") ||
     location === "/polyfighter" || location.startsWith("/polyfighter?") ||
     location === "/terraforge" || location.startsWith("/terraforge?") ||
-    location === "/grudge-brawl" || location.startsWith("/grudge-brawl?");
+    location === "/grudge-brawl" || location.startsWith("/grudge-brawl?") ||
+    location === "/overdrive-racing" || location.startsWith("/overdrive-racing?") ||
+    location === "/overdrive-3d" || location.startsWith("/overdrive-3d?");
   const minimalChrome = isViewerHost || isConanHost || isViewerRoute || isForgeGameRoute;
 
   return (

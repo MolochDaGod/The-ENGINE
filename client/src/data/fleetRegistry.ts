@@ -305,7 +305,7 @@ export const FLEET_REGISTRY: FleetRegistryEntry[] = [
   {
     id: "multiplayer-racing",
     name: "Overdrive Racing",
-    description: "Multiplayer arcade racing across Grudge tracks.",
+    description: "3D arcade racing with Cannon.js raycast vehicle physics and obstacle dodging.",
     canonicalUrl: "/overdrive-racing",
     status: "beta",
     tags: ["pvp", "arena"],

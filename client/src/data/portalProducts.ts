@@ -111,7 +111,7 @@ const _PORTAL_PRODUCTS_RAW = [
     id: "multiplayer-racing",
     name: "Overdrive Racing",
     href: "/overdrive-racing",
-    description: "Multiplayer arcade racing across Grudge tracks.",
+    description: "3D arcade racing with Cannon.js vehicle physics — dodge obstacles and push for top speed.",
     status: "beta",
     section: "play",
     tags: ["pvp", "arena"],
