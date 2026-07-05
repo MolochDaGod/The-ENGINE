@@ -53,6 +53,10 @@ export class GrudgeEngine {
   private _rafId:    number = 0;
   private _running:  boolean = false;
   private _role:     HasBodyAndMesh | null = null;
+  private _canvas:   HTMLCanvasElement | null = null;
+  private _onWindowResize = () => {
+    if (this._canvas) this._onResize(this._canvas);
+  };
 
   // Camera config (mirrors annihilate's cameraDist = 15)
   cameraDist = 15;
@@ -136,8 +140,8 @@ export class GrudgeEngine {
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type    = THREE.PCFSoftShadowMap;
 
-    // Resize handler
-    window.addEventListener('resize', () => this._onResize(canvas));
+    this._canvas = canvas;
+    window.addEventListener('resize', this._onWindowResize);
   }
 
   private _initPhysics(): void {
@@ -192,7 +196,8 @@ export class GrudgeEngine {
   /** Full teardown — resets singleton so next init() works on a new canvas */
   destroy(): void {
     this.stop();
-    window.removeEventListener('resize', () => {});
+    window.removeEventListener('resize', this._onWindowResize);
+    this._canvas = null;
     this.renderer?.dispose();
     this.world?.bodies.forEach(b => this.world.removeBody(b));
     this._updates = [];

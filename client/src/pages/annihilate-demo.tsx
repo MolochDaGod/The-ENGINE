@@ -26,7 +26,8 @@
  */
 
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { Link } from 'wouter';
+import { Link, useLocation } from 'wouter';
+import { getPrefab } from '@shared/character-prefabs';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ArrowLeft, Swords, Users, ChevronDown } from 'lucide-react';
@@ -565,7 +566,23 @@ class GrudgeEnemy extends BaseCharacter {
 
 interface EnemyInstance { character: GrudgeEnemy; ai: BaseAi; preset: CharacterPreset; }
 
+function resolveInitialPreset(heroParam: string | null): CharacterPreset {
+  if (heroParam) {
+    const dashed = heroParam.replace(/_/g, '-');
+    const exact = CHARACTER_PRESETS.find((p) => p.id === dashed);
+    if (exact) return exact;
+
+    const prefab = getPrefab(heroParam);
+    if (prefab) {
+      const raceMatch = CHARACTER_PRESETS.find((p) => p.race === prefab.race);
+      if (raceMatch) return raceMatch;
+    }
+  }
+  return CHARACTER_PRESETS[0];
+}
+
 export default function AnnihilateDemo() {
+  const [location] = useLocation();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<GrudgeEngine | null>(null);
   const roleRef = useRef<GrudgeCharacter | null>(null);
@@ -579,24 +596,49 @@ export default function AnnihilateDemo() {
   const [weaponPackLabel, setWeaponPackLabel] = useState('');
   const [loadingWeapon, setLoadingWeapon] = useState(false);
   const [info, setInfo] = useState('Initializing…');
+  const [playerHealth, setPlayerHealth] = useState(100);
+  const [playerMaxHealth, setPlayerMaxHealth] = useState(100);
+
+  useEffect(() => {
+    document.title = 'Annihilate Demo — Grudge Studio';
+    return () => { document.title = 'Rec0deD:88 — Grudge Studio Gaming Portal'; };
+  }, []);
 
   const spawnCharacter = useCallback(async (preset: CharacterPreset) => {
     const engine = engineRef.current;
     if (!engine) return;
     if (controlsRef.current) { controlsRef.current.destroy(); controlsRef.current = null; }
     if (roleRef.current) { roleRef.current.destroy(); roleRef.current = null; }
-    setLoaded(false); setInfo(`Loading ${preset.name}…`); setFsmState('loading');
+    setLoaded(false); setLoadingWeapon(true);
+    setInfo(`Loading ${preset.name}…`); setFsmState('loading');
     const character = new GrudgeCharacter(preset, { position: new THREE.Vector3(-2, 2, 0) });
-    await character.load(() => {
+    try {
+      await character.load();
       character.enableFootIK();
       const controls = new RoleControls(character);
-      controlsRef.current = controls; roleRef.current = character;
+      controlsRef.current = controls;
+      roleRef.current = character;
       engine.setRole(character);
       character.service.onTransition((state: string) => setFsmState(state));
-      setLoaded(true); setActivePreset(preset);
+      setPlayerHealth(character.health);
+      setPlayerMaxHealth(character.maxHealth);
+
+      setInfo(`Loading ${WEAPON_PACKS[preset.weapon]?.label ?? preset.weapon} animations…`);
+      const loadedClips = await character.loadWeaponPack(preset.weapon);
+      setActivePreset(preset);
       setWeaponPackLabel(WEAPON_PACKS[preset.weapon]?.label || '');
-      setInfo(`${preset.name} • ${WEAPON_PACKS[preset.weapon]?.label || preset.weapon}`);
-    });
+      setLoadingWeapon(false);
+      setLoaded(true);
+      setInfo(
+        loadedClips.length > 0
+          ? `${preset.name} • ${WEAPON_PACKS[preset.weapon]?.label} (${loadedClips.length} clips)`
+          : `${preset.name} • using embedded animations`,
+      );
+    } catch (err) {
+      console.error('[AnnihilateDemo] character load failed', err);
+      setLoadingWeapon(false);
+      setInfo(`Failed to load ${preset.name}. Check /models/grudge assets and retry.`);
+    }
   }, []);
 
   const spawnEnemy = useCallback(async (presetId: string) => {
@@ -645,12 +687,27 @@ export default function AnnihilateDemo() {
     engine.addBox({ size: [4, 0.7, 4], position: [-3.5, 0.35, 5], color: 0x33235e });
 
     engine.start();
-    spawnCharacter(CHARACTER_PRESETS[0]);
+
+    const heroParam = new URLSearchParams(location.split('?')[1] ?? '').get('hero');
+    spawnCharacter(resolveInitialPreset(heroParam));
+
+    const ro = new ResizeObserver(() => {
+      const c = canvasRef.current;
+      if (!c) return;
+      c.width = c.clientWidth || window.innerWidth;
+      c.height = c.clientHeight || window.innerHeight;
+      engine.renderer.setSize(c.width, c.height);
+      engine.camera.aspect = c.width / c.height;
+      engine.camera.updateProjectionMatrix();
+    });
+    ro.observe(canvas);
+
     return () => {
+      ro.disconnect();
       clearEnemies(); controlsRef.current?.destroy(); roleRef.current?.destroy();
       engine.destroy(); engineRef.current = null;
     };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [location, spawnCharacter, clearEnemies]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const characterItems = CHARACTER_PRESETS.map((p) => ({ id: p.id, name: p.name, sub: p.description }));
   const enemyItems = [
@@ -691,7 +748,7 @@ export default function AnnihilateDemo() {
       {/* ── Health bar ─────────────────────────────────────────────────── */}
       {loaded && (
         <div className="absolute top-16 left-1/2 -translate-x-1/2 z-20">
-          <HealthBar current={activePreset.health} max={activePreset.health} name={activePreset.name} race={activePreset.race} />
+          <HealthBar current={playerHealth} max={playerMaxHealth} name={activePreset.name} race={activePreset.race} />
         </div>
       )}
 

@@ -155,7 +155,8 @@ function AppShell() {
     location === "/terraforge" || location.startsWith("/terraforge?") ||
     location === "/grudge-brawl" || location.startsWith("/grudge-brawl?") ||
     location === "/overdrive-racing" || location.startsWith("/overdrive-racing?") ||
-    location === "/overdrive-3d" || location.startsWith("/overdrive-3d?");
+    location === "/overdrive-3d" || location.startsWith("/overdrive-3d?") ||
+    location === "/annihilate-demo" || location.startsWith("/annihilate-demo?");
   const minimalChrome = isViewerHost || isConanHost || isViewerRoute || isForgeGameRoute;
 
   return (
