@@ -2,7 +2,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Play, X, Maximize2, Minimize2, Cpu, Gamepad, Swords, Users, Zap, Globe, Box, Brain, Monitor, Check, Minus } from "lucide-react";
+import { ArrowLeft, Play, X, Maximize2, Minimize2, Cpu, Gamepad, Swords, Users, Zap, Globe, Box, Brain, Monitor, Check, Minus, Settings2, ChevronDown, ChevronUp } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import superEngineBg from "@assets/IqGYJJe_1773841545953.png";
@@ -17,9 +17,12 @@ import coverMarioBros from "@assets/game_covers/super_mario_bros.png";
 import coverZelda from "@assets/game_covers/legend_of_zelda.png";
 import { FORGE_GAMES, resolveFleetGameId, type Capability, type FleetGameCard } from "@/data/fleetGames";
 import { GamePreviewFrame } from "@/components/game-preview-frame";
+import { ForgePreviewCanvas } from "@/components/forge-preview-canvas";
+import { ForgeSystemPanel } from "@/components/forge-system-panel";
 import { GameCover } from "@/components/game-cover";
 import { navigateGame } from "@/lib/game-launch";
 import { loadFeaturedRetroGames } from "@/lib/retro-catalog";
+import { DEFAULT_FORGE_SETTINGS, type ForgeRenderSettings } from "@/lib/engine3d";
 import type { Game } from "@shared/schema";
 
 const CAPABILITY_CONFIG: Record<Capability, { icon: typeof Zap; color: string; label: string }> = {
@@ -146,6 +149,9 @@ export default function SuperEngine() {
   const [expandedGame, setExpandedGame] = useState<string | null>(null);
   const [fullscreenGame, setFullscreenGame] = useState<string | null>(null);
   const [hoveredGame, setHoveredGame] = useState<string | null>(null);
+  const [forgeSettings, setForgeSettings] = useState<ForgeRenderSettings>(DEFAULT_FORGE_SETTINGS);
+  const [showForgePanel, setShowForgePanel] = useState(true);
+  const showcaseGame = FORGE_GAMES[0];
 
   const { data: featuredGames } = useQuery({
     queryKey: ["/catalog/games", "featured"],
@@ -188,7 +194,12 @@ export default function SuperEngine() {
             </Button>
           </div>
           <div className="relative flex-1 min-h-0">
-            <GamePreviewFrame game={fullscreenGameData} className="absolute inset-0" />
+            <GamePreviewFrame
+              game={fullscreenGameData}
+              className="absolute inset-0"
+              forgeSettings={forgeSettings}
+              preferCanvas
+            />
           </div>
         </div>
       )}
@@ -231,6 +242,48 @@ export default function SuperEngine() {
           </div>
         </div>
 
+        <div className="mb-10 rounded-2xl border border-orange-500/20 overflow-hidden bg-gray-900/40 backdrop-blur-sm shadow-2xl shadow-orange-500/5">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800/80 bg-gray-900/60">
+            <div className="flex items-center gap-2">
+              <Box className="w-5 h-5 text-orange-400" />
+              <span className="font-semibold text-white">Forge Player Canvas</span>
+              <Badge className="bg-purple-500/15 text-purple-300 border-purple-500/30 text-[10px]">
+                {showcaseGame.name}
+              </Badge>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-gray-400 hover:text-white h-8"
+              onClick={() => setShowForgePanel((v) => !v)}
+            >
+              <Settings2 className="w-4 h-4 mr-1" />
+              Systems
+              {showForgePanel ? <ChevronUp className="w-3 h-3 ml-1" /> : <ChevronDown className="w-3 h-3 ml-1" />}
+            </Button>
+          </div>
+          <div className={`grid ${showForgePanel ? "lg:grid-cols-[1fr_320px]" : "grid-cols-1"}`}>
+            <div className="relative" style={{ height: showForgePanel ? 420 : 360 }}>
+              <ForgePreviewCanvas
+                game={showcaseGame}
+                settings={forgeSettings}
+                className="absolute inset-0 rounded-none"
+              />
+              <div className="absolute top-3 left-3">
+                <FPSCounter />
+              </div>
+              <div className="absolute bottom-3 right-3 text-[10px] text-gray-500 font-mono pointer-events-none">
+                Drag to orbit · Scroll to zoom
+              </div>
+            </div>
+            {showForgePanel && (
+              <div className="border-t lg:border-t-0 lg:border-l border-gray-800/80 p-3">
+                <ForgeSystemPanel settings={forgeSettings} onChange={setForgeSettings} compact />
+              </div>
+            )}
+          </div>
+        </div>
+
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
           {GAMES.map((game) => {
             const isExpanded = expandedGame === game.id;
@@ -257,7 +310,12 @@ export default function SuperEngine() {
                     {isExpanded ? (
                       <div className="flex flex-col">
                         <div className="relative w-full h-[min(56vh,520px)] min-h-[360px] flex flex-col overflow-hidden rounded-t-lg">
-                          <GamePreviewFrame game={game} className="flex-1 min-h-0" />
+                          <GamePreviewFrame
+                            game={game}
+                            className="flex-1 min-h-0"
+                            forgeSettings={forgeSettings}
+                            preferCanvas
+                          />
                           <div className="absolute top-3 right-3 flex gap-2">
                             <Button
                               size="sm"

@@ -64,7 +64,7 @@ const FORGE_CARD_META: Record<string, ForgeCardMeta> = {
     gradientBorder: "from-amber-500 via-yellow-500 to-orange-500",
     icon: Swords,
     capabilities: ["3D", "Multiplayer", "AI", "Particles"],
-    previewType: "static",
+    previewType: "threejs",
     cardImage: gameImgWargus,
   },
   "rts-grudge": {
@@ -74,7 +74,7 @@ const FORGE_CARD_META: Record<string, ForgeCardMeta> = {
     gradientBorder: "from-red-500 via-orange-500 to-yellow-500",
     icon: Swords,
     capabilities: ["3D", "AI", "Physics", "Particles"],
-    previewType: "static",
+    previewType: "threejs",
     cardImage: gameImgWargus,
   },
   "survival-game": {
@@ -84,7 +84,7 @@ const FORGE_CARD_META: Record<string, ForgeCardMeta> = {
     gradientBorder: "from-orange-500 via-red-500 to-pink-500",
     icon: Shield,
     capabilities: ["3D", "Physics", "AI", "Particles"],
-    previewType: "static",
+    previewType: "threejs",
     cardImage: gameImgAvernus3d,
   },
   "grudge-arena": {
@@ -94,7 +94,7 @@ const FORGE_CARD_META: Record<string, ForgeCardMeta> = {
     gradientBorder: "from-purple-500 via-pink-500 to-red-500",
     icon: Swords,
     capabilities: ["3D", "Multiplayer", "AI", "Particles"],
-    previewType: "static",
+    previewType: "threejs",
     cardImage: gameImgAvernusArena,
   },
   "grudge-drive": {
@@ -104,7 +104,7 @@ const FORGE_CARD_META: Record<string, ForgeCardMeta> = {
     gradientBorder: "from-blue-500 via-cyan-500 to-teal-500",
     icon: Car,
     capabilities: ["3D", "Physics", "Particles"],
-    previewType: "static",
+    previewType: "threejs",
     cardImage: gameImgOverdrive,
   },
   "grudge-fishing": {
@@ -114,7 +114,7 @@ const FORGE_CARD_META: Record<string, ForgeCardMeta> = {
     gradientBorder: "from-cyan-500 via-blue-500 to-indigo-500",
     icon: Gamepad,
     capabilities: ["3D", "Physics", "Particles"],
-    previewType: "static",
+    previewType: "threejs",
     cardImage: gameImgPuzzle,
   },
   "dungeon-crawler": {
@@ -124,7 +124,7 @@ const FORGE_CARD_META: Record<string, ForgeCardMeta> = {
     gradientBorder: "from-green-500 via-emerald-500 to-teal-500",
     icon: Shield,
     capabilities: ["3D", "AI", "Particles"],
-    previewType: "static",
+    previewType: "threejs",
     cardImage: gameImgDecay,
   },
   "final-fighter": {
@@ -134,7 +134,7 @@ const FORGE_CARD_META: Record<string, ForgeCardMeta> = {
     gradientBorder: "from-amber-500 via-yellow-500 to-orange-500",
     icon: Swords,
     capabilities: ["3D", "Physics", "AI"],
-    previewType: "static",
+    previewType: "threejs",
     cardImage: gameImgTowerDef,
   },
   "betta-warlords": {
@@ -144,7 +144,7 @@ const FORGE_CARD_META: Record<string, ForgeCardMeta> = {
     gradientBorder: "from-indigo-500 via-violet-500 to-purple-500",
     icon: Gamepad,
     capabilities: ["2D", "AI", "Multiplayer"],
-    previewType: "static",
+    previewType: "canvas2d",
     cardImage: gameImgRpgMaker,
   },
   "grim-armada": {
@@ -154,7 +154,7 @@ const FORGE_CARD_META: Record<string, ForgeCardMeta> = {
     gradientBorder: "from-slate-500 via-gray-500 to-zinc-500",
     icon: Shield,
     capabilities: ["3D", "AI", "Physics"],
-    previewType: "static",
+    previewType: "threejs",
     cardImage: gameImgWargus,
   },
   "grudge-space-rts": {
@@ -164,7 +164,7 @@ const FORGE_CARD_META: Record<string, ForgeCardMeta> = {
     gradientBorder: "from-indigo-500 via-blue-500 to-cyan-500",
     icon: Globe,
     capabilities: ["3D", "AI", "Multiplayer"],
-    previewType: "static",
+    previewType: "threejs",
     cardImage: gameImgWargus,
   },
   "mage-arena": {
@@ -174,7 +174,7 @@ const FORGE_CARD_META: Record<string, ForgeCardMeta> = {
     gradientBorder: "from-violet-500 via-purple-500 to-fuchsia-500",
     icon: Shield,
     capabilities: ["3D", "AI", "Multiplayer", "Particles"],
-    previewType: "static",
+    previewType: "threejs",
     cardImage: gameImgDecay,
   },
   "nemesis-tcg": {
@@ -184,7 +184,7 @@ const FORGE_CARD_META: Record<string, ForgeCardMeta> = {
     gradientBorder: "from-rose-500 via-red-500 to-orange-500",
     icon: Gamepad,
     capabilities: ["2D", "Multiplayer", "AI"],
-    previewType: "static",
+    previewType: "canvas2d",
     cardImage: gameImgRpgMaker,
   },
   "grudge-metaverse": {
@@ -194,7 +194,7 @@ const FORGE_CARD_META: Record<string, ForgeCardMeta> = {
     gradientBorder: "from-teal-500 via-cyan-500 to-blue-500",
     icon: Globe,
     capabilities: ["3D", "Multiplayer"],
-    previewType: "static",
+    previewType: "threejs",
     cardImage: gameImgAvernus3d,
   },
   "grudge-mech-forge": {
@@ -204,7 +204,7 @@ const FORGE_CARD_META: Record<string, ForgeCardMeta> = {
     gradientBorder: "from-zinc-500 via-slate-500 to-gray-500",
     icon: Cpu,
     capabilities: ["3D", "Physics", "AI"],
-    previewType: "static",
+    previewType: "threejs",
     cardImage: gameImgOverdrive,
   },
   "annihilate-demo": {
@@ -214,7 +214,7 @@ const FORGE_CARD_META: Record<string, ForgeCardMeta> = {
     gradientBorder: "from-violet-500 via-purple-500 to-pink-500",
     icon: Swords,
     capabilities: ["3D", "Physics", "AI", "Particles"],
-    previewType: "static",
+    previewType: "threejs",
     cardImage: gameImgAvernusArena,
   },
   "grudge-controller": {
@@ -224,7 +224,7 @@ const FORGE_CARD_META: Record<string, ForgeCardMeta> = {
     gradientBorder: "from-amber-500 via-yellow-500 to-orange-500",
     icon: Gamepad,
     capabilities: ["3D", "Physics", "AI"],
-    previewType: "static",
+    previewType: "threejs",
     cardImage: gameImgRacing,
   },
   "voxel-sandbox": {
@@ -234,7 +234,7 @@ const FORGE_CARD_META: Record<string, ForgeCardMeta> = {
     gradientBorder: "from-emerald-500 via-green-500 to-lime-500",
     icon: Cpu,
     capabilities: ["3D", "Physics", "AI", "Particles"],
-    previewType: "static",
+    previewType: "threejs",
     cardImage: gameImgPuzzle,
   },
   terraforge: {
@@ -244,7 +244,7 @@ const FORGE_CARD_META: Record<string, ForgeCardMeta> = {
     gradientBorder: "from-lime-500 via-green-500 to-emerald-500",
     icon: Globe,
     capabilities: ["3D", "Physics", "AI", "Particles"],
-    previewType: "static",
+    previewType: "threejs",
     cardImage: gameImgDecay,
   },
   "grudge-brawl": {
@@ -254,7 +254,7 @@ const FORGE_CARD_META: Record<string, ForgeCardMeta> = {
     gradientBorder: "from-red-500 via-orange-500 to-yellow-500",
     icon: Swords,
     capabilities: ["3D", "Physics", "AI", "Particles"],
-    previewType: "static",
+    previewType: "threejs",
     cardImage: gameImgAvernusArena,
   },
   polyfighter: {
@@ -264,7 +264,7 @@ const FORGE_CARD_META: Record<string, ForgeCardMeta> = {
     gradientBorder: "from-pink-500 via-red-500 to-rose-500",
     icon: Swords,
     capabilities: ["3D", "Physics", "AI"],
-    previewType: "static",
+    previewType: "threejs",
     cardImage: gameImgTowerDef,
   },
 };
