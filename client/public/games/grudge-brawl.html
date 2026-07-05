@@ -1,57 +1,207 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en" translate="no">
 <head>
 <meta charset="UTF-8">
 <meta name="google" content="notranslate">
-    <script src="/grudge-game-bootstrap.js"></script>
+<script src="/grudge-game-bootstrap.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Grudge Brawl - Grudge Studio</title>
 <style>
-body{margin:0;overflow:hidden;background:#111;color:#fff;font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh}
-.loader{text-align:center;background:rgba(0,0,0,0.7);padding:40px;border-radius:12px;max-width:400px}
-.loader h1{color:#ff4444;font-size:2rem;margin-bottom:5px}
-.loader .sub{color:#888;font-size:13px;margin-bottom:20px}
-.spinner{width:40px;height:40px;border:3px solid #333;border-top-color:#ff4444;border-radius:50%;animation:spin 1s linear infinite;margin:20px auto}
+body{margin:0;overflow:hidden;background:#1a1018;color:#fff;font-family:system-ui,sans-serif}
+.loader{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;background:#1a1018;z-index:30}
+.loader h1{color:#ff4444;font-size:1.8rem}
+.spinner{width:36px;height:36px;border:3px solid #333;border-top-color:#ff4444;border-radius:50%;animation:spin 1s linear infinite;margin-top:10px}
 @keyframes spin{to{transform:rotate(360deg)}}
-.features{display:grid;grid-template-columns:1fr 1fr;gap:8px;text-align:left;font-size:12px;color:#aaa}
-.feat{background:rgba(255,255,255,0.05);padding:8px 10px;border-radius:6px;border-left:2px solid #ff4444}
-.iter{margin-top:20px;padding:12px;background:rgba(255,100,100,0.1);border:1px solid rgba(255,100,100,0.3);border-radius:8px;font-size:11px;color:#ff8888;text-align:left}
-.iter strong{color:#ff4444}
+#crosshair{position:fixed;left:50%;top:50%;width:14px;height:14px;margin:-7px 0 0 -7px;border:2px solid #ff6666;border-radius:50%;pointer-events:none;z-index:10}
+#score{position:fixed;top:12px;left:12px;padding:8px 12px;background:rgba(0,0,0,0.5);border-radius:8px;font-size:13px;z-index:10}
 </style>
 <script type="importmap">
-{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.182.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.182.0/examples/jsm/"}}
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}
 </script>
 </head>
 <body>
-<div class="loader">
-<h1>GRUDGE BRAWL</h1>
-<div class="sub">Third-Person Arena Combat</div>
-<div class="spinner"></div>
-<div class="features">
-<div class="feat">Body tracks crosshair</div>
-<div class="feat">Grudge voxel characters</div>
-<div class="feat">Custom VFX projectiles</div>
-<div class="feat">Arena terrain (no snow)</div>
-<div class="feat">WASD + mouse aim</div>
-<div class="feat">Mobile touch controls</div>
-<div class="feat">AI opponents</div>
-<div class="feat">Grudge ID auth</div>
-</div>
-<div class="iter">
-<strong>Iteration needed:</strong> Replace snowmen with Grudge voxel characters, remove snow/ice theme, add Grudge arena terrain, use ObjectStore weapon assets, custom VFX projectiles.
-</div>
-</div>
+<div class="loader"><h1>GRUDGE BRAWL</h1><div class="spinner"></div></div>
+<div id="crosshair"></div>
+<div id="score">Kills: 0</div>
 <script type="module">
-// Grudge Auth Bridge
-window.addEventListener('message', (e) => {
-  if (e.data?.type === 'grudge:auth') {
-    window.__GRUDGE_PLAYER__ = e.data.player;
-    window.__GRUDGE_TOKEN__ = e.data.token;
-  }
-});
-if (window.parent !== window) {
-  window.parent.postMessage({ type: 'grudge:game:ready', game: 'grudge-brawl' }, '*');
+import * as THREE from 'three';
+import { installAuthBridge, createHud, removeLoader } from './shared.mjs';
+
+installAuthBridge('grudge-brawl');
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x2a1a22);
+scene.fog = new THREE.Fog(0x2a1a22, 20, 70);
+
+const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.1, 120);
+camera.position.set(0, 9, 12);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true;
+document.body.appendChild(renderer.domElement);
+
+scene.add(new THREE.AmbientLight(0xffeedd, 0.45));
+const key = new THREE.DirectionalLight(0xffaa88, 1.0);
+key.position.set(8, 16, 6);
+key.castShadow = true;
+scene.add(key);
+
+const arena = new THREE.Mesh(
+  new THREE.CylinderGeometry(14, 14, 0.6, 32),
+  new THREE.MeshStandardMaterial({ color: 0x4a3038, roughness: 0.9 })
+);
+arena.position.y = 0.3;
+arena.receiveShadow = true;
+scene.add(arena);
+
+const wallMat = new THREE.MeshStandardMaterial({ color: 0x6b4048 });
+for (let i = 0; i < 8; i++) {
+  const a = (i / 8) * Math.PI * 2;
+  const pillar = new THREE.Mesh(new THREE.BoxGeometry(1.2, 3, 1.2), wallMat);
+  pillar.position.set(Math.cos(a) * 12, 1.5, Math.sin(a) * 12);
+  pillar.castShadow = true;
+  scene.add(pillar);
 }
+
+const player = new THREE.Group();
+const body = new THREE.Mesh(
+  new THREE.BoxGeometry(0.9, 1.4, 0.9),
+  new THREE.MeshStandardMaterial({ color: 0x44aaff })
+);
+body.position.y = 0.9;
+body.castShadow = true;
+const head = new THREE.Mesh(
+  new THREE.BoxGeometry(0.55, 0.55, 0.55),
+  new THREE.MeshStandardMaterial({ color: 0xffcc88 })
+);
+head.position.y = 1.85;
+player.add(body, head);
+scene.add(player);
+
+const enemies = [];
+function spawnEnemy() {
+  const angle = Math.random() * Math.PI * 2;
+  const dist = 6 + Math.random() * 4;
+  const mesh = new THREE.Group();
+  const eBody = new THREE.Mesh(
+    new THREE.BoxGeometry(0.9, 1.4, 0.9),
+    new THREE.MeshStandardMaterial({ color: 0xcc3344 })
+  );
+  eBody.position.y = 0.9;
+  const eHead = new THREE.Mesh(
+    new THREE.BoxGeometry(0.55, 0.55, 0.55),
+    new THREE.MeshStandardMaterial({ color: 0xffddbb })
+  );
+  eHead.position.y = 1.85;
+  mesh.add(eBody, eHead);
+  mesh.position.set(Math.cos(angle) * dist, 0, Math.sin(angle) * dist);
+  scene.add(mesh);
+  enemies.push({ mesh, hp: 3, speed: 0.03 + Math.random() * 0.02 });
+}
+for (let i = 0; i < 5; i++) spawnEnemy();
+
+const projectiles = [];
+let kills = 0;
+const scoreEl = document.getElementById('score');
+const keys = {};
+const mouse = new THREE.Vector2();
+const raycaster = new THREE.Raycaster();
+const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+const hitPoint = new THREE.Vector3();
+createHud(['<b>WASD</b> move · body tracks crosshair', '<b>LMB</b> fire voxel bolt']);
+
+addEventListener('keydown', (e) => { keys[e.code] = true; });
+addEventListener('keyup', (e) => { keys[e.code] = false; });
+addEventListener('mousemove', (e) => {
+  mouse.x = (e.clientX / innerWidth) * 2 - 1;
+  mouse.y = -(e.clientY / innerHeight) * 2 + 1;
+});
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+function aimPoint() {
+  raycaster.setFromCamera(mouse, camera);
+  return raycaster.ray.intersectPlane(plane, hitPoint) ? hitPoint.clone() : new THREE.Vector3(0, 0, -8);
+}
+
+addEventListener('pointerdown', () => {
+  const target = aimPoint();
+  const dir = target.sub(player.position).setY(0).normalize();
+  const bolt = new THREE.Mesh(
+    new THREE.SphereGeometry(0.18, 8, 8),
+    new THREE.MeshBasicMaterial({ color: 0xffee44 })
+  );
+  bolt.position.copy(player.position).add(new THREE.Vector3(0, 1.2, 0));
+  scene.add(bolt);
+  projectiles.push({ mesh: bolt, vel: dir.multiplyScalar(0.55) });
+});
+
+let last = performance.now();
+function tick(now) {
+  requestAnimationFrame(tick);
+  const dt = Math.min(0.05, (now - last) / 1000);
+  last = now;
+
+  const move = new THREE.Vector3(
+    (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0),
+    0,
+    (keys.KeyS ? 1 : 0) - (keys.KeyW ? 1 : 0)
+  );
+  if (move.lengthSq() > 0) {
+    move.normalize().multiplyScalar(0.12);
+    player.position.add(move);
+  }
+  const aim = aimPoint();
+  const look = aim.sub(player.position);
+  look.y = 0;
+  if (look.lengthSq() > 0.01) player.rotation.y = Math.atan2(look.x, look.z);
+
+  camera.position.lerp(new THREE.Vector3(player.position.x, player.position.y + 8, player.position.z + 11), 0.08);
+  camera.lookAt(player.position.x, 1.4, player.position.z);
+
+  enemies.forEach((e) => {
+    const toPlayer = player.position.clone().sub(e.mesh.position);
+    toPlayer.y = 0;
+    if (toPlayer.lengthSq() > 0.5) {
+      toPlayer.normalize().multiplyScalar(e.speed);
+      e.mesh.position.add(toPlayer);
+      e.mesh.lookAt(player.position.x, e.mesh.position.y, player.position.z);
+    }
+  });
+
+  for (let i = projectiles.length - 1; i >= 0; i--) {
+    const p = projectiles[i];
+    p.mesh.position.add(p.vel);
+    let hit = false;
+    for (let j = enemies.length - 1; j >= 0; j--) {
+      if (p.mesh.position.distanceTo(enemies[j].mesh.position) < 1.1) {
+        enemies[j].hp -= 1;
+        hit = true;
+        if (enemies[j].hp <= 0) {
+          scene.remove(enemies[j].mesh);
+          enemies.splice(j, 1);
+          kills += 1;
+          scoreEl.textContent = `Kills: ${kills}`;
+          spawnEnemy();
+        }
+        break;
+      }
+    }
+    if (hit || p.mesh.position.length() > 40) {
+      scene.remove(p.mesh);
+      projectiles.splice(i, 1);
+    }
+  }
+
+  renderer.render(scene, camera);
+}
+
+removeLoader();
+requestAnimationFrame(tick);
 </script>
 </body>
 </html>

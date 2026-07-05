@@ -150,7 +150,12 @@ function AppShell() {
     location === "/viewer" || location.startsWith("/viewer?") ||
     location === "/roster" || location.startsWith("/roster?") ||
     location === "/conan" || location.startsWith("/conan?");
-  const minimalChrome = isViewerHost || isConanHost || isViewerRoute;
+  const isForgeGameRoute =
+    location === "/voxel-sandbox" || location.startsWith("/voxel-sandbox?") ||
+    location === "/polyfighter" || location.startsWith("/polyfighter?") ||
+    location === "/terraforge" || location.startsWith("/terraforge?") ||
+    location === "/grudge-brawl" || location.startsWith("/grudge-brawl?");
+  const minimalChrome = isViewerHost || isConanHost || isViewerRoute || isForgeGameRoute;
 
   return (
     <TooltipProvider>

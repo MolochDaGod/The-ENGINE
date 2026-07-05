@@ -1,13 +1,20 @@
 import { useEffect, useRef, useState } from 'react';
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Maximize2, Minimize2 } from "lucide-react";
+import { ArrowLeft, ExternalLink, Maximize2, Minimize2 } from "lucide-react";
 import { Link } from "wouter";
 import { useAuth } from "@/components/auth-provider";
+
+const FIGHTER_URL = "https://final-fighter.vercel.app";
 
 export default function PolyFighter() {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const { player } = useAuth();
+
+  useEffect(() => {
+    document.title = "Grudge Fighter — Grudge Studio";
+    return () => { document.title = "Rec0deD:88 — Grudge Studio Gaming Portal"; };
+  }, []);
 
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
@@ -26,9 +33,8 @@ export default function PolyFighter() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-black flex flex-col">
-      {/* Header Bar */}
-      <div className="flex items-center justify-between px-4 py-2 bg-[hsl(225,25%,10%)] border-b border-[hsl(43,60%,30%)]/30">
+    <div className="flex flex-col h-screen bg-black">
+      <div className="flex items-center justify-between px-4 py-2 bg-[hsl(225,25%,10%)] border-b border-[hsl(43,60%,30%)]/30 shrink-0">
         <div className="flex items-center gap-3">
           <Link href="/super-engine">
             <Button variant="ghost" size="sm" className="text-[hsl(45,30%,90%)] hover:text-[hsl(43,85%,55%)]">
@@ -45,6 +51,11 @@ export default function PolyFighter() {
           )}
         </div>
         <div className="flex items-center gap-2">
+          <a href={FIGHTER_URL} target="_blank" rel="noopener noreferrer">
+            <Button variant="ghost" size="sm" className="text-[hsl(45,30%,90%)]">
+              <ExternalLink className="w-4 h-4" />
+            </Button>
+          </a>
           <Button
             variant="ghost"
             size="sm"
@@ -55,17 +66,13 @@ export default function PolyFighter() {
           </Button>
         </div>
       </div>
-
-      {/* Game Canvas */}
-      <div className="flex-1 relative">
-        <iframe
-          ref={iframeRef}
-          src="/games/polyfighter.html"
-          className="w-full h-full border-0 absolute inset-0"
-          allow="fullscreen; autoplay"
-          title="Grudge Fighter"
-        />
-      </div>
+      <iframe
+        ref={iframeRef}
+        src={FIGHTER_URL}
+        className="flex-1 w-full min-h-0 border-0"
+        allow="fullscreen; autoplay"
+        title="Grudge Fighter"
+      />
     </div>
   );
 }

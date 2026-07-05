@@ -1,42 +1,188 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en" translate="no">
 <head>
 <meta charset="UTF-8">
 <meta name="google" content="notranslate">
-    <script src="/grudge-game-bootstrap.js"></script>
+<script src="/grudge-game-bootstrap.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Voxel Chaos Sandbox - Grudge Studio</title>
 <style>
-body{margin:0;overflow:hidden;background:#111;color:#fff;font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;height:100vh}
-.loader{text-align:center}
-.loader h1{color:#00ffcc;font-size:2rem;margin-bottom:10px}
-.loader p{color:#888;font-size:14px}
-.spinner{width:40px;height:40px;border:3px solid #333;border-top-color:#00ffcc;border-radius:50%;animation:spin 1s linear infinite;margin:20px auto}
+body{margin:0;overflow:hidden;background:#0a0f14;color:#fff;font-family:system-ui,sans-serif}
+.loader{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;background:#0a0f14;z-index:30}
+.loader h1{color:#00ffcc;font-size:1.6rem;margin-bottom:8px}
+.spinner{width:36px;height:36px;border:3px solid #333;border-top-color:#00ffcc;border-radius:50%;animation:spin 1s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
+#crosshair{position:fixed;left:50%;top:50%;width:10px;height:10px;margin:-5px 0 0 -5px;border:2px solid #fff;border-radius:50%;pointer-events:none;z-index:10;mix-blend-mode:difference}
 </style>
-</head>
-<body>
-<div class="loader">
-<h1>🧱 Voxel Chaos Sandbox</h1>
-<div class="spinner"></div>
-<p>Loading Three.js + Cannon-ES engine...</p>
-<p style="color:#555;margin-top:20px;font-size:12px">Full game HTML to be deployed from source</p>
-</div>
 <script type="importmap">
 {"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/","cannon-es":"https://unpkg.com/cannon-es@0.20.0/dist/cannon-es.js"}}
 </script>
+</head>
+<body>
+<div class="loader"><h1>Voxel Chaos Sandbox</h1><div class="spinner"></div></div>
+<div id="crosshair"></div>
 <script type="module">
-// Grudge Auth Bridge - receives auth state from parent frame
-window.addEventListener('message', (e) => {
-  if (e.data?.type === 'grudge:auth') {
-    window.__GRUDGE_PLAYER__ = e.data.player;
-    window.__GRUDGE_TOKEN__ = e.data.token;
-  }
-});
-// Signal ready to parent
-if (window.parent !== window) {
-  window.parent.postMessage({ type: 'grudge:game:ready', game: 'voxel-sandbox' }, '*');
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import * as CANNON from 'cannon-es';
+import { installAuthBridge, createHud, removeLoader } from './shared.mjs';
+
+installAuthBridge('voxel-sandbox');
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x87b8d9);
+scene.fog = new THREE.Fog(0x87b8d9, 40, 120);
+
+const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.1, 300);
+camera.position.set(14, 12, 14);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true;
+document.body.appendChild(renderer.domElement);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.target.set(0, 2, 0);
+
+scene.add(new THREE.AmbientLight(0xffffff, 0.55));
+const sun = new THREE.DirectionalLight(0xfff2d6, 1.1);
+sun.position.set(20, 30, 10);
+sun.castShadow = true;
+scene.add(sun);
+
+const world = new CANNON.World({ gravity: new CANNON.Vec3(0, -18, 0) });
+world.broadphase = new CANNON.SAPBroadphase(world);
+const groundBody = new CANNON.Body({ mass: 0, shape: new CANNON.Plane() });
+groundBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
+world.addBody(groundBody);
+const ground = new THREE.Mesh(
+  new THREE.PlaneGeometry(120, 120),
+  new THREE.MeshStandardMaterial({ color: 0x3d6b3d })
+);
+ground.rotation.x = -Math.PI / 2;
+ground.receiveShadow = true;
+scene.add(ground);
+
+const grid = new THREE.GridHelper(60, 60, 0x224422, 0x1a331a);
+scene.add(grid);
+
+const blocks = [];
+const blockMeshes = new Map();
+const palette = [0x8b5a2b, 0x6b8e23, 0x708090, 0xc04000, 0x4a6741, 0x9c6644];
+let mode = 'build';
+let selectedColor = palette[0];
+
+function addBlock(x, y, z, color = selectedColor) {
+  const key = `${x}|${y}|${z}`;
+  if (blockMeshes.has(key)) return;
+  const mesh = new THREE.Mesh(
+    new THREE.BoxGeometry(1, 1, 1),
+    new THREE.MeshStandardMaterial({ color })
+  );
+  mesh.position.set(x, y, z);
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  scene.add(mesh);
+  const body = new CANNON.Body({ mass: 2, shape: new CANNON.Box(new CANNON.Vec3(0.5, 0.5, 0.5)) });
+  body.position.set(x, y, z);
+  world.addBody(body);
+  blockMeshes.set(key, { mesh, body });
+  blocks.push(key);
 }
+
+for (let x = -4; x <= 4; x++) for (let z = -4; z <= 4; z++) addBlock(x, 0.5, z, 0x4a6741);
+
+const player = new THREE.Mesh(
+  new THREE.CapsuleGeometry(0.35, 1.0, 4, 8),
+  new THREE.MeshStandardMaterial({ color: 0xff6644 })
+);
+player.position.set(0, 1.2, 4);
+player.castShadow = true;
+scene.add(player);
+const playerBody = new CANNON.Body({
+  mass: 70,
+  shape: new CANNON.Sphere(0.5),
+  position: new CANNON.Vec3(0, 1.2, 4),
+  linearDamping: 0.4,
+});
+world.addBody(playerBody);
+
+const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2();
+const keys = {};
+const hud = createHud([
+  '<b>WASD</b> move ragdoll · <b>LMB</b> place · <b>RMB</b> remove',
+  '<b>1</b> build · <b>2</b> remove · <b>Space</b> jump',
+]);
+
+addEventListener('keydown', (e) => { keys[e.code] = true; if (e.code === 'Digit1') mode = 'build'; if (e.code === 'Digit2') mode = 'remove'; });
+addEventListener('keyup', (e) => { keys[e.code] = false; });
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+function screenToRay(ev) {
+  mouse.x = (ev.clientX / innerWidth) * 2 - 1;
+  mouse.y = -(ev.clientY / innerHeight) * 2 + 1;
+  raycaster.setFromCamera(mouse, camera);
+}
+
+function pickBlock() {
+  return raycaster.intersectObjects([...blockMeshes.values()].map((b) => b.mesh), false)[0];
+}
+
+renderer.domElement.addEventListener('pointerdown', (ev) => {
+  screenToRay(ev);
+  if (mode === 'remove') {
+    const hit = pickBlock();
+    if (!hit) return;
+    const key = `${Math.round(hit.object.position.x)}|${Math.round(hit.object.position.y)}|${Math.round(hit.object.position.z)}`;
+    const entry = blockMeshes.get(key);
+    if (!entry) return;
+    scene.remove(entry.mesh);
+    world.removeBody(entry.body);
+    blockMeshes.delete(key);
+    return;
+  }
+  const hit = raycaster.intersectObject(ground)[0];
+  if (!hit) return;
+  const n = hit.face.normal.clone().transformDirection(hit.object.matrixWorld).round();
+  const p = hit.point.clone().add(n.multiplyScalar(0.5));
+  addBlock(Math.round(p.x), Math.round(p.y), Math.round(p.z), palette[Math.floor(Math.random() * palette.length)]);
+});
+
+let last = performance.now();
+function tick(now) {
+  requestAnimationFrame(tick);
+  const dt = Math.min(0.033, (now - last) / 1000);
+  last = now;
+  const move = new CANNON.Vec3(
+    (keys.KeyD ? 1 : 0) - (keys.KeyA ? 1 : 0),
+    0,
+    (keys.KeyS ? 1 : 0) - (keys.KeyW ? 1 : 0)
+  );
+  if (move.length() > 0) {
+    move.normalize();
+    move.scale(9, move);
+    playerBody.velocity.x = move.x;
+    playerBody.velocity.z = move.z;
+  } else {
+    playerBody.velocity.x *= 0.85;
+    playerBody.velocity.z *= 0.85;
+  }
+  if (keys.Space && playerBody.position.y < 1.05) playerBody.velocity.y = 8;
+  world.step(1 / 60, dt, 3);
+  player.position.copy(playerBody.position);
+  playerBody.position.y = Math.max(playerBody.position.y, 0.6);
+  controls.update();
+  renderer.render(scene, camera);
+}
+
+removeLoader();
+requestAnimationFrame(tick);
 </script>
 </body>
 </html>
