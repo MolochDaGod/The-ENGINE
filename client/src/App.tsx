@@ -156,8 +156,13 @@ function AppShell() {
     location === "/grudge-brawl" || location.startsWith("/grudge-brawl?") ||
     location === "/overdrive-racing" || location.startsWith("/overdrive-racing?") ||
     location === "/overdrive-3d" || location.startsWith("/overdrive-3d?") ||
-    location === "/annihilate-demo" || location.startsWith("/annihilate-demo?");
-  const minimalChrome = isViewerHost || isConanHost || isViewerRoute || isForgeGameRoute;
+    location === "/annihilate-demo" || location.startsWith("/annihilate-demo?") ||
+    location === "/grudge-controller" || location.startsWith("/grudge-controller?");
+  const isPortalEmbed =
+    typeof window !== "undefined" &&
+    (window.self !== window.top ||
+      new URLSearchParams(window.location.search).get("embed") === "1");
+  const minimalChrome = isViewerHost || isConanHost || isViewerRoute || isForgeGameRoute || isPortalEmbed;
 
   return (
     <TooltipProvider>

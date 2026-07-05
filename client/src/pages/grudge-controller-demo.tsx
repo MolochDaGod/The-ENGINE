@@ -4,6 +4,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'wouter';
+import { isPortalEmbedMode } from '@/lib/embed-mode';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ArrowLeft, Gamepad2, Users } from 'lucide-react';
@@ -16,6 +17,7 @@ import {
 } from '@/engine/controller';
 
 export default function GrudgeControllerDemo() {
+  const embedMode = isPortalEmbedMode();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const ctrlRef = useRef<GrudgePlayerController | null>(null);
   const [ready, setReady] = useState(false);
@@ -55,6 +57,9 @@ export default function GrudgeControllerDemo() {
       engine.addToUpdate(ctrl);
       engine.start();
       setReady(true);
+      if (window.parent !== window) {
+        window.parent.postMessage({ type: 'grudge:game:ready', game: 'grudge-controller' }, '*');
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load controller');
     } finally {
@@ -86,44 +91,61 @@ export default function GrudgeControllerDemo() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0a0a0f] text-[#e8dfc8] flex flex-col">
-      <header className="flex items-center justify-between px-4 py-3 border-b border-[#2a2a3a] bg-[#12121a]/90 backdrop-blur z-10">
-        <div className="flex items-center gap-3">
-          <Link href="/super-engine">
-            <Button variant="ghost" size="sm" className="text-[#d4af37]">
-              <ArrowLeft className="w-4 h-4 mr-1" /> Super Engine
-            </Button>
-          </Link>
-          <Badge className="bg-[#d4af37]/20 text-[#d4af37] border-[#d4af37]/40">
-            <Gamepad2 className="w-3 h-3 mr-1" /> Grudge Controller
-          </Badge>
-        </div>
-        <div className="flex items-center gap-2">
-          <Users className="w-4 h-4 text-[#888]" />
-          <select
-            className="bg-[#1a1a25] border border-[#2a2a3a] rounded px-2 py-1 text-sm"
-            value={characterId}
-            onChange={(e) => onRaceChange(e.target.value)}
-          >
-            {GRUDGE_CHARACTERS.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </select>
-        </div>
-      </header>
+    <div className={`${embedMode ? 'h-screen' : 'min-h-screen'} bg-[#0a0a0f] text-[#e8dfc8] flex flex-col`}>
+      {!embedMode && (
+        <header className="flex items-center justify-between px-4 py-3 border-b border-[#2a2a3a] bg-[#12121a]/90 backdrop-blur z-10 shrink-0">
+          <div className="flex items-center gap-3">
+            <Link href="/super-engine">
+              <Button variant="ghost" size="sm" className="text-[#d4af37]">
+                <ArrowLeft className="w-4 h-4 mr-1" /> Super Engine
+              </Button>
+            </Link>
+            <Badge className="bg-[#d4af37]/20 text-[#d4af37] border-[#d4af37]/40">
+              <Gamepad2 className="w-3 h-3 mr-1" /> Grudge Controller
+            </Badge>
+          </div>
+          <div className="flex items-center gap-2">
+            <Users className="w-4 h-4 text-[#888]" />
+            <select
+              className="bg-[#1a1a25] border border-[#2a2a3a] rounded px-2 py-1 text-sm"
+              value={characterId}
+              onChange={(e) => onRaceChange(e.target.value)}
+            >
+              {GRUDGE_CHARACTERS.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          </div>
+        </header>
+      )}
 
-      <div className="relative flex-1">
+      <div className="relative flex-1 min-h-0">
         <canvas ref={canvasRef} className="absolute inset-0 w-full h-full block" />
         {(loading || error) && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/50 pointer-events-none">
             <p className="text-sm text-[#d4af37]">{error ?? 'Loading grudge6 character…'}</p>
           </div>
         )}
-        <div className="absolute bottom-4 left-4 right-4 max-w-md p-3 rounded-lg bg-[#12121a]/90 border border-[#2a2a3a] text-xs text-[#888] pointer-events-none">
-          <strong className="text-[#d4af37]">Controls:</strong> WASD move · Shift sprint · Space jump · V toggle view · F fly · Mouse look
-          <br />
-          <span className="text-[#666]">grudge-control BVH + artifact animator combat/OWR + grudge6 CDN</span>
-        </div>
+        {embedMode && (
+          <div className="absolute top-3 right-3 z-10 flex items-center gap-2">
+            <select
+              className="bg-[#12121a]/90 border border-[#2a2a3a] rounded px-2 py-1 text-xs text-[#e8dfc8]"
+              value={characterId}
+              onChange={(e) => onRaceChange(e.target.value)}
+            >
+              {GRUDGE_CHARACTERS.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          </div>
+        )}
+        {!embedMode && (
+          <div className="absolute bottom-4 left-4 right-4 max-w-md p-3 rounded-lg bg-[#12121a]/90 border border-[#2a2a3a] text-xs text-[#888] pointer-events-none">
+            <strong className="text-[#d4af37]">Controls:</strong> WASD move · Shift sprint · Space jump · V toggle view · F fly · Mouse look
+            <br />
+            <span className="text-[#666]">grudge-control BVH + artifact animator combat/OWR + grudge6 CDN</span>
+          </div>
+        )}
       </div>
     </div>
   );

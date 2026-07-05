@@ -27,6 +27,7 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { Link, useLocation } from 'wouter';
+import { isPortalEmbedMode } from '@/lib/embed-mode';
 import { getPrefab } from '@shared/character-prefabs';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -583,6 +584,7 @@ function resolveInitialPreset(heroParam: string | null): CharacterPreset {
 
 export default function AnnihilateDemo() {
   const [location] = useLocation();
+  const embedMode = isPortalEmbedMode();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<GrudgeEngine | null>(null);
   const roleRef = useRef<GrudgeCharacter | null>(null);
@@ -688,6 +690,10 @@ export default function AnnihilateDemo() {
 
     engine.start();
 
+    if (window.parent !== window) {
+      window.parent.postMessage({ type: 'grudge:game:ready', game: 'annihilate-demo' }, '*');
+    }
+
     const heroParam = new URLSearchParams(location.split('?')[1] ?? '').get('hero');
     spawnCharacter(resolveInitialPreset(heroParam));
 
@@ -724,12 +730,16 @@ export default function AnnihilateDemo() {
 
       {/* ── Top bar ────────────────────────────────────────────────────── */}
       <div className="absolute top-0 left-0 right-0 z-20 flex items-center gap-2 p-3">
-        <Link href="/super-engine">
-          <Button variant="outline" size="sm" className="border-purple-500/50 text-purple-300 hover:bg-purple-900/30 bg-black/60 h-9">
-            <ArrowLeft className="w-4 h-4 mr-1" /> Back
-          </Button>
-        </Link>
-        <div className="h-6 w-px bg-purple-500/20" />
+        {!embedMode && (
+          <>
+            <Link href="/super-engine">
+              <Button variant="outline" size="sm" className="border-purple-500/50 text-purple-300 hover:bg-purple-900/30 bg-black/60 h-9">
+                <ArrowLeft className="w-4 h-4 mr-1" /> Back
+              </Button>
+            </Link>
+            <div className="h-6 w-px bg-purple-500/20" />
+          </>
+        )}
         <Dropdown label={activePreset.name} icon={<Swords className="w-3.5 h-3.5" />} items={characterItems}
           onSelect={(id) => { const p = CHARACTER_PRESETS.find((c) => c.id === id); if (p) spawnCharacter(p); }} />
         <Dropdown label={`Enemies (${enemyCount})`} icon={<Users className="w-3.5 h-3.5" />} items={enemyItems}

@@ -2,11 +2,11 @@
  * Fleet game launch helpers — iframe vs new-tab with embed fallback.
  *
  * CSP `frame-ancestors https://*.grudge-studio.com` does NOT cover the apex
- * domain grudge-studio.com. Games that only allow subdomains will refuse portal
- * iframes; use embedRoute when available or open a dedicated tab.
+ * domain grudge-studio.com. Fleet games on *.grudge-studio.com subdomains
+ * must open in a tab when the portal host is the apex domain.
  */
 
-export type GameLaunchMode = "internal" | "embed" | "tab";
+export type GameLaunchMode = 'internal' | 'embed' | 'tab';
 
 export interface LaunchableGame {
   id: string;
@@ -22,29 +22,60 @@ export interface ResolvedLaunch {
   mode: GameLaunchMode;
 }
 
+const APEX_HOSTS = new Set(['grudge-studio.com', 'www.grudge-studio.com']);
+
+/** Hosts that ship a dedicated /embed/ document for portal iframes. */
+const APEX_EMBED_BLOCKLIST = new Set(['rpg-modular.vercel.app']);
+
 export function isInternalRoute(route: string): boolean {
-  return route.startsWith("/");
+  return route.startsWith('/');
+}
+
+export function isApexPortalHost(): boolean {
+  if (typeof window === 'undefined') return false;
+  return APEX_HOSTS.has(window.location.hostname);
+}
+
+/** Subdomain fleet URLs whose frame-ancestors omit the apex portal host. */
+export function blocksApexEmbed(url: string): boolean {
+  if (!isApexPortalHost()) return false;
+  try {
+    const host = new URL(url, window.location.origin).hostname;
+    if (host.endsWith('.grudge-studio.com') && !APEX_HOSTS.has(host)) {
+      return true;
+    }
+    return APEX_EMBED_BLOCKLIST.has(host) && !url.includes('/embed/');
+  } catch {
+    return false;
+  }
+}
+
+export function prefersTabLaunch(url: string): boolean {
+  return blocksApexEmbed(url);
 }
 
 export function resolveGameLaunch(game: LaunchableGame): ResolvedLaunch {
-  if (isInternalRoute(game.route)) {
-    return { playUrl: game.route, embedUrl: game.route, mode: "internal" };
-  }
+  const playUrl = game.route;
 
   if (game.allowEmbed === false) {
-    return { playUrl: game.route, embedUrl: null, mode: "tab" };
+    return { playUrl, embedUrl: null, mode: 'tab' };
   }
 
   const embedCandidate = game.embedRoute ?? game.route;
+
   if (prefersTabLaunch(embedCandidate)) {
-    return { playUrl: game.route, embedUrl: null, mode: "tab" };
+    return { playUrl, embedUrl: null, mode: 'tab' };
   }
 
-  return { playUrl: game.route, embedUrl: embedCandidate, mode: "embed" };
+  if (isInternalRoute(embedCandidate)) {
+    return { playUrl, embedUrl: embedCandidate, mode: 'internal' };
+  }
+
+  return { playUrl, embedUrl: embedCandidate, mode: 'embed' };
 }
 
 export function openGameTab(url: string): void {
-  window.open(url, "_blank", "noopener,noreferrer");
+  window.open(url, '_blank', 'noopener,noreferrer');
 }
 
 export function navigateGame(route: string, navigate: (path: string) => void): void {
@@ -53,18 +84,4 @@ export function navigateGame(route: string, navigate: (path: string) => void): v
     return;
   }
   openGameTab(route);
-}
-
-/** Hosts known to block apex grudge-studio.com in frame-ancestors. */
-const APEX_EMBED_BLOCKLIST = new Set([
-  "rpg-modular.vercel.app",
-]);
-
-export function prefersTabLaunch(url: string): boolean {
-  try {
-    const host = new URL(url).hostname;
-    return APEX_EMBED_BLOCKLIST.has(host) && !url.includes("/embed/");
-  } catch {
-    return false;
-  }
 }

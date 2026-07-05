@@ -187,8 +187,8 @@ export default function SuperEngine() {
               <X className="w-5 h-5" />
             </Button>
           </div>
-          <div className="flex-1">
-            <GamePreviewFrame game={fullscreenGameData} className="w-full h-full border-0" />
+          <div className="relative flex-1 min-h-0">
+            <GamePreviewFrame game={fullscreenGameData} className="absolute inset-0" />
           </div>
         </div>
       )}
@@ -256,8 +256,8 @@ export default function SuperEngine() {
                   <CardContent className="p-0">
                     {isExpanded ? (
                       <div className="flex flex-col">
-                        <div className="relative w-full" style={{ height: '500px' }}>
-                          <GamePreviewFrame game={game} className="w-full h-full border-0 rounded-t-lg" />
+                        <div className="relative w-full h-[min(56vh,520px)] min-h-[360px] flex flex-col overflow-hidden rounded-t-lg">
+                          <GamePreviewFrame game={game} className="flex-1 min-h-0" />
                           <div className="absolute top-3 right-3 flex gap-2">
                             <Button
                               size="sm"
