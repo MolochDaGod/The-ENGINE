@@ -149,7 +149,12 @@ function AppShell() {
     location === "/viewer" || location.startsWith("/viewer?") ||
     location === "/roster" || location.startsWith("/roster?") ||
     location === "/conan" || location.startsWith("/conan?");
+  const isSuperEngineRoute =
+    location === "/super-engine" ||
+    location.startsWith("/super-engine?") ||
+    location.startsWith("/super-engine/");
   const isForgeGameRoute =
+    isSuperEngineRoute ||
     location === "/voxel-sandbox" || location.startsWith("/voxel-sandbox?") ||
     location === "/polyfighter" || location.startsWith("/polyfighter?") ||
     location === "/terraforge" || location.startsWith("/terraforge?") ||
