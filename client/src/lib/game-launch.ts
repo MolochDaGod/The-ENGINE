@@ -27,6 +27,12 @@ const APEX_HOSTS = new Set(['grudge-studio.com', 'www.grudge-studio.com']);
 /** Hosts that ship a dedicated /embed/ document for portal iframes. */
 const APEX_EMBED_BLOCKLIST = new Set(['rpg-modular.vercel.app']);
 
+/** Fleet subdomains that allow iframe embed from the apex portal (no frame-ancestors block). */
+const APEX_EMBED_ALLOWLIST = new Set([
+  'grudox.grudge-studio.com',
+  'play.grudge-studio.com',
+]);
+
 export function isInternalRoute(route: string): boolean {
   return route.startsWith('/');
 }
@@ -41,6 +47,7 @@ export function blocksApexEmbed(url: string): boolean {
   if (!isApexPortalHost()) return false;
   try {
     const host = new URL(url, window.location.origin).hostname;
+    if (APEX_EMBED_ALLOWLIST.has(host)) return false;
     if (host.endsWith('.grudge-studio.com') && !APEX_HOSTS.has(host)) {
       return true;
     }

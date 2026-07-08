@@ -8,6 +8,38 @@
       "NODE_OPTIONS": "--max-old-space-size=6144"
     }
   },
+  "redirects": [
+    {
+      "source": "/island",
+      "destination": "https://grudgewarlords.com/island",
+      "permanent": false
+    },
+    {
+      "source": "/island/:path*",
+      "destination": "https://grudgewarlords.com/island/:path*",
+      "permanent": false
+    },
+    {
+      "source": "/forge",
+      "destination": "https://forge.grudge-studio.com",
+      "permanent": false
+    },
+    {
+      "source": "/forge/:path*",
+      "destination": "https://forge.grudge-studio.com/:path*",
+      "permanent": false
+    },
+    {
+      "source": "/grudges",
+      "destination": "https://grudges.grudge-studio.com",
+      "permanent": false
+    },
+    {
+      "source": "/grudges/:path*",
+      "destination": "https://grudges.grudge-studio.com/:path*",
+      "permanent": false
+    }
+  ],
   "rewrites": [
     {
       "source": "/",

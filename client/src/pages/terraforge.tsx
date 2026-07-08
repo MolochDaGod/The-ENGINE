@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft, Maximize2, Minimize2, Settings } from "lucide-react";
 import { Link } from "wouter";
 import { useAuth } from "@/components/auth-provider";
+import { VOXGRUDGE_GAMES } from "@/lib/voxgrudge-urls";
 
 interface GameSettings {
   crosshairStyle: 'dot' | 'circle' | 'cross' | 'dynamic';
@@ -199,7 +200,7 @@ export default function TerraForge() {
 
       <iframe
         ref={iframeRef}
-        src="/games/terraforge.html"
+        src={VOXGRUDGE_GAMES.terraforge}
         className="flex-1 w-full min-h-0 border-0"
         allow="fullscreen; autoplay; pointer-lock"
         title="TerraForge"

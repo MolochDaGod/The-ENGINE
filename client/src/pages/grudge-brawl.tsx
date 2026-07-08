@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft, Maximize2, Minimize2 } from "lucide-react";
 import { Link } from "wouter";
 import { useAuth } from "@/components/auth-provider";
+import { VOXGRUDGE_GAMES } from "@/lib/voxgrudge-urls";
 
 export default function GrudgeBrawl() {
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -64,7 +65,7 @@ export default function GrudgeBrawl() {
       </div>
       <iframe
         ref={iframeRef}
-        src="/games/grudge-brawl.html"
+        src={VOXGRUDGE_GAMES.grudgeBrawl}
         className="flex-1 w-full min-h-0 border-0"
         allow="fullscreen; autoplay; pointer-lock"
         title="Grudge Brawl"

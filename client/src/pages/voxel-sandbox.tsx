@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft, Maximize2, Minimize2 } from "lucide-react";
 import { Link } from "wouter";
 import { useAuth } from "@/components/auth-provider";
+import { VOXGRUDGE_GAMES } from "@/lib/voxgrudge-urls";
 
 export default function VoxelSandbox() {
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -59,7 +60,7 @@ export default function VoxelSandbox() {
       </div>
       <iframe
         ref={iframeRef}
-        src="/games/voxel-sandbox.html"
+        src={VOXGRUDGE_GAMES.voxelSandbox}
         className="flex-1 w-full min-h-0 border-0"
         allow="fullscreen; autoplay"
         title="Voxel Chaos Sandbox"

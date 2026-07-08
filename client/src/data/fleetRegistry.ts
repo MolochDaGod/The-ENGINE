@@ -5,6 +5,8 @@
  * Naming: `betta-warlords` (rpg-modular) ≠ `rpg-maker-studio` (portal demo).
  */
 
+import { VOXGRUDGE_GAMES } from "@/lib/voxgrudge-urls";
+
 export type FleetStatus = "live" | "beta" | "planned";
 export type FleetTag = "pvp" | "pvpve" | "coop" | "solo" | "retro" | "arena" | "mmo" | "rts";
 
@@ -247,7 +249,7 @@ export const FLEET_REGISTRY: FleetRegistryEntry[] = [
     name: "Voxel Chaos Sandbox",
     description: "3D physics sandbox with 23 tools, ragdoll characters, NPC/zombie AI, scripting, vehicles.",
     canonicalUrl: "/voxel-sandbox",
-    embedUrl: "/games/voxel-sandbox.html",
+    embedUrl: VOXGRUDGE_GAMES.voxelSandbox,
     status: "beta",
     tags: ["solo", "coop"],
     forge: true,
@@ -257,7 +259,7 @@ export const FLEET_REGISTRY: FleetRegistryEntry[] = [
     name: "TerraForge",
     description: "Open-world voxel sandbox with FPS combat, city builder, castle fortress, NPC AI, world editor.",
     canonicalUrl: "/terraforge",
-    embedUrl: "/games/terraforge.html",
+    embedUrl: VOXGRUDGE_GAMES.terraforge,
     status: "beta",
     tags: ["solo", "coop", "pvpve"],
     forge: true,
@@ -267,7 +269,7 @@ export const FLEET_REGISTRY: FleetRegistryEntry[] = [
     name: "Grudge Brawl",
     description: "Third-person arena combat with body-tracks-crosshair aiming, WASD movement, mobile touch.",
     canonicalUrl: "/grudge-brawl",
-    embedUrl: "/games/grudge-brawl.html",
+    embedUrl: VOXGRUDGE_GAMES.grudgeBrawl,
     status: "beta",
     tags: ["pvp", "arena"],
     forge: true,
