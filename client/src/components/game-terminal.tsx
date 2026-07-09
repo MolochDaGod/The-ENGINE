@@ -81,6 +81,8 @@ export function GameTerminal({ games = FORGE_GAMES, defaultGameId }: GameTermina
   useEffect(() => {
     if (resolvedLegacy) {
       setSelectedId(resolvedLegacy);
+      // Deep links like /super-engine/grudge-drive open the play canvas immediately
+      setFullscreen(true);
       return;
     }
     if (defaultGameId) {

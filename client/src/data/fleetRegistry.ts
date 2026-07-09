@@ -103,12 +103,16 @@ export const FLEET_REGISTRY: FleetRegistryEntry[] = [
   {
     id: "grudge-drive",
     name: "Grudge Drive",
-    description: "High-speed vehicular combat arena brawler. BabylonJS + Havok physics, destructible environments.",
+    description:
+      "High-speed vehicular combat. Babylon.js + Havok — production canvas at drive.grudge-studio.com; Super Engine play terminal embeds it.",
     canonicalUrl: "https://drive.grudge-studio.com",
+    embedUrl: "https://drive.grudge-studio.com/?embed=1",
+    allowEmbed: true,
     status: "live",
     tags: ["pvp", "arena"],
     forge: true,
     repo: "grudge-drive",
+    authRequired: true,
   },
   {
     id: "grudge-fishing",
