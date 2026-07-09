@@ -258,13 +258,13 @@ const FORGE_CARD_META: Record<string, ForgeCardMeta> = {
     cardImage: gameImgAvernusArena,
   },
   polyfighter: {
-    type: "3D Fighting",
+    type: "2D Platform Fighter",
     emoji: "🥊",
     color: "from-pink-900/60 to-rose-800/30",
     gradientBorder: "from-pink-500 via-red-500 to-rose-500",
     icon: Swords,
-    capabilities: ["3D", "Physics", "AI"],
-    previewType: "threejs",
+    capabilities: ["2D", "Multiplayer", "AI", "Physics"],
+    previewType: "canvas",
     cardImage: gameImgTowerDef,
   },
 };

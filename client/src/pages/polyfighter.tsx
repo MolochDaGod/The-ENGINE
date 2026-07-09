@@ -4,7 +4,8 @@ import { ArrowLeft, ExternalLink, Maximize2, Minimize2 } from "lucide-react";
 import { Link } from "wouter";
 import { useAuth } from "@/components/auth-provider";
 
-const FIGHTER_URL = "https://final-fighter.vercel.app";
+/** 2D Smash-style platform fighter (GitHub: MolochDaGod/Grudge-RPG-Sprite-Attack). */
+const FIGHTER_URL = "https://grudge-rpg-sprite-attack.vercel.app";
 
 export default function PolyFighter() {
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -12,7 +13,7 @@ export default function PolyFighter() {
   const { player } = useAuth();
 
   useEffect(() => {
-    document.title = "Grudge Fighter — Grudge Studio";
+    document.title = "Grudge Smash — Grudge Studio";
     return () => { document.title = "Rec0deD:88 — Grudge Studio Gaming Portal"; };
   }, []);
 
@@ -42,7 +43,7 @@ export default function PolyFighter() {
             </Button>
           </Link>
           <h1 className="text-lg font-bold" style={{ color: '#ff0055' }}>
-            🥊 Grudge Fighter
+            🥊 Grudge Smash
           </h1>
           {player && (
             <span className="text-xs text-[hsl(45,15%,60%)] ml-2">
@@ -71,7 +72,7 @@ export default function PolyFighter() {
         src={FIGHTER_URL}
         className="flex-1 w-full min-h-0 border-0"
         allow="fullscreen; autoplay"
-        title="Grudge Fighter"
+        title="Grudge Smash"
       />
     </div>
   );
