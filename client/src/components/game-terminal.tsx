@@ -12,12 +12,15 @@ import {
   Maximize2,
   Minimize2,
   Search,
+  Settings2,
   Terminal,
   X,
 } from "lucide-react";
 import { FORGE_GAMES, resolveFleetGameId, type Capability, type FleetGameCard } from "@/data/fleetGames";
 import { GamePreviewFrame } from "@/components/game-preview-frame";
+import { ForgeSystemPanel } from "@/components/forge-system-panel";
 import { navigateGame, openGameTab, resolveGameLaunch } from "@/lib/game-launch";
+import { DEFAULT_FORGE_SETTINGS, type ForgeRenderSettings } from "@/lib/engine3d";
 
 const FILTER_TAGS: { id: "all" | Capability; label: string }[] = [
   { id: "all", label: "ALL" },
@@ -74,6 +77,8 @@ export function GameTerminal({ games = FORGE_GAMES, defaultGameId }: GameTermina
   const [tag, setTag] = useState<"all" | Capability>("all");
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [fullscreen, setFullscreen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [forgeSettings, setForgeSettings] = useState<ForgeRenderSettings>(DEFAULT_FORGE_SETTINGS);
   const searchRef = useRef<HTMLInputElement>(null);
 
   const resolvedLegacy = legacyId ? resolveFleetGameId(legacyId) : null;
@@ -349,7 +354,33 @@ export function GameTerminal({ games = FORGE_GAMES, defaultGameId }: GameTermina
 
           <div className="relative min-h-0 flex-1 bg-black">
             {selectedGame ? (
-              <GamePreviewFrame game={selectedGame} className="absolute inset-0" />
+              <>
+                <GamePreviewFrame
+                  game={selectedGame}
+                  forgeSettings={forgeSettings}
+                  className="absolute inset-0"
+                />
+                <div className="absolute bottom-3 right-3 z-20 flex flex-col items-end gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-8 border-[hsl(43,60%,30%)]/50 bg-black/70 text-[hsl(43,85%,55%)] backdrop-blur-sm hover:bg-black/90"
+                    onClick={() => setSettingsOpen((v) => !v)}
+                  >
+                    <Settings2 className="mr-1.5 h-3.5 w-3.5" />
+                    Systems
+                  </Button>
+                  {settingsOpen && (
+                    <div className="w-[min(100vw-2rem,320px)] max-h-[min(60vh,420px)] overflow-y-auto shadow-xl">
+                      <ForgeSystemPanel
+                        settings={forgeSettings}
+                        onChange={setForgeSettings}
+                        compact
+                      />
+                    </div>
+                  )}
+                </div>
+              </>
             ) : (
               <div className="flex h-full flex-col items-center justify-center gap-4 p-8 text-center">
                 <div className="rounded-full border border-[hsl(43,60%,30%)]/40 bg-[hsl(225,28%,10%)] p-6">
@@ -399,11 +430,7 @@ export function GameTerminal({ games = FORGE_GAMES, defaultGameId }: GameTermina
           </Button>
         </div>
         <div className="relative min-h-0 flex-1">
-          <GamePreviewFrame game={selectedGame} className="absolute inset-0" />
-        </div>
-      </div>
-    );
-  }
-
-  return shell;
-}
+          <GamePreviewFrame
+            game={selectedGame}
+            forgeSettings={forgeSettings}
+            className="absolute inset-0

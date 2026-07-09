@@ -5,7 +5,7 @@ import { ExternalLink, Box, MonitorPlay } from "lucide-react";
 import type { FleetGameCard } from "@/data/fleetGames";
 import { openGameTab, resolveGameLaunch } from "@/lib/game-launch";
 import { ForgePreviewCanvas } from "@/components/forge-preview-canvas";
-import type { ForgeRenderSettings } from "@/lib/engine3d";
+import { DEFAULT_FORGE_SETTINGS, type ForgeRenderSettings } from "@/lib/engine3d";
 
 type PreviewMode = "embed" | "canvas" | "tab";
 
@@ -25,9 +25,16 @@ export function GamePreviewFrame({
   forgeSettings,
   preferCanvas = false,
 }: GamePreviewFrameProps) {
+  // Always have render settings — never block the Forge canvas on missing props
+  const settings = forgeSettings ?? DEFAULT_FORGE_SETTINGS;
   const launch = resolveGameLaunch(game);
   const canEmbed = launch.mode === "embed" || launch.mode === "internal";
-  const canCanvas = game.previewType === "threejs" || game.previewType === "canvas2d" || preferCanvas;
+  // Live fleet embeds (Drive, etc.) are the real play canvas; Three.js preview is a fallback/showcase
+  const canCanvas =
+    game.previewType === "threejs" ||
+    game.previewType === "canvas2d" ||
+    preferCanvas ||
+    !canEmbed;
 
   const defaultMode: PreviewMode = preferCanvas && canCanvas
     ? "canvas"
@@ -130,18 +137,15 @@ export function GamePreviewFrame({
         </div>
       )}
 
-      {mode === "canvas" && forgeSettings ? (
-        <ForgePreviewCanvas game={game} settings={forgeSettings} className="absolute inset-0" />
-      ) : mode === "canvas" && !forgeSettings ? (
-        <div className="absolute inset-0 flex items-center justify-center bg-black/80 text-gray-400 text-sm">
-          Forge canvas requires system settings
-        </div>
-      ) : embedFailed && forgeSettings ? (
-        <ForgePreviewCanvas game={game} settings={forgeSettings} className="absolute inset-0" />
-      ) : (
+      {mode === "canvas" || (embedFailed && !launch.embedUrl) ? (
+        <ForgePreviewCanvas game={game} settings={settings} className="absolute inset-0" />
+      ) : embedFailed && launch.embedUrl ? (
+        // Embed blocked — fall back to Forge Three.js preview with defaults
+        <ForgePreviewCanvas game={game} settings={settings} className="absolute inset-0" />
+      ) : launch.embedUrl ? (
         <iframe
           ref={iframeRef}
-          src={launch.embedUrl!}
+          src={launch.embedUrl}
           className="absolute inset-0 block h-full w-full border-0"
           title={title ?? game.name}
           allow="autoplay; fullscreen; gamepad; xr-spatial-tracking; accelerometer; gyroscope; clipboard-write; pointer-lock"
@@ -150,9 +154,11 @@ export function GamePreviewFrame({
           loading="eager"
           onError={() => {
             setEmbedFailed(true);
-            if (canCanvas) setMode("canvas");
+            setMode("canvas");
           }}
         />
+      ) : (
+        <ForgePreviewCanvas game={game} settings={settings} className="absolute inset-0" />
       )}
 
       {mode === "canvas" && (
