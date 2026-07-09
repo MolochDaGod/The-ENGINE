@@ -264,7 +264,7 @@ const FORGE_CARD_META: Record<string, ForgeCardMeta> = {
     gradientBorder: "from-pink-500 via-red-500 to-rose-500",
     icon: Swords,
     capabilities: ["2D", "Multiplayer", "AI", "Physics"],
-    previewType: "canvas",
+    previewType: "canvas2d",
     cardImage: gameImgTowerDef,
   },
 };
