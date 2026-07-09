@@ -68,18 +68,22 @@ function safeCompare(a: string, b: string): boolean {
   return crypto.timingSafeEqual(aBuf, bBuf);
 }
 
-function readAdminPasscode(body: unknown): string {
+function readAdminPasscode(body: unknown, headerPass?: string | null): string {
   if (body && typeof body === "object" && "passcode" in body) {
-    return String((body as { passcode?: unknown }).passcode || "").trim();
+    const fromBody = String((body as { passcode?: unknown }).passcode || "").trim();
+    if (fromBody) return fromBody;
   }
   if (typeof body === "string" && body.trim()) {
     try {
       const parsed = JSON.parse(body) as { passcode?: unknown };
-      return String(parsed.passcode || "").trim();
+      const fromParsed = String(parsed.passcode || "").trim();
+      if (fromParsed) return fromParsed;
     } catch {
-      return "";
+      /* fall through to header */
     }
   }
+  // Compat: character-viewer admin UI historically sent only x-admin-password.
+  if (headerPass && String(headerPass).trim()) return String(headerPass).trim();
   return "";
 }
 
@@ -2156,7 +2160,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ═════════════════════════════════════════════════════════════════
 
   app.post("/api/admin/login", (req, res) => {
-    const submittedPasscode = readAdminPasscode(req.body);
+    const submittedPasscode = readAdminPasscode(
+      req.body,
+      req.header("x-admin-password") ?? req.header("x-admin-passcode"),
+    );
     const sessionSecret = process.env.ADMIN_SESSION_SECRET || process.env.SESSION_SECRET;
 
     if (!sessionSecret) {
