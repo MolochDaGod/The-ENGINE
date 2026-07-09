@@ -163,6 +163,15 @@ export default {
       responseHeaders.set(k, v);
     }
 
+    // Super-engine embeds id.grudge-studio.com auth UI in iframes — never SAMEORIGIN.
+    responseHeaders.delete("X-Frame-Options");
+    responseHeaders.delete("x-frame-options");
+    responseHeaders.set(
+      "Content-Security-Policy",
+      "frame-ancestors 'self' https://grudge-studio.com https://www.grudge-studio.com https://*.grudge-studio.com https://grudgewarlords.com https://www.grudgewarlords.com https://*.vercel.app https://*.puter.site https://puter.com http://localhost:5173 http://localhost:5000",
+    );
+    responseHeaders.set("X-Grudge-Auth-Gateway", "identity-v3");
+
     return new Response(upstreamResponse.body, {
       status: upstreamResponse.status,
       statusText: upstreamResponse.statusText,

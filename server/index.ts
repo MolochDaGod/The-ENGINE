@@ -44,6 +44,8 @@ app.use(helmet({
   contentSecurityPolicy: false,          // managed per-route by the game
   crossOriginEmbedderPolicy: false,      // required for SharedArrayBuffer / game workers
   crossOriginResourcePolicy: { policy: "cross-origin" },  // allow CDN asset loading
+  // Auth UI is framed by super-engine / fleet portals — CSP frame-ancestors on the gateway
+  frameguard: false,
 }));
 
 // ── CORS ────────────────────────────────────────────────────────
