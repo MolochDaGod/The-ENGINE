@@ -433,4 +433,32 @@ export function GameTerminal({ games = FORGE_GAMES, defaultGameId }: GameTermina
           <GamePreviewFrame
             game={selectedGame}
             forgeSettings={forgeSettings}
-            className="absolute inset-0
+            className="absolute inset-0"
+          />
+          <div className="absolute bottom-3 right-3 z-20 flex flex-col items-end gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8 border-[hsl(43,60%,30%)]/50 bg-black/70 text-[hsl(43,85%,55%)] backdrop-blur-sm"
+              onClick={() => setSettingsOpen((v) => !v)}
+            >
+              <Settings2 className="mr-1.5 h-3.5 w-3.5" />
+              Systems
+            </Button>
+            {settingsOpen && (
+              <div className="w-[min(100vw-2rem,320px)] max-h-[min(50vh,380px)] overflow-y-auto shadow-xl">
+                <ForgeSystemPanel
+                  settings={forgeSettings}
+                  onChange={setForgeSettings}
+                  compact
+                />
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return shell;
+}
