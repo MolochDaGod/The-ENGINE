@@ -2,16 +2,17 @@
  * Full voxgrudge game builds on grudox.
  *
  * Direct grudox URLs send X-Frame-Options: SAMEORIGIN and cannot iframe
- * on the apex portal. Use same-origin /embed/vox/* proxies (vercel.json)
- * so the terminal container can host real HTML5 builds.
+ * on the apex portal. Use same-origin /embed/vox/* (middleware.ts proxies
+ * to grudox, strips XFO, forces fleet asset mode).
  */
 export const VOXGRUDGE_ORIGIN = "https://grudox.grudge-studio.com/voxgrudge";
 
-/** Same-origin proxy prefix — rewrites to VOXGRUDGE_ORIGIN on The Engine. */
+/** Same-origin proxy prefix — handled by middleware.ts on The Engine. */
 export const VOXGRUDGE_EMBED_PREFIX = "/embed/vox";
 
 function proxied(file: string): string {
-  return `${VOXGRUDGE_EMBED_PREFIX}/${file}`;
+  // Cache-bust when proxy patch changes so browsers don't keep a broken shell
+  return `${VOXGRUDGE_EMBED_PREFIX}/${file}?v=fleet2`;
 }
 
 export const VOXGRUDGE_GAMES = {

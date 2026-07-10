@@ -93,7 +93,11 @@ export function GamePreviewFrame({
     if (mode !== "embed" || !embedUrl) return;
 
     const onMessage = (event: MessageEvent) => {
-      if (event.data?.type === "grudge:game:ready") {
+      if (
+        event.data?.type === "grudge:game:ready" ||
+        event.data?.type === "grudge:vox:ready" ||
+        event.data?.type === "vox:ready"
+      ) {
         readyRef.current = true;
       }
     };
@@ -104,13 +108,16 @@ export function GamePreviewFrame({
       try {
         const doc = iframeRef.current?.contentDocument;
         if (!doc) {
-          // No document after timeout — treat as failed embed
-          setEmbedFailed(true);
-          setMode(hasCover ? "cover" : "canvas");
+          // Same-origin proxy should always expose contentDocument; missing = fail
+          if (isProxiedPath(embedUrl)) {
+            setEmbedFailed(true);
+            setMode(hasCover ? "cover" : "canvas");
+          }
           return;
         }
         const text = (doc.body?.innerText ?? doc.title ?? "").slice(0, 400);
         const title = (doc.title ?? "").toLowerCase();
+        const html = doc.documentElement?.innerHTML?.slice(0, 500) ?? "";
         // SPA shell, 404, or empty placeholder mistaken for the game
         const isBroken =
           text.includes("Rec0deD") ||
@@ -119,7 +126,14 @@ export function GamePreviewFrame({
           title.includes("404") ||
           text.includes("NOT_FOUND") ||
           text.includes("Full game HTML to be deployed") ||
+          text.includes("Vox embed proxy failed") ||
           (doc.body?.childElementCount ?? 0) === 0;
+        // Proxied vox games are large HTML — tiny body means SPA/404 shell
+        if (isProxiedPath(embedUrl) && html.length < 800 && !html.includes("three")) {
+          setEmbedFailed(true);
+          setMode(hasCover ? "cover" : "canvas");
+          return;
+        }
         if (isBroken) {
           setEmbedFailed(true);
           setMode(hasCover ? "cover" : "canvas");
@@ -127,7 +141,7 @@ export function GamePreviewFrame({
       } catch {
         /* cross-origin live embeds — keep iframe */
       }
-    }, 6_000);
+    }, 10_000);
 
     return () => {
       window.removeEventListener("message", onMessage);

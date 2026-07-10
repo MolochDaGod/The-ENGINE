@@ -167,11 +167,7 @@
       "destination": "/studio-forge"
     },
     {
-      "source": "/embed/vox/:path*",
-      "destination": "https://grudox.grudge-studio.com/voxgrudge/:path*"
-    },
-    {
-      "source": "/((?!api/|ws/|emulator\\.html|catalog/|assets/|games/|models/|embed/|vendor/|favicon|apple-touch|grudge-sso|grudge-auth|grudge-game-bootstrap|sw\\.js|manifest).*)",
+      "source": "/((?!api/|ws/|emulator\\.html|catalog/|assets/|games/|models/|embed/|voxgrudge/|vendor/|favicon|apple-touch|grudge-sso|grudge-auth|grudge-game-bootstrap|sw\\.js|manifest).*)",
       "destination": "/index.html"
     }
   ],
