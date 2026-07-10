@@ -271,10 +271,19 @@ export function ForgePreviewCanvas({
     const w = host.clientWidth || 640;
     const h = host.clientHeight || 360;
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
-    renderer.setSize(w, h);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, settings.pixelRatio));
-    renderer.shadowMap.enabled = settings.shadows;
+    const mobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
+    const renderer = new THREE.WebGLRenderer({
+      antialias: !mobile,
+      alpha: false,
+      powerPreference: "high-performance",
+      stencil: false,
+      preserveDrawingBuffer: false,
+    });
+    renderer.setSize(w, h, false);
+    renderer.setPixelRatio(
+      Math.min(window.devicePixelRatio || 1, mobile ? Math.min(settings.pixelRatio, 1.5) : settings.pixelRatio),
+    );
+    renderer.shadowMap.enabled = settings.shadows && !mobile;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.toneMapping = TONE_MAP[settings.toneMapping];
     renderer.toneMappingExposure = settings.exposure;

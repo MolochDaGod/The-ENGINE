@@ -174,12 +174,21 @@ export default function CharacterViewport({ prefab, vfxMode, unarmed, laneMode, 
     const camera = new THREE.PerspectiveCamera(45, host.clientWidth / host.clientHeight, 0.1, 200);
     camera.position.set(2, 1.2, 2.5);
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.setSize(host.clientWidth, host.clientHeight);
+    const mobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
+    const maxDpr = mobile ? 1.5 : 2;
+    const renderer = new THREE.WebGLRenderer({
+      antialias: !mobile,
+      alpha: true,
+      powerPreference: "high-performance",
+      stencil: false,
+      preserveDrawingBuffer: false,
+    });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, maxDpr));
+    renderer.setSize(host.clientWidth, host.clientHeight, false);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.shadowMap.enabled = true;
+    renderer.toneMappingExposure = 1.05;
+    renderer.shadowMap.enabled = !mobile;
     host.appendChild(renderer.domElement);
 
     const pmrem = new THREE.PMREMGenerator(renderer);
@@ -212,9 +221,12 @@ export default function CharacterViewport({ prefab, vfxMode, unarmed, laneMode, 
       if (!hostRef.current) return;
       const w = hostRef.current.clientWidth;
       const h = hostRef.current.clientHeight;
+      if (w < 1 || h < 1) return;
       camera.aspect = w / h;
       camera.updateProjectionMatrix();
-      renderer.setSize(w, h);
+      const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, isMobile ? 1.5 : 2));
+      renderer.setSize(w, h, false);
     };
     const ro = new ResizeObserver(onResize);
     ro.observe(host);

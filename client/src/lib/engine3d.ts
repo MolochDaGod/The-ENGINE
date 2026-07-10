@@ -41,12 +41,52 @@ export const DEFAULT_FORGE_SETTINGS: ForgeRenderSettings = {
   camera: "orbit",
   toneMapping: "aces",
   exposure: 1.1,
+  /** Cap DPR — 1.5 is a good desktop default; mobile callers should pass ≤1.5 */
   pixelRatio: 1.5,
   showGrid: true,
   fogEnabled: true,
   autoRotate: true,
   shadows: true,
 };
+
+/** Shared canvas quality helper for all Grudge Engine game players. */
+export function resolveCanvasQuality(opts?: {
+  preferHighDpr?: boolean;
+}): {
+  maxDpr: number;
+  antialias: boolean;
+  powerPreference: WebGLPowerPreference;
+  shadows: boolean;
+} {
+  const mobile =
+    typeof navigator !== "undefined" &&
+    /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
+  const maxDpr = mobile ? 1.5 : opts?.preferHighDpr ? 2 : 1.75;
+  return {
+    maxDpr,
+    antialias: !mobile,
+    powerPreference: "high-performance",
+    shadows: !mobile,
+  };
+}
+
+export function applyRendererQuality(
+  renderer: {
+    setPixelRatio: (n: number) => void;
+    setSize: (w: number, h: number, updateStyle?: boolean) => void;
+    shadowMap: { enabled: boolean };
+  },
+  width: number,
+  height: number,
+  quality = resolveCanvasQuality(),
+): void {
+  if (width < 1 || height < 1) return;
+  const dpr =
+    typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
+  renderer.setPixelRatio(Math.min(dpr, quality.maxDpr));
+  renderer.setSize(width, height, false);
+  renderer.shadowMap.enabled = quality.shadows;
+}
 
 export const CAMERA_PRESETS: Record<CameraPresetId, CameraPreset> = {
   rts: {

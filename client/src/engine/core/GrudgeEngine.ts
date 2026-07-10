@@ -58,6 +58,17 @@ export class GrudgeEngine {
     if (this._canvas) this._onResize(this._canvas);
   };
 
+  private _onVisibility = () => {
+    if (document.hidden) {
+      if (this._running && this._rafId) {
+        cancelAnimationFrame(this._rafId);
+        this._rafId = 0;
+      }
+    } else if (this._running && !this._rafId) {
+      this._rafId = requestAnimationFrame(this._animate);
+    }
+  };
+
   // Camera config (mirrors annihilate's cameraDist = 15)
   cameraDist = 15;
   cameraOffsetX = 0;
@@ -132,16 +143,37 @@ export class GrudgeEngine {
     (this.gridHelper.material as THREE.Material).transparent = true;
     this.scene.add(this.gridHelper);
 
-    // Renderer
-    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    this.renderer.setSize(canvas.clientWidth, canvas.clientHeight);
+    // Renderer — high-performance GPU, capped DPR, no unused buffers
+    const mobile =
+      typeof navigator !== 'undefined' &&
+      /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
+    const maxDpr = mobile ? 1.5 : 2;
+    this.renderer = new THREE.WebGLRenderer({
+      canvas,
+      antialias: !mobile,
+      alpha: false,
+      powerPreference: 'high-performance',
+      stencil: false,
+      depth: true,
+      preserveDrawingBuffer: false,
+      failIfMajorPerformanceCaveat: false,
+    });
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, maxDpr));
+    this.renderer.setSize(canvas.clientWidth, canvas.clientHeight, false);
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 1.05;
     this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type    = THREE.PCFSoftShadowMap;
+    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    // Soften GPU cost of large shadow maps on low-end devices
+    if (mobile) {
+      this.shadowLight.shadow.mapSize.set(1024, 1024);
+    }
 
     this._canvas = canvas;
     window.addEventListener('resize', this._onWindowResize);
+    // Pause RAF when tab is hidden (battery + GPU)
+    document.addEventListener('visibilitychange', this._onVisibility);
   }
 
   private _initPhysics(): void {
@@ -197,6 +229,7 @@ export class GrudgeEngine {
   destroy(): void {
     this.stop();
     window.removeEventListener('resize', this._onWindowResize);
+    document.removeEventListener('visibilitychange', this._onVisibility);
     this._canvas = null;
     this.renderer?.dispose();
     this.world?.bodies.forEach(b => this.world.removeBody(b));
@@ -248,9 +281,15 @@ export class GrudgeEngine {
   private _onResize(canvas: HTMLCanvasElement): void {
     const w = canvas.clientWidth;
     const h = canvas.clientHeight;
+    if (w < 1 || h < 1) return;
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
-    this.renderer.setSize(w, h);
+    const mobile =
+      typeof navigator !== 'undefined' &&
+      /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
+    const maxDpr = mobile ? 1.5 : 2;
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, maxDpr));
+    this.renderer.setSize(w, h, false);
   }
 
   // ── Helpers ────────────────────────────────────────────────────────────────
