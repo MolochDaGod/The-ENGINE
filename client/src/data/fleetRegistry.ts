@@ -231,7 +231,8 @@ export const FLEET_REGISTRY: FleetRegistryEntry[] = [
     id: "grudge-forge",
     name: "Grudge Studio Forge",
     description: "Paid game-making IDE — scenes, assets, deploy. Requires premium / paid Grudge ID.",
-    canonicalUrl: "https://forge.grudge-studio.com",
+    /** Portal gate enforces paid access, then SSO-launches forge host. */
+    canonicalUrl: "/studio-forge",
     status: "live",
     authRequired: true,
     tags: ["solo"],

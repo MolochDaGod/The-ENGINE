@@ -94,7 +94,7 @@ export default function Header() {
     { name: "Treaty Chat", href: "/chat", icon: MessageSquare },
     { name: "Play", href: "/super-engine", icon: Gamepad },
     { name: "Games", href: "/games", icon: Library },
-    { name: "Forge", href: "/forge", icon: Wrench },
+    { name: "Forge", href: "/studio-forge", icon: Wrench },
     { name: "Studio", href: "/#studio", icon: Wrench },
   ] as const;
 

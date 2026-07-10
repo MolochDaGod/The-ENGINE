@@ -92,10 +92,10 @@ function FleetGamePlayer({ fleetId }: { fleetId: string }) {
   const { open: openAuth } = useAuthModal();
   const entry = getFleetEntry(fleetId);
 
-  // Paid IDE — route through /forge gate
+  // Paid IDE — route through portal gate (not /forge — CF may redirect that host)
   useEffect(() => {
     if (entry?.id === "grudge-forge") {
-      setLocation("/forge");
+      setLocation("/studio-forge");
     }
   }, [entry?.id, setLocation]);
 

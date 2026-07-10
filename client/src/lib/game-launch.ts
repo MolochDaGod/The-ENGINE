@@ -86,13 +86,15 @@ export function openGameTab(url: string): void {
 }
 
 export function navigateGame(route: string, navigate: (path: string) => void): void {
-  // Paid Forge IDE — always use portal gate
+  // Paid Forge IDE — always use portal gate (avoid /forge CF redirect to WCS host)
   if (
     route === "https://forge.grudge-studio.com" ||
     route.startsWith("https://forge.grudge-studio.com/") ||
-    route === "/forge"
+    route === "/forge" ||
+    route === "/studio-forge" ||
+    route === "/forge-access"
   ) {
-    navigate("/forge");
+    navigate("/studio-forge");
     return;
   }
   if (isInternalRoute(route)) {

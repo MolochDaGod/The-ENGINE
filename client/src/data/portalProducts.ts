@@ -343,13 +343,13 @@ const _PORTAL_PRODUCTS_RAW = [
   {
     id: "grudge-forge",
     name: "Grudge Studio Forge",
-    href: "/forge",
+    href: "/studio-forge",
     description: "Paid game-making IDE. Build scenes, edit assets, and deploy — requires premium / paid Grudge ID.",
     status: "live",
     section: "studio",
     external: false,
     authRequired: true,
-    note: "Paid IDE · forge.grudge-studio.com",
+    note: "Paid IDE · forge.grudge-studio.com (portal gate /studio-forge)",
   },
   {
     id: "grudge-coder",

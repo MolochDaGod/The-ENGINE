@@ -91,6 +91,8 @@ function Router() {
       <Route path="/play/fleet/:id" component={GamePlayer} />
       <Route path="/play/:id" component={GamePlayer} />
       <Route path="/forge" component={ForgeAccessPage} />
+      <Route path="/studio-forge" component={ForgeAccessPage} />
+      <Route path="/forge-access" component={ForgeAccessPage} />
       <Route path="/scraping" component={withAdminGuard(Scraping)} />
       <Route path="/store" component={Store} />
       <Route path="/tower-defense" component={TowerDefense} />
