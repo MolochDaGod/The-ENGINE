@@ -146,3 +146,18 @@ export function resolvePrefabVisibleMeshes(
 
   return visible;
 }
+
+const WEAPON_MESH_RE =
+  /weapon_|shield|xtra_quiver|units_bow|units_sword|units_axe|units_staff|units_hammer|units_dagger|units_mace|units_spear|units_pick/i;
+
+/** Armor-only visibility for unarmed player preview. */
+export function resolveUnarmedVisibleMeshes(
+  allMeshNames: string[],
+  prefab: CharacterPrefab,
+): Set<string> {
+  const visible = resolvePrefabVisibleMeshes(allMeshNames, prefab);
+  for (const name of [...visible]) {
+    if (WEAPON_MESH_RE.test(name)) visible.delete(name);
+  }
+  return visible;
+}

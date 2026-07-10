@@ -33,7 +33,7 @@ const CLASS_WEAPON: Record<ClassId, string> = {
   warrior: "SWORD",
   mage: "STAFF",
   ranger: "BOW",
-  worge: "SPEAR",
+  worge: "AXE",
 };
 
 const RACE_LABELS: Record<RaceId, string> = {
@@ -165,7 +165,7 @@ export default function CharacterViewerPage() {
                 Grudge6 Character Viewer
               </h1>
               <p className="text-xs text-[hsl(45,15%,55%)]">
-                {PREFAB_STATS.total} prefabs · {PREFAB_STATS.races} races · CDN + FBX fallback
+                {PREFAB_STATS.total} prefabs · {PREFAB_STATS.races} races · toon-rts CDN wardrobe
               </p>
             </div>
           </div>
@@ -262,12 +262,20 @@ export default function CharacterViewerPage() {
                 }`}
               >
                 <div className="flex items-center gap-2">
-                  <img
-                    src={prefab.iconUrl}
-                    alt=""
-                    className="w-8 h-8 rounded object-cover bg-[hsl(225,25%,14%)]"
-                    loading="lazy"
-                  />
+                  <div className="relative w-8 h-8 shrink-0">
+                    <img
+                      src={prefab.raceIconUrl}
+                      alt=""
+                      className="w-full h-full object-contain"
+                      loading="lazy"
+                    />
+                    <img
+                      src={prefab.classIconUrl}
+                      alt=""
+                      className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 object-contain rounded bg-[hsl(225,25%,8%)] border border-[hsl(43,60%,30%)]/40"
+                      loading="lazy"
+                    />
+                  </div>
                   <div className="min-w-0 flex-1">
                     <div className="text-xs font-medium truncate">{prefab.name}</div>
                     <div className="text-[10px] text-[hsl(45,15%,50%)] truncate">{prefab.lore}</div>
@@ -286,7 +294,12 @@ export default function CharacterViewerPage() {
         </aside>
 
         <main className="min-h-[420px] flex flex-col gap-3 min-h-0">
-          <CharacterViewport key={selectedPrefab.id + (vfxMode ? "-vfx" : "")} prefab={selectedPrefab} vfxMode={vfxMode} />
+          <CharacterViewport
+            key={selectedPrefab.id + (vfxMode ? "-vfx" : "")}
+            prefab={selectedPrefab}
+            vfxMode={vfxMode}
+            laneMode
+          />
           {skillBar.length > 0 && (
             <div className="px-1">
               <div className="flex items-center justify-between mb-1.5">

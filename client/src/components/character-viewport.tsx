@@ -1,51 +1,51 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import { FBXLoader } from "three/examples/jsm/loaders/FBXLoader.js";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { Loader2, RotateCcw, Swords, Footprints, Heart, Skull, Zap } from "lucide-react";
-import {
-  AnimatedUnit,
-  createAnimatedUnit,
-  GrudgeAssets,
-  type UnitAnimState,
-} from "@/lib/grudge-assets";
+import { GrudgeAssets } from "@/lib/grudge-assets";
+import { loadPortraitGlb, normalizePortraitModel } from "@/lib/portrait-glb-loader";
 import { getEquipmentMeshNames, type CharacterPrefab } from "@shared/character-prefabs";
-import { applyLaneMeshVisibility, applyUnarmedMeshVisibility } from "@shared/game-roster";
+import {
+  portraitGlbUrl,
+  resolvePrefabVisibleMeshes,
+  resolveUnarmedVisibleMeshes,
+} from "@shared/character-meshes";
 
-const CDN_BASE = "https://assets.grudge-studio.com";
-
-const ANIM_BTNS: { id: UnitAnimState; label: string; Icon: typeof RotateCcw }[] = [
+const ANIM_BTNS = [
   { id: "idle", label: "Idle", Icon: RotateCcw },
   { id: "run", label: "Run", Icon: Footprints },
   { id: "attack", label: "Attack", Icon: Swords },
   { id: "hurt", label: "Hit", Icon: Heart },
   { id: "death", label: "Death", Icon: Skull },
   { id: "attack2", label: "Alt", Icon: Zap },
-];
-
-function hexToNumber(hex: string): number {
-  return parseInt(hex.replace("#", ""), 16);
-}
+] as const;
 
 interface Props {
   prefab: CharacterPrefab;
   vfxMode?: boolean;
-  /** Player preview — hide class weapons from FBX */
+  /** Player preview — hide class weapons */
   unarmed?: boolean;
-  /** Lane unit preview — show full prefab equipment */
+  /** Lane unit preview — show full prefab equipment (default for viewer) */
   laneMode?: boolean;
   /** CDN manifest keys for pregame weapon attach */
   weaponManifestKeys?: string[];
 }
 
-export default function CharacterViewport({ prefab, vfxMode, unarmed, laneMode, weaponManifestKeys }: Props) {
+export default function CharacterViewport({
+  prefab,
+  vfxMode,
+  unarmed,
+  laneMode,
+  weaponManifestKeys,
+}: Props) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const controlsRef = useRef<OrbitControls | null>(null);
-  const unitRef = useRef<AnimatedUnit | null>(null);
+  const rootRef = useRef<THREE.Group | null>(null);
+  const meshIndexRef = useRef<Map<string, THREE.Object3D>>(new Map());
   const weaponRefs = useRef<THREE.Object3D[]>([]);
   const vfxRef = useRef<THREE.Points | null>(null);
   const rafRef = useRef(0);
@@ -53,17 +53,34 @@ export default function CharacterViewport({ prefab, vfxMode, unarmed, laneMode, 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const applyMeshVisibility = useCallback(() => {
+    const idx = meshIndexRef.current;
+    if (idx.size === 0) return;
+    const names = Array.from(idx.keys());
+    const visible = unarmed
+      ? resolveUnarmedVisibleMeshes(names, prefab)
+      : resolvePrefabVisibleMeshes(names, prefab);
+    idx.forEach((obj, name) => {
+      obj.visible = visible.has(name);
+    });
+  }, [prefab, unarmed]);
+
   const clearScene = useCallback(() => {
     const scene = sceneRef.current;
     if (!scene) return;
-    if (unitRef.current) {
-      scene.remove(unitRef.current.root);
-      unitRef.current.dispose();
-      unitRef.current = null;
+    if (rootRef.current) {
+      scene.remove(rootRef.current);
+      rootRef.current.traverse((o) => {
+        const m = o as THREE.Mesh;
+        if (m.geometry) m.geometry.dispose();
+        const mat = m.material as THREE.Material | THREE.Material[] | undefined;
+        if (Array.isArray(mat)) mat.forEach((x) => x.dispose());
+        else if (mat) mat.dispose();
+      });
+      rootRef.current = null;
     }
-    for (const w of weaponRefs.current) {
-      scene.remove(w);
-    }
+    meshIndexRef.current.clear();
+    for (const w of weaponRefs.current) scene.remove(w);
     weaponRefs.current = [];
     if (vfxRef.current) {
       scene.remove(vfxRef.current);
@@ -108,63 +125,59 @@ export default function CharacterViewport({ prefab, vfxMode, unarmed, laneMode, 
     setError(null);
     clearScene();
 
-    const tint = hexToNumber(prefab.classColor);
-    const manifestKey = prefab.cdnModelKey ?? "char_soldier";
-    let unit = await createAnimatedUnit(manifestKey, tint, 0.55);
+    try {
+      const group = await loadPortraitGlb(prefab.race);
+      normalizePortraitModel(group, 2.0);
 
-    if (!unit) {
-      const fbxUrl = `${CDN_BASE}/${prefab.modelPath}`;
-      try {
-        const loader = new FBXLoader();
-        const fbx = await loader.loadAsync(fbxUrl);
-        unit = new AnimatedUnit(fbx as THREE.Group, fbx.animations, tint, 0.55);
-      } catch (e: unknown) {
-        setError(e instanceof Error ? e.message : "Failed to load character model");
-        setLoading(false);
-        return;
+      const idx = meshIndexRef.current;
+      idx.clear();
+      group.traverse((obj) => {
+        if (obj.name) idx.set(obj.name, obj);
+      });
+      applyMeshVisibility();
+
+      scene.add(group);
+      rootRef.current = group;
+
+      const box = new THREE.Box3().setFromObject(group);
+      const center = box.getCenter(new THREE.Vector3());
+      const size = box.getSize(new THREE.Vector3());
+      const maxDim = Math.max(size.x, size.y, size.z);
+      camera.position.set(center.x + maxDim * 1.2, center.y + maxDim * 0.55, center.z + maxDim * 1.35);
+      camera.lookAt(center);
+      controlsRef.current?.target.copy(new THREE.Vector3(center.x, center.y + size.y * 0.45, center.z));
+      controlsRef.current?.update();
+
+      if (vfxMode) spawnVfx(scene, prefab.classColor);
+
+      if (weaponManifestKeys?.length) {
+        const assets = GrudgeAssets.getInstance();
+        let offset = 0;
+        for (const key of weaponManifestKeys) {
+          const gltf = await assets.loadModel(key);
+          if (!gltf) continue;
+          const w = gltf.scene.clone();
+          w.scale.setScalar(0.35);
+          w.position.set(0.35 + offset * 0.15, 1.0, 0.1);
+          scene.add(w);
+          weaponRefs.current.push(w);
+          offset += 1;
+        }
       }
-    }
 
-    if (!unit) {
-      setError("No model on CDN — check R2 path or upload faction GLB");
       setLoading(false);
-      return;
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Failed to load character model");
+      setLoading(false);
     }
-
-    unit.root.position.set(0, 0, 0);
-    if (unarmed) applyUnarmedMeshVisibility(unit.root);
-    else if (laneMode) applyLaneMeshVisibility(unit.root, prefab);
-    scene.add(unit.root);
-    unitRef.current = unit;
-
-    const box = new THREE.Box3().setFromObject(unit.root);
-    const size = box.getSize(new THREE.Vector3());
-    const center = box.getCenter(new THREE.Vector3());
-    const maxDim = Math.max(size.x, size.y, size.z);
-    camera.position.set(center.x + maxDim * 1.2, center.y + maxDim * 0.6, center.z + maxDim * 1.4);
-    camera.lookAt(center);
-    controlsRef.current?.target.copy(center);
-    controlsRef.current?.update();
-
-    if (vfxMode) spawnVfx(scene, prefab.classColor);
-
-    if (weaponManifestKeys?.length) {
-      const assets = GrudgeAssets.getInstance();
-      let offset = 0;
-      for (const key of weaponManifestKeys) {
-        const gltf = await assets.loadModel(key);
-        if (!gltf) continue;
-        const w = gltf.scene.clone();
-        w.scale.setScalar(0.35);
-        w.position.set(0.35 + offset * 0.15, 1.0, 0.1);
-        scene.add(w);
-        weaponRefs.current.push(w);
-        offset += 1;
-      }
-    }
-
-    setLoading(false);
-  }, [prefab, vfxMode, unarmed, laneMode, weaponManifestKeys, clearScene, spawnVfx]);
+  }, [
+    prefab,
+    vfxMode,
+    weaponManifestKeys,
+    clearScene,
+    spawnVfx,
+    applyMeshVisibility,
+  ]);
 
   useEffect(() => {
     if (!hostRef.current) return;
@@ -188,7 +201,6 @@ export default function CharacterViewport({ prefab, vfxMode, unarmed, laneMode, 
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.05;
-    renderer.shadowMap.enabled = !mobile;
     host.appendChild(renderer.domElement);
 
     const pmrem = new THREE.PMREMGenerator(renderer);
@@ -198,15 +210,16 @@ export default function CharacterViewport({ prefab, vfxMode, unarmed, laneMode, 
     const grid = new THREE.GridHelper(6, 24, 0x3d3520, 0x1a1810);
     scene.add(grid);
 
-    const amb = new THREE.AmbientLight(0xffffff, 0.35);
-    scene.add(amb);
+    scene.add(new THREE.AmbientLight(0xffffff, 0.4));
     const key = new THREE.DirectionalLight(0xffe8c8, 1.1);
     key.position.set(4, 6, 3);
-    key.castShadow = true;
     scene.add(key);
     const fill = new THREE.DirectionalLight(0xa8c8ff, 0.35);
     fill.position.set(-3, 2, -2);
     scene.add(fill);
+    const rim = new THREE.DirectionalLight(new THREE.Color(prefab.classColor), 0.45);
+    rim.position.set(0, 2, -3);
+    scene.add(rim);
 
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
@@ -233,12 +246,8 @@ export default function CharacterViewport({ prefab, vfxMode, unarmed, laneMode, 
 
     const tick = () => {
       rafRef.current = requestAnimationFrame(tick);
-      const dt = clockRef.current.getDelta();
       controls.update();
-      unitRef.current?.update(dt);
-      if (vfxRef.current) {
-        vfxRef.current.rotation.y += dt * 0.4;
-      }
+      if (vfxRef.current) vfxRef.current.rotation.y += clockRef.current.getDelta() * 0.4;
       renderer.render(scene, camera);
     };
     tick();
@@ -255,11 +264,15 @@ export default function CharacterViewport({ prefab, vfxMode, unarmed, laneMode, 
       rendererRef.current = null;
       controlsRef.current = null;
     };
-  }, [clearScene]);
+  }, [clearScene, prefab.classColor]);
 
   useEffect(() => {
     void loadCharacter();
   }, [loadCharacter]);
+
+  useEffect(() => {
+    applyMeshVisibility();
+  }, [applyMeshVisibility]);
 
   useEffect(() => {
     if (!vfxMode || !sceneRef.current || vfxRef.current) return;
@@ -275,6 +288,7 @@ export default function CharacterViewport({ prefab, vfxMode, unarmed, laneMode, 
   }, [vfxMode, prefab.classColor, spawnVfx]);
 
   const equipment = getEquipmentMeshNames(prefab);
+  const glbUrl = portraitGlbUrl(prefab.race);
 
   return (
     <div className="flex flex-col h-full min-h-0 rounded-lg border border-[hsl(43,60%,30%)]/30 bg-[hsl(225,25%,8%)] overflow-hidden">
@@ -283,6 +297,7 @@ export default function CharacterViewport({ prefab, vfxMode, unarmed, laneMode, 
         <span className="text-[10px] text-[hsl(45,15%,55%)]">
           {unarmed ? "unarmed" : prefab.animationPack}
           {laneMode ? " · lane" : ""}
+          {" · toon-rts"}
         </span>
         {loading && <Loader2 size={12} className="animate-spin text-[hsl(43,85%,55%)] ml-auto" />}
       </div>
@@ -290,13 +305,13 @@ export default function CharacterViewport({ prefab, vfxMode, unarmed, laneMode, 
       {error && (
         <div className="px-3 py-2 text-xs text-red-400 border-t border-red-900/30 bg-red-950/20">{error}</div>
       )}
-      <div className="flex flex-wrap gap-1.5 px-3 py-2 border-t border-[hsl(43,60%,30%)]/20 shrink-0">
+      <div className="flex flex-wrap gap-1.5 px-3 py-2 border-t border-[hsl(43,60%,30%)]/20 shrink-0 opacity-40 pointer-events-none" title="Static toon-rts portrait — animations coming with grudge6 locomotion pack">
         {ANIM_BTNS.map(({ id, label, Icon }) => (
           <button
             key={id}
             type="button"
-            className="inline-flex items-center gap-1 text-[10px] px-2 py-1 rounded border border-[hsl(43,60%,30%)]/30 text-[hsl(45,15%,70%)] hover:border-[hsl(43,85%,55%)]/50 hover:text-[hsl(43,85%,55%)] transition-colors"
-            onClick={() => unitRef.current?.play(id)}
+            disabled
+            className="inline-flex items-center gap-1 text-[10px] px-2 py-1 rounded border border-[hsl(43,60%,30%)]/30 text-[hsl(45,15%,70%)]"
             title={label}
           >
             <Icon size={11} /> {label}
@@ -306,7 +321,9 @@ export default function CharacterViewport({ prefab, vfxMode, unarmed, laneMode, 
       <div className="flex flex-wrap gap-1.5 px-3 py-1.5 text-[9px] text-[hsl(45,15%,50%)] border-t border-[hsl(43,60%,30%)]/10 shrink-0">
         <span>Faction {prefab.faction}</span>
         <span>·</span>
-        <span>{equipment.length} equipment meshes</span>
+        <span>{equipment.length} wardrobe slots</span>
+        <span>·</span>
+        <span className="truncate max-w-[200px] font-mono">{glbUrl.split("/").pop()}</span>
         {weaponManifestKeys && weaponManifestKeys.length > 0 && (
           <>
             <span>·</span>
