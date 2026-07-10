@@ -43,6 +43,7 @@ import GameLibrary from "@/pages/game-library";
 import GamePlayer from "@/pages/game-player";
 import Chat from "@/pages/chat";
 import AdminLogin from "@/pages/admin-login";
+import SystemDevPage from "@/pages/system-dev";
 import NotFound from "@/pages/not-found";
 import MageArena from "@/pages/mage-arena";
 import AnnihilateDemo from "@/pages/annihilate-demo";
@@ -125,6 +126,7 @@ function Router() {
       <Route path="/grudge-controller" component={GrudgeControllerDemo} />
       <Route path="/asset-pipeline" component={withAdminGuard(AssetPipeline)} />
       <Route path="/admin-login" component={AdminLogin} />
+      <Route path="/system-dev" component={SystemDevPage} />
       <Route path="/voxel-sandbox" component={VoxelSandbox} />
       <Route path="/polyfighter" component={PolyFighter} />
       <Route path="/terraforge" component={TerraForge} />

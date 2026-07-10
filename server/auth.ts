@@ -261,18 +261,63 @@ export function clearPlayerCookie(res: Response): void {
 
 // ── Middleware ────────────────────────────────────────────────────
 
-/** Attaches req.player if a valid session exists (non-blocking). */
+/**
+ * Attaches req.player if a valid session exists (non-blocking).
+ * Accepts (in order):
+ *   1) gs_player_session cookie
+ *   2) Authorization: Bearer <session JWT>
+ *   3) Authorization: Bearer <launch JWT> (cross-domain handoff)
+ *   4) ?grudge_token= / X-Grudge-Token header (fleet launch query)
+ */
 export async function loadPlayer(req: Request, _res: Response, next: NextFunction) {
-  const cookies = parseCookies(req.headers.cookie);
-  const token = cookies[PLAYER_COOKIE];
-  if (token) {
-    const userId = verifyPlayerToken(token);
-    if (userId !== null) {
-      const user = await storage.getUser(userId);
-      if (user) {
-        (req as any).player = user;
+  try {
+    if ((req as any).player) return next();
+
+    const cookies = parseCookies(req.headers.cookie);
+    const candidates: string[] = [];
+
+    if (cookies[PLAYER_COOKIE]) candidates.push(cookies[PLAYER_COOKIE]);
+
+    const authHeader = req.headers.authorization || req.headers.Authorization;
+    if (typeof authHeader === "string" && authHeader.toLowerCase().startsWith("bearer ")) {
+      candidates.push(authHeader.slice(7).trim());
+    }
+
+    const headerToken = req.headers["x-grudge-token"];
+    if (typeof headerToken === "string" && headerToken.trim()) {
+      candidates.push(headerToken.trim());
+    }
+
+    const q = (req as any).query as Record<string, unknown> | undefined;
+    const qTok = q?.grudge_token ?? q?.token;
+    if (typeof qTok === "string" && qTok.trim()) candidates.push(qTok.trim());
+
+    for (const token of candidates) {
+      if (!token) continue;
+      // Long-lived player session
+      const sessionUserId = verifyPlayerToken(token);
+      if (sessionUserId !== null) {
+        const user = await storage.getUser(sessionUserId);
+        if (user) {
+          (req as any).player = user;
+          (req as any).authVia = "session";
+          break;
+        }
+      }
+      // Short-lived launch JWT from portal handoff
+      const launch = verifyLaunchToken(token);
+      if (launch?.sub) {
+        const user = await storage.getUser(launch.sub);
+        if (user) {
+          (req as any).player = user;
+          (req as any).authVia = "launch";
+          (req as any).launchClaims = launch;
+          break;
+        }
       }
     }
+  } catch (e) {
+    console.error("loadPlayer error:", e);
   }
   next();
 }

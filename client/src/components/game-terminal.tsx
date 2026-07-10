@@ -81,6 +81,9 @@ export function GameTerminal({ games = FORGE_GAMES, defaultGameId }: GameTermina
   const [forgeSettings, setForgeSettings] = useState<ForgeRenderSettings>(DEFAULT_FORGE_SETTINGS);
   const searchRef = useRef<HTMLInputElement>(null);
 
+  const forgeHydrated = useRef(false);
+  const forgeSaveTimer = useRef<number | null>(null);
+
   // Hydrate super-engine forge presets from account play settings when signed in
   useEffect(() => {
     let cancelled = false;
@@ -103,6 +106,7 @@ export function GameTerminal({ games = FORGE_GAMES, defaultGameId }: GameTermina
           ...(typeof forge.autoRotate === "boolean" ? { autoRotate: forge.autoRotate } : {}),
           ...(typeof forge.shadows === "boolean" ? { shadows: forge.shadows } : {}),
         }));
+        forgeHydrated.current = true;
       } catch {
         /* guest / offline */
       }
@@ -110,6 +114,19 @@ export function GameTerminal({ games = FORGE_GAMES, defaultGameId }: GameTermina
     return () => {
       cancelled = true;
     };
+  }, []);
+
+  const updateForgeSettings = useCallback((next: ForgeRenderSettings) => {
+    setForgeSettings(next);
+    if (forgeSaveTimer.current) window.clearTimeout(forgeSaveTimer.current);
+    forgeSaveTimer.current = window.setTimeout(() => {
+      fetch("/api/me/play-settings", {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ settings: { forge: next } }),
+      }).catch(() => {});
+    }, 800);
   }, []);
 
   const resolvedLegacy = legacyId ? resolveFleetGameId(legacyId) : null;
@@ -405,7 +422,7 @@ export function GameTerminal({ games = FORGE_GAMES, defaultGameId }: GameTermina
                     <div className="w-[min(100vw-2rem,320px)] max-h-[min(60vh,420px)] overflow-y-auto shadow-xl">
                       <ForgeSystemPanel
                         settings={forgeSettings}
-                        onChange={setForgeSettings}
+                        onChange={updateForgeSettings}
                         compact
                       />
                     </div>
@@ -480,7 +497,7 @@ export function GameTerminal({ games = FORGE_GAMES, defaultGameId }: GameTermina
               <div className="w-[min(100vw-2rem,320px)] max-h-[min(50vh,380px)] overflow-y-auto shadow-xl">
                 <ForgeSystemPanel
                   settings={forgeSettings}
-                  onChange={setForgeSettings}
+                  onChange={updateForgeSettings}
                   compact
                 />
               </div>

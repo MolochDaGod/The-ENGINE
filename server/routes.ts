@@ -38,6 +38,7 @@ import { getFleetHealth, checkSingleService, getServiceRegistry } from "./fleet-
 import { legionAI, generateNPCDialogue, moderateContent, generateQuestText, analyzeFleetStatus, type LegionTask } from "./legion-ai";
 import { getGBuxBalance, requestGBuxMint, savePlayerData, loadPlayerData, listPlayerSaves, deletePlayerSave, linkPuterToGrudge, resolveGrudgeId, getGrudaChainStatus } from "./grudachain";
 import { registerUniverseRoutes } from "./routes-universe";
+import { registerSystemAdminRoutes } from "./routes-system-admin";
 
 const ADMIN_SESSION_COOKIE = "gs_admin_session";
 const ADMIN_SESSION_TTL_MS = 1000 * 60 * 60 * 12; // 12 hours
@@ -2188,6 +2189,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Characters / Nexus decks / home islands / game saves
   registerUniverseRoutes(app);
+  // Admin system-dev console for agents + operators
+  registerSystemAdminRoutes(app);
 
   app.get("/api/games/top", async (req, res) => {
     try {
