@@ -61,22 +61,40 @@ function copyText(text: string) {
 }
 
 function PrefabIconStack({ item }: { item: CanonicalItem }) {
+  const [raceSrc, setRaceSrc] = useState(item.raceIconUrl);
+  const [classSrc, setClassSrc] = useState(item.classIconUrl);
+
+  useEffect(() => {
+    setRaceSrc(item.raceIconUrl);
+    setClassSrc(item.classIconUrl);
+  }, [item.raceIconUrl, item.classIconUrl]);
+
   return (
     <div className="relative w-full h-full flex items-center justify-center p-2">
-      {item.raceIconUrl && (
+      {raceSrc ? (
         <img
-          src={item.raceIconUrl}
+          src={raceSrc}
           alt=""
           className="w-[72%] h-[72%] object-contain drop-shadow-md"
           loading="lazy"
+          onError={() => {
+            const direct = item.prefab?.raceIconUrl;
+            if (direct && raceSrc !== direct) setRaceSrc(direct);
+          }}
         />
+      ) : (
+        <Users className="w-8 h-8 text-[hsl(45,15%,40%)]" />
       )}
-      {item.classIconUrl && (
+      {classSrc && (
         <img
-          src={item.classIconUrl}
+          src={classSrc}
           alt=""
           className="absolute bottom-1 right-1 w-[38%] h-[38%] object-contain rounded bg-[hsl(225,25%,8%)]/90 border border-[hsl(43,60%,30%)]/40 p-0.5"
           loading="lazy"
+          onError={() => {
+            const direct = item.prefab?.classIconUrl;
+            if (direct && classSrc !== direct) setClassSrc(direct);
+          }}
         />
       )}
     </div>

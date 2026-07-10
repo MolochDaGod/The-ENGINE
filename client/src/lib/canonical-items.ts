@@ -9,6 +9,7 @@ import {
   type CharacterPrefab,
 } from "@shared/character-prefabs";
 import { portraitGlbUrl, raceIconUrl, classIconUrl } from "@shared/character-meshes";
+import { assetUrl } from "@/lib/api-config";
 import { resolveAssetUrl } from "@/lib/weapon-skills";
 
 const OBJECTSTORE_BASE =
@@ -143,7 +144,9 @@ function normalizeArmor(raw: Record<string, unknown>): CanonicalItem {
 
 function prefabToItem(prefab: CharacterPrefab): CanonicalItem {
   const meshNames = getEquipmentMeshNames(prefab);
-  const glbUrl = portraitGlbUrl(prefab.race);
+  const glbUrl = assetUrl(portraitGlbUrl(prefab.race));
+  const raceIcon = assetUrl(prefab.raceIconUrl ?? raceIconUrl(prefab.race));
+  const classIcon = assetUrl(prefab.classIconUrl ?? classIconUrl(prefab.classId));
   return {
     id: prefab.id,
     uuid: prefab.id,
@@ -153,9 +156,9 @@ function prefabToItem(prefab: CharacterPrefab): CanonicalItem {
     tier: 1,
     tierLabel: prefab.classId,
     tierColor: prefab.classColor,
-    iconUrl: prefab.raceIconUrl,
-    raceIconUrl: prefab.raceIconUrl ?? raceIconUrl(prefab.race),
-    classIconUrl: prefab.classIconUrl ?? classIconUrl(prefab.classId),
+    iconUrl: raceIcon,
+    raceIconUrl: raceIcon,
+    classIconUrl: classIcon,
     description: prefab.lore,
     stats: prefab.baseStats as unknown as Record<string, number>,
     meshNames,
@@ -174,8 +177,8 @@ function prefabToItem(prefab: CharacterPrefab): CanonicalItem {
       cdnModelKey: prefab.cdnModelKey,
       equipment: prefab.equipment,
       meshNames,
-      raceIconUrl: prefab.raceIconUrl,
-      classIconUrl: prefab.classIconUrl,
+      raceIconUrl: raceIcon,
+      classIconUrl: classIcon,
       animationPack: prefab.animationPack,
       skills: prefab.skills,
     },

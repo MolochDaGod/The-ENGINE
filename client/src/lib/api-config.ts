@@ -46,10 +46,44 @@ export function objectStoreUrl(path: string): string {
   return `${OBJECTSTORE_ORIGIN.replace(/\/$/, "")}${p}`;
 }
 
+/** Hosts that should load R2 assets via same-origin /api/assets proxy (avoids CDN CORS). */
+function useAssetProxy(): boolean {
+  if (typeof window === "undefined") return false;
+  const host = window.location.hostname;
+  return (
+    host === "grudge-studio.com" ||
+    host === "www.grudge-studio.com" ||
+    host.endsWith(".grudge-studio.com") ||
+    host.endsWith(".vercel.app")
+  );
+}
+
+function toAssetProxyPath(pathOrUrl: string): string {
+  const p = pathOrUrl.startsWith("/") ? pathOrUrl : `/${pathOrUrl}`;
+  return `/api/assets${p}`;
+}
+
+/** Resolve CDN asset paths — proxied on portal hosts for reliable GLB/icon loading. */
 export function assetUrl(path: string): string {
   if (!path) return "";
-  if (/^(https?:|data:|blob:)/i.test(path)) return path;
+  if (/^(data:|blob:)/i.test(path)) return path;
+
+  if (/^https?:/i.test(path)) {
+    if (useAssetProxy()) {
+      try {
+        const u = new URL(path);
+        if (u.hostname === "assets.grudge-studio.com") {
+          return toAssetProxyPath(`${u.pathname}${u.search}`);
+        }
+      } catch {
+        /* keep original */
+      }
+    }
+    return path;
+  }
+
   const p = path.startsWith("/") ? path : `/${path}`;
+  if (useAssetProxy()) return toAssetProxyPath(p);
   return `${ASSETS_ORIGIN.replace(/\/$/, "")}${p}`;
 }
 

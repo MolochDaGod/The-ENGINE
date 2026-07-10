@@ -2,15 +2,18 @@ import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { portraitGlbUrl } from "@shared/character-meshes";
 import type { RaceId } from "@shared/character-prefabs";
+import { assetUrl } from "@/lib/api-config";
 
 const glbCache = new Map<string, Promise<THREE.Group>>();
 
 export function loadPortraitGlb(race: RaceId): Promise<THREE.Group> {
-  const url = portraitGlbUrl(race);
+  const url = assetUrl(portraitGlbUrl(race));
   let p = glbCache.get(url);
   if (!p) {
     p = new Promise<THREE.Group>((resolve, reject) => {
-      new GLTFLoader().load(
+      const loader = new GLTFLoader();
+      if (!url.startsWith("/")) loader.setCrossOrigin("anonymous");
+      loader.load(
         url,
         (gltf) => resolve(gltf.scene),
         undefined,

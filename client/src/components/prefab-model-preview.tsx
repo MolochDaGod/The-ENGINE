@@ -44,6 +44,9 @@ export function PrefabModelPreview({ prefab, className }: Props) {
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.05;
+    renderer.domElement.style.display = "block";
+    renderer.domElement.style.width = "100%";
+    renderer.domElement.style.height = "100%";
     host.appendChild(renderer.domElement);
 
     const pmrem = new THREE.PMREMGenerator(renderer);
@@ -94,12 +97,14 @@ export function PrefabModelPreview({ prefab, className }: Props) {
       rootRef.current = group;
       scene.add(group);
       applyVisibility();
+      resize();
       setLoading(false);
       tick();
     };
 
     setLoading(true);
     setError(null);
+    tick();
 
     loadPortraitGlb(prefab.race)
       .then(installModel)
@@ -142,16 +147,19 @@ export function PrefabModelPreview({ prefab, className }: Props) {
 
   return (
     <div
-      ref={hostRef}
-      className={className ?? "relative w-full aspect-[4/3] rounded-lg border border-[hsl(43,60%,30%)]/30 overflow-hidden bg-[#0d0908]"}
+      className={
+        className ??
+        "relative w-full min-h-[280px] h-[280px] rounded-lg border border-[hsl(43,60%,30%)]/30 overflow-hidden bg-[#0d0908]"
+      }
     >
+      <div ref={hostRef} className="absolute inset-0" />
       {loading && (
-        <div className="absolute inset-0 flex items-center justify-center text-[hsl(43,85%,55%)] z-10">
+        <div className="absolute inset-0 flex items-center justify-center text-[hsl(43,85%,55%)] z-10 pointer-events-none">
           <Loader2 className="w-6 h-6 animate-spin" />
         </div>
       )}
       {error && (
-        <div className="absolute inset-0 flex items-center justify-center text-xs text-[hsl(0,60%,55%)] px-3 text-center z-10">
+        <div className="absolute inset-0 flex items-center justify-center text-xs text-[hsl(0,60%,55%)] px-3 text-center z-10 pointer-events-none">
           {error}
         </div>
       )}
