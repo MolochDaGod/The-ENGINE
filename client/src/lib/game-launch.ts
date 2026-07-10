@@ -37,6 +37,11 @@ export function isInternalRoute(route: string): boolean {
   return route.startsWith('/');
 }
 
+/** Same-origin proxy embeds that should always iframe (bypass apex CSP blocklist). */
+export function isProxiedEmbed(url: string): boolean {
+  return url.startsWith('/embed/') || url.startsWith('/games/');
+}
+
 export function isApexPortalHost(): boolean {
   if (typeof window === 'undefined') return false;
   return APEX_HOSTS.has(window.location.hostname);
@@ -62,20 +67,30 @@ export function prefersTabLaunch(url: string): boolean {
 }
 
 export function resolveGameLaunch(game: LaunchableGame): ResolvedLaunch {
+  // Prefer same-origin proxy/static shell for iframe; play URL stays full game.
   const playUrl = game.route;
-
-  if (game.allowEmbed === false) {
-    return { playUrl, embedUrl: null, mode: 'tab' };
-  }
-
   const embedCandidate = game.embedRoute ?? game.route;
 
-  if (prefersTabLaunch(embedCandidate)) {
+  if (game.allowEmbed === false) {
+    // Still allow same-origin preview shells if provided
+    if (game.embedRoute && isProxiedEmbed(game.embedRoute)) {
+      return { playUrl, embedUrl: game.embedRoute, mode: 'internal' };
+    }
     return { playUrl, embedUrl: null, mode: 'tab' };
   }
 
-  if (isInternalRoute(embedCandidate)) {
-    return { playUrl, embedUrl: embedCandidate, mode: 'internal' };
+  // Same-origin /embed/* and /games/* always iframe on the portal
+  if (isProxiedEmbed(embedCandidate) || isInternalRoute(embedCandidate)) {
+    return {
+      playUrl,
+      embedUrl: embedCandidate,
+      mode: isInternalRoute(embedCandidate) ? 'internal' : 'embed',
+    };
+  }
+
+  if (prefersTabLaunch(embedCandidate)) {
+    // External blocked — no iframe; cover UI will handle
+    return { playUrl, embedUrl: null, mode: 'tab' };
   }
 
   return { playUrl, embedUrl: embedCandidate, mode: 'embed' };

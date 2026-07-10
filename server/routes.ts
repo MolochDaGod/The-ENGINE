@@ -2132,11 +2132,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/me/play", requirePlayer, async (req, res) => {
+    try {
+      const player = getPlayer(req)!;
+      const { gameKey, category, title, url } = req.body ?? {};
+      if (!gameKey || typeof gameKey !== "string") {
+        return res.status(400).json({ error: "gameKey is required" });
+      }
+      if (category !== "fleet" && category !== "retro") {
+        return res.status(400).json({ error: "category must be fleet or retro" });
+      }
+      const plays = await storage.recordFleetPlay(player.id, {
+        gameKey,
+        category,
+        title: typeof title === "string" ? title : gameKey,
+        url: typeof url === "string" ? url : undefined,
+      });
+      return res.json({ ok: true, plays });
+    } catch (error) {
+      console.error("/api/me/play error:", error);
+      return res.status(500).json({ error: "Failed to record play" });
+    }
+  });
+
   app.get("/api/me/games", requirePlayer, async (req, res) => {
     try {
       const player = getPlayer(req)!;
-      const rows = await storage.getPlayerGames(player.id);
-      return res.json(rows);
+      const [retroRows, fleetPlays] = await Promise.all([
+        storage.getPlayerGames(player.id),
+        storage.getFleetPlays(player.id),
+      ]);
+      const retro = retroRows.map((row) => ({
+        kind: "retro" as const,
+        game: row.game,
+        bestScore: row.bestScore,
+        personalBestAt: row.personalBestAt,
+      }));
+      const fleet = fleetPlays
+        .filter((p) => p.category === "fleet")
+        .map((p) => ({
+          kind: "fleet" as const,
+          gameKey: p.gameKey,
+          title: p.title,
+          url: p.url,
+          lastPlayedAt: p.lastPlayedAt,
+          playCount: p.playCount,
+        }));
+      return res.json({ retro, fleet, all: [...fleet, ...retro] });
     } catch (error) {
       console.error("/api/me/games error:", error);
       return res.status(500).json({ error: "Failed to fetch games" });

@@ -379,17 +379,25 @@ function useGrudgePanelClose() {
 function GamesTab() {
   const gamesQ = useQuery({
     queryKey: ["/api/me/games"],
-    queryFn: () => fetchJSON<any[]>("/api/me/games"),
+    queryFn: () => fetchJSON<{
+      retro: Array<{ game: { id: number; title: string; platform: string; thumbnailUrl: string | null }; bestScore: number }>;
+      fleet: Array<{ gameKey: string; title: string; url?: string; playCount: number }>;
+      all: unknown[];
+    }>("/api/me/games"),
   });
   const { close } = useGrudgePanel();
+
+  const retro = gamesQ.data?.retro ?? [];
+  const fleet = gamesQ.data?.fleet ?? [];
+  const hasPlays = retro.length > 0 || fleet.length > 0;
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <span className="text-xs font-heading text-[hsl(43,85%,55%)] uppercase tracking-wider">My Games</span>
-        <Link href="/games" onClick={close}>
+        <Link href="/account" onClick={close}>
           <span className="text-[10px] text-[hsl(43,85%,55%)] hover:underline font-body flex items-center gap-0.5">
-            Library <ChevronRight className="w-3 h-3" />
+            Hub <ChevronRight className="w-3 h-3" />
           </span>
         </Link>
       </div>
@@ -398,19 +406,43 @@ function GamesTab() {
         <div className="py-8 text-center">
           <Loader2 className="w-5 h-5 animate-spin text-[hsl(43,85%,55%)] mx-auto" />
         </div>
-      ) : !gamesQ.data?.length ? (
+      ) : !hasPlays ? (
         <div className="text-center py-8">
           <Gamepad className="w-8 h-8 text-[hsl(45,15%,40%)] mx-auto mb-2" />
           <p className="text-sm text-[hsl(45,15%,55%)] font-body">No games played yet.</p>
-          <Link href="/games" onClick={close}>
+          <Link href="/account" onClick={close}>
             <Button size="sm" className="gilded-button mt-3 text-xs">
-              Browse Library
+              Open Games Hub
             </Button>
           </Link>
         </div>
       ) : (
         <div className="space-y-2">
-          {gamesQ.data.slice(0, 12).map((row: any) => (
+          {fleet.slice(0, 6).map((row) => (
+            <a
+              key={row.gameKey}
+              href={row.url || "/super-engine"}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={close}
+            >
+              <div className="flex items-center gap-3 p-2 rounded border border-[hsl(43,60%,30%)]/15 hover:border-[hsl(43,60%,30%)]/40 transition-colors cursor-pointer">
+                <div className="w-10 h-10 rounded bg-[hsl(225,25%,12%)] flex items-center justify-center shrink-0">
+                  <Gamepad className="w-4 h-4 text-[hsl(43,85%,55%)]" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-xs font-medium truncate">{row.title}</div>
+                  <div className="text-[10px] text-[hsl(45,15%,55%)] font-body">
+                    Fleet · {row.playCount} play{row.playCount === 1 ? "" : "s"}
+                  </div>
+                </div>
+                <Badge variant="outline" className="text-[9px] border-[hsl(43,60%,30%)]/30 text-[hsl(43,85%,55%)] uppercase shrink-0">
+                  new
+                </Badge>
+              </div>
+            </a>
+          ))}
+          {retro.slice(0, 6).map((row) => (
             <Link key={row.game.id} href={`/play/${row.game.id}`} onClick={close}>
               <div className="flex items-center gap-3 p-2 rounded border border-[hsl(43,60%,30%)]/15 hover:border-[hsl(43,60%,30%)]/40 transition-colors cursor-pointer">
                 <div className="w-10 h-10 rounded bg-[hsl(225,25%,12%)] overflow-hidden shrink-0">

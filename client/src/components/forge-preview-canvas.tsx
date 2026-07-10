@@ -55,113 +55,64 @@ function buildScene(
   game: FleetGameCard,
   accent: number,
   caps: Set<Capability>,
+  coverTexture: THREE.Texture | null,
 ) {
   const floor = new THREE.Mesh(
     new THREE.PlaneGeometry(24, 24),
-    new THREE.MeshStandardMaterial({ color: 0x1a1428, roughness: 0.92, metalness: 0.05 }),
+    new THREE.MeshStandardMaterial({ color: 0x0c0a12, roughness: 0.92, metalness: 0.08 }),
   );
   floor.rotation.x = -Math.PI / 2;
   floor.receiveShadow = true;
   floor.name = "__floor";
   scene.add(floor);
 
-  const core = new THREE.Mesh(
-    new THREE.IcosahedronGeometry(1.1, 1),
-    new THREE.MeshStandardMaterial({
-      color: accent,
-      emissive: accent,
-      emissiveIntensity: 0.25,
-      roughness: 0.35,
-      metalness: 0.55,
-    }),
-  );
-  core.position.y = 1.4;
-  core.castShadow = true;
-  core.name = "__core";
-  scene.add(core);
-
-  if (caps.has("3D") || caps.has("Physics")) {
-    const ring = new THREE.Mesh(
-      new THREE.TorusGeometry(2.2, 0.08, 12, 48),
-      new THREE.MeshStandardMaterial({ color: accent, emissive: accent, emissiveIntensity: 0.15 }),
+  // Prefer game cover art on a cinematic billboard — never a pile of abstract junk
+  if (coverTexture) {
+    coverTexture.colorSpace = THREE.SRGBColorSpace;
+    const aspect = coverTexture.image
+      ? (coverTexture.image as HTMLImageElement).width /
+        Math.max(1, (coverTexture.image as HTMLImageElement).height)
+      : 16 / 9;
+    const h = 3.6;
+    const w = h * Math.min(2.2, Math.max(1.1, aspect));
+    const frame = new THREE.Mesh(
+      new THREE.PlaneGeometry(w + 0.16, h + 0.16),
+      new THREE.MeshStandardMaterial({ color: 0x1a1408, metalness: 0.6, roughness: 0.4 }),
     );
-    ring.rotation.x = Math.PI / 2;
-    ring.position.y = 0.05;
-    ring.name = "__ring";
-    scene.add(ring);
-  }
+    frame.position.set(0, 2.0, -0.02);
+    frame.name = "__frame";
+    scene.add(frame);
 
-  if (caps.has("Physics")) {
-    for (let i = 0; i < 5; i++) {
-      const ball = new THREE.Mesh(
-        new THREE.SphereGeometry(0.22 + Math.random() * 0.12, 12, 12),
-        new THREE.MeshStandardMaterial({
-          color: new THREE.Color().setHSL((i * 0.12 + 0.05) % 1, 0.7, 0.55),
-          roughness: 0.4,
-          metalness: 0.3,
-        }),
-      );
-      const angle = (i / 5) * Math.PI * 2;
-      ball.position.set(Math.cos(angle) * 3.2, 0.4 + i * 0.15, Math.sin(angle) * 3.2);
-      ball.castShadow = true;
-      ball.name = `__ball_${i}`;
-      scene.add(ball);
-    }
-  }
-
-  if (caps.has("Multiplayer")) {
-    for (let i = 0; i < 3; i++) {
-      const avatar = new THREE.Mesh(
-        new THREE.CapsuleGeometry(0.25, 0.7, 4, 8),
-        new THREE.MeshStandardMaterial({
-          color: i === 0 ? accent : 0x4ade80,
-          roughness: 0.5,
-        }),
-      );
-      avatar.position.set(-2.5 + i * 2.5, 0.85, -2.8);
-      avatar.castShadow = true;
-      avatar.name = `__avatar_${i}`;
-      scene.add(avatar);
-    }
-  }
-
-  if (caps.has("AI")) {
-    const beacon = new THREE.Mesh(
-      new THREE.ConeGeometry(0.35, 0.9, 6),
-      new THREE.MeshStandardMaterial({ color: 0x22d3ee, emissive: 0x0891b2, emissiveIntensity: 0.4 }),
+    const poster = new THREE.Mesh(
+      new THREE.PlaneGeometry(w, h),
+      new THREE.MeshBasicMaterial({ map: coverTexture }),
     );
-    beacon.position.set(3.5, 0.55, 2.5);
-    beacon.name = "__ai_beacon";
-    scene.add(beacon);
-  }
+    poster.position.set(0, 2.0, 0);
+    poster.name = "__poster";
+    scene.add(poster);
 
-  if (caps.has("2D")) {
-    const panel = new THREE.Mesh(
-      new THREE.BoxGeometry(4, 2.4, 0.12),
-      new THREE.MeshStandardMaterial({ color: 0x111827, roughness: 0.8 }),
+    const glow = new THREE.Mesh(
+      new THREE.PlaneGeometry(w * 1.15, h * 1.15),
+      new THREE.MeshBasicMaterial({
+        color: accent,
+        transparent: true,
+        opacity: 0.12,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      }),
     );
-    panel.position.set(0, 2.2, -1.5);
-    panel.name = "__screen";
-    scene.add(panel);
+    glow.position.set(0, 2.0, -0.05);
+    glow.name = "__glow";
+    scene.add(glow);
 
-    const sprite = new THREE.Mesh(
-      new THREE.PlaneGeometry(3.2, 1.8),
-      new THREE.MeshBasicMaterial({ color: accent, transparent: true, opacity: 0.85 }),
-    );
-    sprite.position.set(0, 2.2, -1.42);
-    sprite.name = "__sprite";
-    scene.add(sprite);
-  }
-
-  if (caps.has("Particles")) {
-    const count = 180;
+    // Soft ambient motes only — no random capability shapes
+    const count = 60;
     const positions = new Float32Array(count * 3);
     for (let i = 0; i < count; i++) {
-      const r = 1.5 + Math.random() * 2.5;
+      const r = 2.2 + Math.random() * 2.8;
       const theta = Math.random() * Math.PI * 2;
-      const y = 0.5 + Math.random() * 3;
       positions[i * 3] = Math.cos(theta) * r;
-      positions[i * 3 + 1] = y;
+      positions[i * 3 + 1] = 0.4 + Math.random() * 3.2;
       positions[i * 3 + 2] = Math.sin(theta) * r;
     }
     const geom = new THREE.BufferGeometry();
@@ -170,15 +121,43 @@ function buildScene(
       geom,
       new THREE.PointsMaterial({
         color: accent,
-        size: 0.07,
+        size: 0.05,
         transparent: true,
-        opacity: 0.75,
+        opacity: 0.55,
         blending: THREE.AdditiveBlending,
         depthWrite: false,
       }),
     );
     points.name = "__particles";
     scene.add(points);
+    return;
+  }
+
+  // No cover: single elegant core + optional subtle ring — not random geometry soup
+  const core = new THREE.Mesh(
+    new THREE.SphereGeometry(1.0, 48, 32),
+    new THREE.MeshStandardMaterial({
+      color: accent,
+      emissive: accent,
+      emissiveIntensity: 0.35,
+      roughness: 0.25,
+      metalness: 0.65,
+    }),
+  );
+  core.position.y = 1.4;
+  core.castShadow = true;
+  core.name = "__core";
+  scene.add(core);
+
+  if (caps.has("3D") || caps.has("Physics") || caps.has("Multiplayer")) {
+    const ring = new THREE.Mesh(
+      new THREE.TorusGeometry(2.0, 0.06, 12, 48),
+      new THREE.MeshStandardMaterial({ color: accent, emissive: accent, emissiveIntensity: 0.12 }),
+    );
+    ring.rotation.x = Math.PI / 2;
+    ring.position.y = 0.05;
+    ring.name = "__ring";
+    scene.add(ring);
   }
 }
 
@@ -293,11 +272,47 @@ export function ForgePreviewCanvas({
     const scene = new THREE.Scene();
     const caps = new Set(game.capabilities);
     const accent = gameAccent(game);
-    buildScene(scene, game, accent, caps);
+
+    let disposed = false;
+    let coverTexture: THREE.Texture | null = null;
+    const loader = new THREE.TextureLoader();
+
+    const mountScene = (tex: THREE.Texture | null) => {
+      if (disposed) {
+        tex?.dispose();
+        return;
+      }
+      // Clear previous content meshes
+      [...scene.children].forEach((c) => {
+        if (!c.name.startsWith("__light_") && c.name !== "__grid") {
+          scene.remove(c);
+        }
+      });
+      buildScene(scene, game, accent, caps, tex);
+    };
+
+    if (game.cardImage) {
+      loader.load(
+        game.cardImage,
+        (tex) => {
+          coverTexture = tex;
+          mountScene(tex);
+        },
+        undefined,
+        () => mountScene(null),
+      );
+    } else {
+      mountScene(null);
+    }
 
     const camPreset = CAMERA_PRESETS[settings.camera];
     const camera = new THREE.PerspectiveCamera(camPreset.fov, w / h, camPreset.near, camPreset.far);
-    camera.position.set(camPreset.position.x, camPreset.position.y, camPreset.position.z);
+    // Pull back slightly when showing cover billboard
+    camera.position.set(
+      camPreset.position.x * 0.85,
+      camPreset.position.y * 1.05,
+      Math.max(camPreset.position.z, 6.5),
+    );
 
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.target.set(camPreset.target.x, camPreset.target.y, camPreset.target.z);

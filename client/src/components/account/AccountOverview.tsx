@@ -11,7 +11,11 @@ import { GameCover } from "@/components/game-cover";
 
 interface PlayerStats {
   gamesPlayed: number;
+  retroGamesPlayed?: number;
+  fleetGamesPlayed?: number;
   totalScores: number;
+  retroScores?: number;
+  fleetPlays?: number;
   personalBests: number;
   globalRecords: number;
   challengesWon: number;
@@ -162,7 +166,10 @@ export default function AccountOverview({ player }: { player: PlayerProfile }) {
           <div className="py-8 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-[hsl(43,85%,55%)]" /></div>
         ) : !scoresQuery.data?.length ? (
           <p className="text-sm text-[hsl(45,15%,60%)] font-body">
-            No scores yet. Play a game in the <Link href="/games" className="text-[hsl(43,85%,55%)] hover:underline">retro library</Link> to get started.
+            No retro scores yet. Launch a fleet game from{" "}
+            <Link href="/account" className="text-[hsl(43,85%,55%)] hover:underline">Games</Link>
+            {" "}or play classics in the{" "}
+            <Link href="/games" className="text-[hsl(43,85%,55%)] hover:underline">retro library</Link>.
           </p>
         ) : (
           <ul className="divide-y divide-[hsl(43,60%,30%)]/15">

@@ -28,6 +28,7 @@ import AccountOverview from "@/components/account/AccountOverview";
 import AccountWallet from "@/components/account/AccountWallet";
 import AccountSettings from "@/components/account/AccountSettings";
 import AccountCharacters from "@/components/account/AccountCharacters";
+import AccountGamesHub from "@/components/account/AccountGamesHub";
 
 export default function AccountPage() {
   const { player, loading, logout } = useAuth();
@@ -71,6 +72,9 @@ export default function AccountPage() {
             <TabsTrigger value="overview" className="data-[state=active]:bg-[hsl(43,85%,55%)]/15 data-[state=active]:text-[hsl(43,85%,55%)] text-[hsl(45,15%,55%)] text-xs font-heading">
               <Gamepad className="w-3.5 h-3.5 mr-1.5" /> Overview
             </TabsTrigger>
+            <TabsTrigger value="games" className="data-[state=active]:bg-[hsl(43,85%,55%)]/15 data-[state=active]:text-[hsl(43,85%,55%)] text-[hsl(45,15%,55%)] text-xs font-heading">
+              <Gamepad className="w-3.5 h-3.5 mr-1.5" /> Games
+            </TabsTrigger>
             <TabsTrigger value="wallet" className="data-[state=active]:bg-[hsl(43,85%,55%)]/15 data-[state=active]:text-[hsl(43,85%,55%)] text-[hsl(45,15%,55%)] text-xs font-heading">
               <Wallet className="w-3.5 h-3.5 mr-1.5" /> Wallet & Web3
             </TabsTrigger>
@@ -90,6 +94,10 @@ export default function AccountPage() {
 
           <TabsContent value="overview" className="mt-6">
             <AccountOverview player={player} />
+          </TabsContent>
+
+          <TabsContent value="games" className="mt-6">
+            <AccountGamesHub />
           </TabsContent>
 
           <TabsContent value="wallet" className="mt-6">

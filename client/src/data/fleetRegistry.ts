@@ -80,6 +80,17 @@ export const FLEET_REGISTRY: FleetRegistryEntry[] = [
     repo: "RTS-Grudge",
   },
   {
+    id: "warlord-genesis",
+    name: "Warlord Genesis",
+    description:
+      "Three-lane hero ground RTS — Grudge 6 champions, lane guards, deploy screen, weapon skills, and warcamp progression.",
+    canonicalUrl: "https://warlord-genesis.vercel.app/play",
+    status: "live",
+    tags: ["rts", "pvp", "arena", "coop"],
+    forge: true,
+    repo: "warlord-genesis",
+  },
+  {
     id: "survival-game",
     name: "Grudges — Survival ARPG",
     description: "Sci-fi survival action RPG. Bind a grudge, bear it forward. Crafting, combat, exploration.",
@@ -307,8 +318,9 @@ export const FLEET_REGISTRY: FleetRegistryEntry[] = [
     id: "polyfighter",
     name: "Grudge Smash",
     description: "2D Smash-style platform fighter — sprite warriors, AI opponents, online PvP, super attacks.",
-    canonicalUrl: "/polyfighter",
-    embedUrl: "https://grudge-rpg-sprite-attack.vercel.app",
+    /** Live on Vercel; XFO blocks apex iframe — cover art + new-tab play (no stub shell). */
+    canonicalUrl: "https://grudge-rpg-sprite-attack.vercel.app",
+    allowEmbed: false,
     status: "live",
     tags: ["pvp", "solo", "arena"],
     forge: true,

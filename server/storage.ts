@@ -29,6 +29,15 @@ export interface GameListResult {
   total: number;
 }
 
+export type FleetPlayRecord = {
+  gameKey: string;
+  category: "fleet" | "retro";
+  title: string;
+  url?: string;
+  lastPlayedAt: string;
+  playCount: number;
+};
+
 export interface IStorage {
   getUser(id: number): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
@@ -86,7 +95,11 @@ export interface IStorage {
   // Portal aggregates
   getPlayerStats(userId: number): Promise<{
     gamesPlayed: number;
+    retroGamesPlayed: number;
+    fleetGamesPlayed: number;
     totalScores: number;
+    retroScores: number;
+    fleetPlays: number;
     personalBests: number;
     globalRecords: number;
     challengesWon: number;
@@ -94,6 +107,8 @@ export interface IStorage {
   }>;
   getRecentPlayerScores(userId: number, limit?: number): Promise<Array<Score & { gameTitle: string; platform: string; thumbnailUrl: string | null }>>;
   getPlayerGames(userId: number): Promise<Array<{ game: Game; bestScore: number; personalBestAt: Date | null }>>;
+  getFleetPlays(userId: number): Promise<FleetPlayRecord[]>;
+  recordFleetPlay(userId: number, play: Omit<FleetPlayRecord, "playCount" | "lastPlayedAt"> & { lastPlayedAt?: string }): Promise<FleetPlayRecord[]>;
   getTopGames(limit?: number, windowDays?: number): Promise<Array<Game & { playerCount: number; scoreCount: number }>>;
   getGlobalTopPlayers(limit?: number): Promise<Array<{ userId: number; username: string; displayName: string | null; avatarUrl: string | null; totalScore: number; personalBests: number; globalRecords: number }>>;
 
@@ -584,7 +599,38 @@ export class DatabaseStorage implements IStorage {
 
   // ── Portal aggregates ────────────────────────────────────────
 
+  async getFleetPlays(userId: number): Promise<FleetPlayRecord[]> {
+    const [user] = await db.select({ recentPlays: users.recentPlays }).from(users).where(eq(users.id, userId)).limit(1);
+    const plays = user?.recentPlays;
+    return Array.isArray(plays) ? plays : [];
+  }
+
+  async recordFleetPlay(
+    userId: number,
+    play: Omit<FleetPlayRecord, "playCount" | "lastPlayedAt"> & { lastPlayedAt?: string },
+  ): Promise<FleetPlayRecord[]> {
+    const existing = await this.getFleetPlays(userId);
+    const now = play.lastPlayedAt ?? new Date().toISOString();
+    const hit = existing.find((p) => p.gameKey === play.gameKey);
+    const next: FleetPlayRecord[] = hit
+      ? existing.map((p) =>
+          p.gameKey === play.gameKey
+            ? { ...p, ...play, playCount: p.playCount + 1, lastPlayedAt: now }
+            : p,
+        )
+      : [{ ...play, playCount: 1, lastPlayedAt: now }, ...existing];
+    const trimmed = next.slice(0, 48);
+    await db.update(users).set({ recentPlays: trimmed }).where(eq(users.id, userId));
+    return trimmed;
+  }
+
   async getPlayerStats(userId: number) {
+    const fleetPlays = await this.getFleetPlays(userId);
+    const fleetGameCount = new Set(
+      fleetPlays.filter((p) => p.category === "fleet").map((p) => p.gameKey),
+    ).size;
+    const fleetPlayCount = fleetPlays.reduce((sum, p) => sum + (p.playCount ?? 1), 0);
+
     const [[gamesPlayedRow], [totalScoresRow], [personalBestsRow], [globalRecordsRow], [challengesWonRow], [challengesLostRow]] = await Promise.all([
       db.select({ count: sql<number>`cast(count(distinct ${scores.gameId}) as int)` })
         .from(scores)
@@ -610,9 +656,14 @@ export class DatabaseStorage implements IStorage {
         )),
     ]);
 
+    const retroGamesPlayed = gamesPlayedRow?.count ?? 0;
     return {
-      gamesPlayed: gamesPlayedRow?.count ?? 0,
-      totalScores: totalScoresRow?.count ?? 0,
+      gamesPlayed: retroGamesPlayed + fleetGameCount,
+      retroGamesPlayed,
+      fleetGamesPlayed: fleetGameCount,
+      totalScores: (totalScoresRow?.count ?? 0) + fleetPlayCount,
+      retroScores: totalScoresRow?.count ?? 0,
+      fleetPlays: fleetPlayCount,
       personalBests: personalBestsRow?.count ?? 0,
       globalRecords: globalRecordsRow?.count ?? 0,
       challengesWon: challengesWonRow?.count ?? 0,
@@ -736,8 +787,19 @@ async function ensureStoreProductColumns() {
   }
 }
 
+async function ensureRecentPlaysColumn() {
+  try {
+    await db.execute(
+      sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS recent_plays JSONB DEFAULT '[]'::jsonb`,
+    );
+  } catch (err) {
+    console.warn("[storage] recent_plays column ensure skipped:", err);
+  }
+}
+
 async function bootstrapStorage() {
   await ensureStoreProductColumns();
+  await ensureRecentPlaysColumn();
   const steps: Array<[string, () => Promise<void>]> = [
     ["store products", () => storage.initializeStoreProducts()],
     ["hydra products", () => storage.initializeHydraProducts()],

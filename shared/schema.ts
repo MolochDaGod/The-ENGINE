@@ -21,6 +21,15 @@ export const users = pgTable("users", {
   googleId: text("google_id").unique(),
   phone: text("phone").unique(),
   needsProfile: boolean("needs_profile").default(false).notNull(),
+  /** Fleet + retro play history for account hub (retro scores remain in scores table). */
+  recentPlays: jsonb("recent_plays").$type<Array<{
+    gameKey: string;
+    category: "fleet" | "retro";
+    title: string;
+    url?: string;
+    lastPlayedAt: string;
+    playCount: number;
+  }>>().default([]),
   createdAt: timestamp("created_at").defaultNow(),
   lastLoginAt: timestamp("last_login_at"),
 });
