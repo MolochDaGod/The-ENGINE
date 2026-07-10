@@ -37,6 +37,7 @@ import { getWalletStatus } from "./web3/solana-client";
 import { getFleetHealth, checkSingleService, getServiceRegistry } from "./fleet-health";
 import { legionAI, generateNPCDialogue, moderateContent, generateQuestText, analyzeFleetStatus, type LegionTask } from "./legion-ai";
 import { getGBuxBalance, requestGBuxMint, savePlayerData, loadPlayerData, listPlayerSaves, deletePlayerSave, linkPuterToGrudge, resolveGrudgeId, getGrudaChainStatus } from "./grudachain";
+import { registerUniverseRoutes } from "./routes-universe";
 
 const ADMIN_SESSION_COOKIE = "gs_admin_session";
 const ADMIN_SESSION_TTL_MS = 1000 * 60 * 60 * 12; // 12 hours
@@ -2184,6 +2185,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(500).json({ error: "Failed to fetch games" });
     }
   });
+
+  // Characters / Nexus decks / home islands / game saves
+  registerUniverseRoutes(app);
 
   app.get("/api/games/top", async (req, res) => {
     try {

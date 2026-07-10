@@ -254,6 +254,93 @@ export const tournamentMatches = pgTable("tournament_matches", {
   completedAt: timestamp("completed_at"),
 });
 
+// ── Unified account universe (Warlords chars, Nexus decks, home islands) ──
+
+/** Warlords-era character slots bound to a Grudge account (prefab + progression). */
+export const playerCharacters = pgTable("player_characters", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => users.id).notNull(),
+  prefabId: text("prefab_id").notNull(), // e.g. human_warrior
+  displayName: text("display_name").notNull(),
+  level: integer("level").default(1).notNull(),
+  xp: integer("xp").default(0).notNull(),
+  isActive: boolean("is_active").default(false).notNull(),
+  /** Overridden stats / skill ranks / cosmetics */
+  stats: jsonb("stats").$type<Record<string, number>>().default({}),
+  loadout: jsonb("loadout").$type<{
+    primaryWeapon?: string;
+    secondaryWeapon?: string | null;
+    equipment?: Record<string, unknown>;
+  }>().default({}),
+  meta: jsonb("meta").$type<Record<string, unknown>>().default({}),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+/** Nexus Nemesis deck snapshots stored on the portal for launch + account hub. */
+export const playerDecks = pgTable("player_decks", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => users.id).notNull(),
+  name: text("name").notNull(),
+  description: text("description"),
+  tribe: text("tribe"), // grudge | ethereal | legion | fabled | mixed
+  isActive: boolean("is_active").default(false).notNull(),
+  isValid: boolean("is_valid").default(false).notNull(),
+  /** Card list: { cardKey, name, qty, cost?, attack?, health?, rarity? }[] */
+  cards: jsonb("cards").$type<Array<{
+    cardKey: string;
+    name: string;
+    qty: number;
+    cost?: number;
+    attack?: number;
+    health?: number;
+    rarity?: string;
+    tribe?: string;
+  }>>().default([]).notNull(),
+  totalCards: integer("total_cards").default(0).notNull(),
+  meta: jsonb("meta").$type<Record<string, unknown>>().default({}),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+/** Home islands / warcamp plots for Warlords + metaverse loops. */
+export const playerIslands = pgTable("player_islands", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => users.id).notNull(),
+  name: text("name").notNull(),
+  biome: text("biome").notNull().default("tropical"), // tropical | volcanic | frozen | desert | swamp | ruins
+  isHome: boolean("is_home").default(false).notNull(),
+  /** Plot grid / structures / resources — game clients merge this save */
+  layout: jsonb("layout").$type<{
+    size?: number;
+    seed?: number;
+    structures?: Array<{ id: string; type: string; x: number; z: number; level?: number }>;
+    resources?: Record<string, number>;
+    flags?: Record<string, boolean>;
+  }>().default({}).notNull(),
+  progress: jsonb("progress").$type<{
+    level?: number;
+    defense?: number;
+    population?: number;
+    lastHarvestAt?: string;
+  }>().default({}).notNull(),
+  meta: jsonb("meta").$type<Record<string, unknown>>().default({}),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+/** Generic per-game save slots (complete loops across the fleet). */
+export const playerGameSaves = pgTable("player_game_saves", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => users.id).notNull(),
+  gameKey: text("game_key").notNull(), // fleet id e.g. warlords, nemesis-tcg, warlord-genesis
+  slot: integer("slot").default(0).notNull(),
+  label: text("label"),
+  progress: jsonb("progress").$type<Record<string, unknown>>().default({}).notNull(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true, lastLoginAt: true });
 export const insertChatMessageSchema = createInsertSchema(chatMessages).omit({ id: true, createdAt: true });
 export const insertScoreSchema = createInsertSchema(scores).omit({ id: true, createdAt: true, isPersonalBest: true, isGlobalRecord: true });
@@ -301,3 +388,21 @@ export type InsertWeb3Transaction = z.infer<typeof insertWeb3TransactionSchema>;
 export type Web3Transaction = typeof web3Transactions.$inferSelect;
 export type InsertWalletConnection = z.infer<typeof insertWalletConnectionSchema>;
 export type WalletConnection = typeof walletConnections.$inferSelect;
+
+export type PlayerCharacter = typeof playerCharacters.$inferSelect;
+export type PlayerDeck = typeof playerDecks.$inferSelect;
+export type PlayerIsland = typeof playerIslands.$inferSelect;
+export type PlayerGameSave = typeof playerGameSaves.$inferSelect;
+
+export const insertPlayerCharacterSchema = createInsertSchema(playerCharacters).omit({
+  id: true, createdAt: true, updatedAt: true,
+});
+export const insertPlayerDeckSchema = createInsertSchema(playerDecks).omit({
+  id: true, createdAt: true, updatedAt: true,
+});
+export const insertPlayerIslandSchema = createInsertSchema(playerIslands).omit({
+  id: true, createdAt: true, updatedAt: true,
+});
+export const insertPlayerGameSaveSchema = createInsertSchema(playerGameSaves).omit({
+  id: true, createdAt: true, updatedAt: true,
+});

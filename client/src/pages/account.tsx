@@ -21,7 +21,7 @@
 import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Coins, Gamepad, Loader2, LogOut, Settings, Swords, Users, UserCircle, Wallet } from "lucide-react";
+import { Coins, Gamepad, Layers, Loader2, LogOut, Map, Settings, Swords, Users, UserCircle, Wallet } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
 import { useAuthModal } from "@/components/auth-modal";
 import AccountOverview from "@/components/account/AccountOverview";
@@ -29,6 +29,8 @@ import AccountWallet from "@/components/account/AccountWallet";
 import AccountSettings from "@/components/account/AccountSettings";
 import AccountCharacters from "@/components/account/AccountCharacters";
 import AccountGamesHub from "@/components/account/AccountGamesHub";
+import AccountDecks from "@/components/account/AccountDecks";
+import AccountIslands from "@/components/account/AccountIslands";
 
 export default function AccountPage() {
   const { player, loading, logout } = useAuth();
@@ -81,6 +83,12 @@ export default function AccountPage() {
             <TabsTrigger value="characters" className="data-[state=active]:bg-[hsl(43,85%,55%)]/15 data-[state=active]:text-[hsl(43,85%,55%)] text-[hsl(45,15%,55%)] text-xs font-heading">
               <UserCircle className="w-3.5 h-3.5 mr-1.5" /> Characters
             </TabsTrigger>
+            <TabsTrigger value="decks" className="data-[state=active]:bg-[hsl(43,85%,55%)]/15 data-[state=active]:text-[hsl(43,85%,55%)] text-[hsl(45,15%,55%)] text-xs font-heading">
+              <Layers className="w-3.5 h-3.5 mr-1.5" /> Decks
+            </TabsTrigger>
+            <TabsTrigger value="islands" className="data-[state=active]:bg-[hsl(43,85%,55%)]/15 data-[state=active]:text-[hsl(43,85%,55%)] text-[hsl(45,15%,55%)] text-xs font-heading">
+              <Map className="w-3.5 h-3.5 mr-1.5" /> Islands
+            </TabsTrigger>
             <TabsTrigger value="pvp" className="data-[state=active]:bg-[hsl(43,85%,55%)]/15 data-[state=active]:text-[hsl(43,85%,55%)] text-[hsl(45,15%,55%)] text-xs font-heading">
               <Swords className="w-3.5 h-3.5 mr-1.5" /> PvP
             </TabsTrigger>
@@ -106,6 +114,14 @@ export default function AccountPage() {
 
           <TabsContent value="characters" className="mt-6">
             <AccountCharacters player={player} />
+          </TabsContent>
+
+          <TabsContent value="decks" className="mt-6">
+            <AccountDecks />
+          </TabsContent>
+
+          <TabsContent value="islands" className="mt-6">
+            <AccountIslands />
           </TabsContent>
 
           <TabsContent value="pvp" className="mt-6">

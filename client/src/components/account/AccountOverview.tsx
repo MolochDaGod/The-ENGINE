@@ -56,11 +56,54 @@ export default function AccountOverview({ player }: { player: PlayerProfile }) {
     queryFn: () => fetchJSON<RecentScore[]>("/api/me/scores?limit=8"),
   });
 
+  const universeQuery = useQuery({
+    queryKey: ["/api/me/universe"],
+    queryFn: () =>
+      fetchJSON<{
+        characters: unknown[];
+        decks: unknown[];
+        islands: unknown[];
+        bootstrapped?: { deck?: boolean; island?: boolean };
+      }>("/api/me/universe"),
+  });
+
   const stats = statsQuery.data;
   const gbux = stats?.gbuxBalance ?? player.gbuxBalance ?? "0";
+  const universe = universeQuery.data;
 
   return (
     <div className="space-y-6">
+      {/* Universe loops strip */}
+      <section className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <Link href="/account">
+          <div className="fantasy-panel p-4 h-full hover:rune-glow transition-all cursor-pointer">
+            <div className="text-[10px] uppercase tracking-wider text-[hsl(45,15%,55%)] font-body">Warlords heroes</div>
+            <div className="text-2xl font-heading gold-text mt-1">
+              {universeQuery.isLoading ? "…" : universe?.characters?.length ?? 0}
+            </div>
+            <p className="text-[11px] text-[hsl(45,15%,55%)] font-body mt-1">Claimed characters · open Characters tab</p>
+          </div>
+        </Link>
+        <div className="fantasy-panel p-4 h-full">
+          <div className="text-[10px] uppercase tracking-wider text-[hsl(45,15%,55%)] font-body">Nexus decks</div>
+          <div className="text-2xl font-heading gold-text mt-1">
+            {universeQuery.isLoading ? "…" : universe?.decks?.length ?? 0}
+          </div>
+          <p className="text-[11px] text-[hsl(45,15%,55%)] font-body mt-1">
+            {universe?.bootstrapped?.deck ? "Starter provisioned · " : ""}Decks tab
+          </p>
+        </div>
+        <div className="fantasy-panel p-4 h-full">
+          <div className="text-[10px] uppercase tracking-wider text-[hsl(45,15%,55%)] font-body">Home islands</div>
+          <div className="text-2xl font-heading gold-text mt-1">
+            {universeQuery.isLoading ? "…" : universe?.islands?.length ?? 0}
+          </div>
+          <p className="text-[11px] text-[hsl(45,15%,55%)] font-body mt-1">
+            {universe?.bootstrapped?.island ? "Home plot ready · " : ""}Islands tab
+          </p>
+        </div>
+      </section>
+
       {/* Profile Card — based on GrudgeBuilder AccountPage pattern */}
       <section className="fantasy-panel p-6 md:p-8">
         <div className="flex flex-col md:flex-row md:items-center gap-6">
