@@ -67,6 +67,7 @@ const SERVICES: ServiceDef[] = [
   { id: 'vc-platform', name: 'GrudaChain Platform', region: 'vercel', url: 'https://platform.grudge-studio.com/', timeoutMs: 8000, warnThresholdMs: 2000 },
   { id: 'vc-apps', name: 'Apps Hub', region: 'vercel', url: 'https://apps.grudge-studio.com/', timeoutMs: 8000, warnThresholdMs: 2000 },
   { id: 'vc-grudge-arena', name: 'Grudge Arena', region: 'vercel', url: 'https://grudge-arena.grudge-studio.com/', timeoutMs: 8000, warnThresholdMs: 2000 },
+  { id: 'vc-warlord-genesis', name: 'Warlord Genesis', region: 'vercel', url: 'https://warlord-genesis.vercel.app/play', timeoutMs: 8000, warnThresholdMs: 2000 },
   { id: 'vc-grudge6', name: 'Character Viewer', region: 'vercel', url: 'https://grudge6.grudge-studio.com/', timeoutMs: 8000, warnThresholdMs: 2000 },
 
   // Puter

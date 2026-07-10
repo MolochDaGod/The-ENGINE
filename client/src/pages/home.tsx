@@ -86,7 +86,7 @@ const ERAS: { key: EraKey; name: string; tagline: string; description: string; i
     bgImage: "/assets/store/dark_fantasy_scenes.png",
     accent: "hsl(43,85%,55%)",
     accentBorder: "hsl(43,60%,30%)",
-    productIds: ["warlords", "grudge-crafting", "grudge-angler", "match-3-grudge", "mage-arena", "avernus-arena", "tower-defense"],
+    productIds: ["warlords", "warlord-genesis", "grudge-crafting", "grudge-angler", "match-3-grudge", "mage-arena", "avernus-arena", "tower-defense"],
   },
   {
     key: "nexus",

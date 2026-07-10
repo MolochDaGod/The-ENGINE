@@ -564,6 +564,18 @@ const _PORTAL_PRODUCTS_RAW = [
     image: "/assets/games/rts-grudge-card.jpg",
   },
   {
+    id: "warlord-genesis",
+    name: "Warlord Genesis",
+    href: "https://warlord-genesis.vercel.app/play",
+    description:
+      "Three-lane hero ground RTS — pick your Grudge 6 champion, deploy lane guards, and siege the warcamp.",
+    status: "live",
+    section: "play",
+    external: true,
+    tags: ["rts", "pvp", "arena", "coop"],
+    image: "/assets/games/warrior-card.png",
+  },
+  {
     id: "grudge-pipeline",
     name: "Grudge Pipeline",
     href: "https://grudge-pipeline.vercel.app",
