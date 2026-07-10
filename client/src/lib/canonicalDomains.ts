@@ -23,10 +23,9 @@ export const CANONICAL = {
   threePort: "https://grudge-three-port.vercel.app",
   warlords: "https://client.grudge-studio.com",
   warlordsLegacy: "https://grudgewarlords.com",
-  /** Pending DNS — fall back to vercel until CNAME live */
-  metaverse: "https://grudge-metaverse.vercel.app",
-  warlordGenesis: "https://warlord-genesis.vercel.app/play",
-  islands: "https://island-crusade-combat-sandbox.vercel.app/arena",
+  metaverse: "https://metaverse.grudge-studio.com",
+  warlordGenesis: "https://genesis.grudge-studio.com/play",
+  islands: "https://islands.grudge-studio.com/arena",
 } as const;
 
 /** Roles that unlock paid Forge IDE / premium studio tools. */

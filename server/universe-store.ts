@@ -329,9 +329,9 @@ export async function bootstrapUniverse(
   decks: PlayerDeck[];
   islands: PlayerIsland[];
   saves: PlayerGameSave[];
-  bootstrapped: { deck: boolean; island: boolean };
+  bootstrapped: { deck: boolean; island: boolean; character: boolean };
 }> {
-  const bootstrapped = { deck: false, island: false };
+  const bootstrapped = { deck: false, island: false, character: false };
   let decks = await listDecks(userId);
   if (decks.length === 0) {
     const deck = await createDeck(userId, {
@@ -353,10 +353,35 @@ export async function bootstrapUniverse(
     bootstrapped.island = true;
   }
 
-  const [characters, saves] = await Promise.all([
-    listCharacters(userId),
-    listGameSaves(userId),
-  ]);
+  let characters = await listCharacters(userId);
+  if (characters.length === 0) {
+    try {
+      // Lazy import avoids circular deps at module load
+      const { getPrefab } = await import("@shared/character-prefabs");
+      const prefab = getPrefab("human_warrior") ?? getPrefab("barbarian_warrior");
+      if (prefab) {
+        const claimed = await claimCharacter(userId, {
+          prefabId: prefab.id,
+          displayName: prefab.name,
+          stats: { ...prefab.baseStats },
+          loadout: { primaryWeapon: "pistol", secondaryWeapon: "knife" },
+          setActive: true,
+        });
+        characters = [claimed];
+        (bootstrapped as any).character = true;
+      }
+    } catch (e) {
+      console.error("bootstrap starter character failed:", e);
+    }
+  }
 
-  return { characters, decks, islands, saves, bootstrapped };
+  const saves = await listGameSaves(userId);
+
+  return {
+    characters,
+    decks,
+    islands,
+    saves,
+    bootstrapped: { ...bootstrapped, character: !!(bootstrapped as any).character },
+  };
 }

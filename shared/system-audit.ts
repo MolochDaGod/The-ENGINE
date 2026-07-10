@@ -16,9 +16,9 @@ export const SYSTEM_CANONICAL = {
   drive: "https://drive.grudge-studio.com",
   launcher: "https://launcher.grudge-studio.com",
   warlordsLegacy: "https://grudgewarlords.com",
-  metaverse: "https://grudge-metaverse.vercel.app",
-  warlordGenesis: "https://warlord-genesis.vercel.app/play",
-  islands: "https://island-crusade-combat-sandbox.vercel.app/arena",
+  metaverse: "https://metaverse.grudge-studio.com",
+  warlordGenesis: "https://genesis.grudge-studio.com/play",
+  islands: "https://islands.grudge-studio.com/arena",
 } as const;
 
 /** Subset of fleet registry for admin grade checks */

@@ -100,8 +100,7 @@ export const UNIVERSE_LAUNCH = {
   },
   warlordGenesis: {
     gameKey: "warlord-genesis",
-    /** Until genesis.grudge-studio.com is wired, keep /play path on vercel. */
-    route: "https://warlord-genesis.vercel.app/play",
+    route: "https://genesis.grudge-studio.com/play",
     label: "Warlord Genesis",
   },
   nemesis: {
@@ -111,13 +110,12 @@ export const UNIVERSE_LAUNCH = {
   },
   metaverse: {
     gameKey: "grudge-metaverse",
-    route: "https://grudge-metaverse.vercel.app",
+    route: "https://metaverse.grudge-studio.com",
     label: "Metaverse",
   },
-  /** Island loop: crusade sandbox until islands.grudge-studio.com is DNS'd. */
   islands: {
     gameKey: "island-crusade-combat-sandbox",
-    route: "https://island-crusade-combat-sandbox.vercel.app/arena",
+    route: "https://islands.grudge-studio.com/arena",
     label: "Home Islands",
   },
 } as const;
