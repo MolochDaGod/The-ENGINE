@@ -140,11 +140,14 @@ export const FLEET_REGISTRY: FleetRegistryEntry[] = [
   {
     id: "grudge-fishing",
     name: "Grudge Fishing",
-    description: "3D fishing with procedural island, animated water, 35 fish species, 5 tiered rods, tension minigame.",
-    canonicalUrl: "https://grudge-fishing-game.vercel.app",
+    description:
+      "Super-engine 3D fishing — pick a Grudge6 race, cast arc, reel, hook, Angeler tension fight on the dock.",
+    canonicalUrl: "/grudge-fishing",
+    embedUrl: "/grudge-fishing?embed=1",
+    allowEmbed: true,
     status: "live",
-    tags: ["solo"],
     forge: true,
+    tags: ["solo"],
   },
   {
     id: "dungeon-crawler",

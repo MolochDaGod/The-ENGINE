@@ -48,6 +48,7 @@ import NotFound from "@/pages/not-found";
 import MageArena from "@/pages/mage-arena";
 import AnnihilateDemo from "@/pages/annihilate-demo";
 import GrudgeControllerDemo from "@/pages/grudge-controller-demo";
+import GrudgeFishingPage from "@/pages/grudge-fishing";
 import WargusDefault from "@/pages/wargus-default";
 import AssetPipeline from "@/pages/asset-pipeline";
 import ComingSoon from "@/pages/coming-soon";
@@ -124,6 +125,7 @@ function Router() {
       <Route path="/mage-arena" component={MageArena} />
       <Route path="/annihilate-demo" component={AnnihilateDemo} />
       <Route path="/grudge-controller" component={GrudgeControllerDemo} />
+      <Route path="/grudge-fishing" component={GrudgeFishingPage} />
       <Route path="/asset-pipeline" component={withAdminGuard(AssetPipeline)} />
       <Route path="/admin-login" component={AdminLogin} />
       <Route path="/system-dev" component={SystemDevPage} />

@@ -423,8 +423,9 @@ const _PORTAL_PRODUCTS_RAW = [
   {
     id: "grudge-fishing",
     name: "Grudge Fishing Game",
-    href: "https://grudge-fishing-game.vercel.app",
-    description: "3D fishing game with procedural island, animated water shader, 35 fish species, 5 tiered rods, and tension minigame.",
+    href: "/grudge-fishing",
+    description:
+      "Super-engine 3D fishing — Grudge6 races, cast arc, reel/hook skills, Angeler tension fight.",
     status: "live",
     section: "play",
     external: true,
