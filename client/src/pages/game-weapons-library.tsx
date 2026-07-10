@@ -23,7 +23,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ItemModelPreview } from "@/components/item-model-preview";
-import CharacterViewport from "@/components/character-viewport";
+import { PrefabModelPreview } from "@/components/prefab-model-preview";
+import type { ClassId, RaceId } from "@shared/character-prefabs";
 import {
   CANONICAL_SOURCES,
   filterLibraryItems,
@@ -43,8 +44,43 @@ const TAB_META: { key: TabKind; label: string; Icon: typeof Swords }[] = [
   { key: "prefab", label: "Prefabs", Icon: Users },
 ];
 
+const PREFAB_RACES: RaceId[] = ["human", "barbarian", "elf", "dwarf", "orc", "undead"];
+const PREFAB_CLASSES: ClassId[] = ["warrior", "mage", "ranger", "worge"];
+
+const RACE_LABELS: Record<RaceId, string> = {
+  human: "Human",
+  barbarian: "Barbarian",
+  elf: "Elf",
+  dwarf: "Dwarf",
+  orc: "Orc",
+  undead: "Undead",
+};
+
 function copyText(text: string) {
   void navigator.clipboard?.writeText(text);
+}
+
+function PrefabIconStack({ item }: { item: CanonicalItem }) {
+  return (
+    <div className="relative w-full h-full flex items-center justify-center p-2">
+      {item.raceIconUrl && (
+        <img
+          src={item.raceIconUrl}
+          alt=""
+          className="w-[72%] h-[72%] object-contain drop-shadow-md"
+          loading="lazy"
+        />
+      )}
+      {item.classIconUrl && (
+        <img
+          src={item.classIconUrl}
+          alt=""
+          className="absolute bottom-1 right-1 w-[38%] h-[38%] object-contain rounded bg-[hsl(225,25%,8%)]/90 border border-[hsl(43,60%,30%)]/40 p-0.5"
+          loading="lazy"
+        />
+      )}
+    </div>
+  );
 }
 
 export default function GameWeaponsLibraryPage() {
@@ -55,6 +91,8 @@ export default function GameWeaponsLibraryPage() {
   const [query, setQuery] = useState("");
   const [tier, setTier] = useState<number | "all">("all");
   const [category, setCategory] = useState("all");
+  const [raceFilter, setRaceFilter] = useState<RaceId | "all">("all");
+  const [classFilter, setClassFilter] = useState<ClassId | "all">("all");
   const [selected, setSelected] = useState<CanonicalItem | null>(null);
 
   useEffect(() => {
@@ -85,10 +123,23 @@ export default function GameWeaponsLibraryPage() {
     return [...lib.weapons, ...lib.armor, ...lib.prefabs];
   }, [lib, tab]);
 
-  const filtered = useMemo(
-    () => filterLibraryItems(pool, { kind: tab === "all" ? "all" : tab, query, tier, category }),
-    [pool, tab, query, tier, category],
-  );
+  const filtered = useMemo(() => {
+    let items = filterLibraryItems(pool, {
+      kind: tab === "all" ? "all" : tab,
+      query,
+      tier: tab === "prefab" ? "all" : tier,
+      category: tab === "prefab" ? "all" : category,
+    });
+    if (tab === "prefab" || tab === "all") {
+      if (raceFilter !== "all") {
+        items = items.filter((i) => i.prefab?.race === raceFilter);
+      }
+      if (classFilter !== "all") {
+        items = items.filter((i) => i.prefab?.classId === classFilter);
+      }
+    }
+    return items;
+  }, [pool, tab, query, tier, category, raceFilter, classFilter]);
 
   const categories = useMemo(() => uniqueCategories(pool), [pool]);
 
@@ -166,6 +217,11 @@ export default function GameWeaponsLibraryPage() {
                 onClick={() => {
                   setTab(key);
                   setCategory("all");
+                  setRaceFilter("all");
+                  setClassFilter("all");
+                  if (key === "prefab" && lib?.prefabs[0]) {
+                    setSelected(lib.prefabs[0]);
+                  }
                 }}
                 className={`text-[10px] px-2.5 py-1 rounded border flex items-center gap-1 transition-colors ${
                   tab === key
@@ -189,25 +245,88 @@ export default function GameWeaponsLibraryPage() {
             />
           </div>
 
-          <div className="flex flex-wrap gap-1.5">
-            <span className="text-[10px] text-[hsl(45,15%,50%)] w-full uppercase tracking-wider">Tier</span>
-            {(["all", 1, 2, 3, 4, 5, 6, 7, 8] as const).map((t) => (
-              <button
-                key={String(t)}
-                type="button"
-                onClick={() => setTier(t)}
-                className={`text-[10px] px-2 py-0.5 rounded border ${
-                  tier === t
-                    ? "border-[hsl(43,85%,55%)]/50 text-[hsl(43,85%,55%)]"
-                    : "border-[hsl(43,60%,30%)]/20 text-[hsl(45,15%,55%)]"
-                }`}
-              >
-                {t === "all" ? "Any" : `T${t}`}
-              </button>
-            ))}
-          </div>
+          {(tab === "prefab" || tab === "all") && (
+            <>
+              <div className="flex flex-wrap gap-1.5">
+                <span className="text-[10px] text-[hsl(45,15%,50%)] w-full uppercase tracking-wider">Race</span>
+                <button
+                  type="button"
+                  onClick={() => setRaceFilter("all")}
+                  className={`text-[10px] px-2 py-0.5 rounded border ${
+                    raceFilter === "all"
+                      ? "border-[hsl(43,85%,55%)]/50 text-[hsl(43,85%,55%)]"
+                      : "border-[hsl(43,60%,30%)]/20 text-[hsl(45,15%,55%)]"
+                  }`}
+                >
+                  All
+                </button>
+                {PREFAB_RACES.map((race) => (
+                  <button
+                    key={race}
+                    type="button"
+                    onClick={() => setRaceFilter(race)}
+                    className={`text-[10px] px-2 py-0.5 rounded border ${
+                      raceFilter === race
+                        ? "border-[hsl(43,85%,55%)]/50 text-[hsl(43,85%,55%)]"
+                        : "border-[hsl(43,60%,30%)]/20 text-[hsl(45,15%,55%)]"
+                    }`}
+                  >
+                    {RACE_LABELS[race]}
+                  </button>
+                ))}
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                <span className="text-[10px] text-[hsl(45,15%,50%)] w-full uppercase tracking-wider">Class</span>
+                <button
+                  type="button"
+                  onClick={() => setClassFilter("all")}
+                  className={`text-[10px] px-2 py-0.5 rounded border capitalize ${
+                    classFilter === "all"
+                      ? "border-[hsl(43,85%,55%)]/50 text-[hsl(43,85%,55%)]"
+                      : "border-[hsl(43,60%,30%)]/20 text-[hsl(45,15%,55%)]"
+                  }`}
+                >
+                  All
+                </button>
+                {PREFAB_CLASSES.map((cls) => (
+                  <button
+                    key={cls}
+                    type="button"
+                    onClick={() => setClassFilter(cls)}
+                    className={`text-[10px] px-2 py-0.5 rounded border capitalize ${
+                      classFilter === cls
+                        ? "border-[hsl(43,85%,55%)]/50 text-[hsl(43,85%,55%)]"
+                        : "border-[hsl(43,60%,30%)]/20 text-[hsl(45,15%,55%)]"
+                    }`}
+                  >
+                    {cls}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
 
-          {categories.length > 1 && (
+          {tab !== "prefab" && (
+            <div className="flex flex-wrap gap-1.5">
+              <span className="text-[10px] text-[hsl(45,15%,50%)] w-full uppercase tracking-wider">Tier</span>
+              {(["all", 1, 2, 3, 4, 5, 6, 7, 8] as const).map((t) => (
+                <button
+                  key={String(t)}
+                  type="button"
+                  onClick={() => setTier(t)}
+                  className={`text-[10px] px-2 py-0.5 rounded border ${
+                    tier === t
+                      ? "border-[hsl(43,85%,55%)]/50 text-[hsl(43,85%,55%)]"
+                      : "border-[hsl(43,60%,30%)]/20 text-[hsl(45,15%,55%)]"
+                  }`}
+                >
+                  {t === "all" ? "Any" : `T${t}`}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {categories.length > 1 && tab !== "prefab" && (
             <select
               value={category}
               onChange={(e) => setCategory(e.target.value)}
@@ -254,7 +373,9 @@ export default function GameWeaponsLibraryPage() {
                   }`}
                 >
                   <div className="aspect-square rounded bg-[#0d0908] mb-2 flex items-center justify-center overflow-hidden">
-                    {item.iconUrl ? (
+                    {item.kind === "prefab" ? (
+                      <PrefabIconStack item={item} />
+                    ) : item.iconUrl ? (
                       <img src={item.iconUrl} alt="" className="w-full h-full object-contain p-1" loading="lazy" />
                     ) : (
                       <Package className="w-8 h-8 text-[hsl(45,15%,40%)]" />
@@ -284,9 +405,30 @@ export default function GameWeaponsLibraryPage() {
           ) : (
             <>
               <div className="flex items-start justify-between gap-2">
-                <div>
-                  <h2 className="text-base font-heading text-[hsl(43,85%,55%)]">{selected.name}</h2>
-                  <p className="text-[10px] text-[hsl(45,15%,50%)] font-mono break-all">{selected.uuid}</p>
+                <div className="flex items-start gap-2 min-w-0">
+                  {selected.kind === "prefab" && (
+                    <div className="relative shrink-0 w-12 h-12">
+                      {selected.raceIconUrl && (
+                        <img src={selected.raceIconUrl} alt="" className="w-full h-full object-contain" />
+                      )}
+                      {selected.classIconUrl && (
+                        <img
+                          src={selected.classIconUrl}
+                          alt=""
+                          className="absolute -bottom-0.5 -right-0.5 w-5 h-5 object-contain rounded bg-[hsl(225,25%,8%)] border border-[hsl(43,60%,30%)]/40 p-0.5"
+                        />
+                      )}
+                    </div>
+                  )}
+                  <div className="min-w-0">
+                    <h2 className="text-base font-heading text-[hsl(43,85%,55%)]">{selected.name}</h2>
+                    <p className="text-[10px] text-[hsl(45,15%,50%)] font-mono break-all">{selected.uuid}</p>
+                    {selected.prefab && (
+                      <p className="text-[10px] text-[hsl(45,15%,55%)] capitalize mt-0.5">
+                        {selected.prefab.race} · {selected.prefab.classId} · {selected.prefab.faction}
+                      </p>
+                    )}
+                  </div>
                 </div>
                 <Button
                   size="sm"
@@ -324,9 +466,7 @@ export default function GameWeaponsLibraryPage() {
               </div>
 
               {selected.prefab && (
-                <div className="rounded-lg overflow-hidden border border-[hsl(43,60%,30%)]/25 aspect-[4/3]">
-                  <CharacterViewport prefab={selected.prefab} laneMode />
-                </div>
+                <PrefabModelPreview key={selected.prefab.id} prefab={selected.prefab} />
               )}
 
               {selected.modelUrl && !selected.prefab && (
@@ -379,7 +519,7 @@ export default function GameWeaponsLibraryPage() {
               {selected.meshNames && selected.meshNames.length > 0 && (
                 <div>
                   <h3 className="text-[10px] uppercase tracking-wider text-[hsl(45,15%,50%)] mb-1">
-                    Wardrobe meshes (toon-rts)
+                    Wardrobe meshes (FBX prefab definition)
                   </h3>
                   <ul className="text-[10px] font-mono text-[hsl(45,15%,65%)] space-y-0.5 max-h-32 overflow-auto">
                     {selected.meshNames.map((m) => (

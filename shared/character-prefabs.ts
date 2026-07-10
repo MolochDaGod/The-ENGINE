@@ -67,8 +67,12 @@ export interface CharacterPrefab {
   };
   /** Starting skill tree (first 3 skills per class) */
   skills: SkillTreeEntry[];
-  /** Icon URL on GitHub CDN */
+  /** Primary card icon (race portrait from assets CDN) */
   iconUrl: string;
+  /** Canonical race icon — assets.grudge-studio.com/icons/pack/races */
+  raceIconUrl: string;
+  /** Canonical class icon — assets.grudge-studio.com/icons/pack/classes */
+  classIconUrl: string;
   /** Class color for UI */
   classColor: string;
   /** Lore snippet */
@@ -88,7 +92,15 @@ const RACE_META: Record<RaceId, { prefix: string; faction: FactionId; modelDir: 
   undead:    { prefix: "UD_",  faction: "legion",  modelDir: "Undead" },
 };
 
-const ICONS_BASE = "https://molochdagod.github.io/ObjectStore/icons";
+const ASSETS_CDN = "https://assets.grudge-studio.com";
+
+export function prefabRaceIconUrl(race: RaceId): string {
+  return `${ASSETS_CDN}/icons/pack/races/${race}.png`;
+}
+
+export function prefabClassIconUrl(classId: ClassId): string {
+  return `${ASSETS_CDN}/icons/pack/classes/${classId}.png`;
+}
 
 // ═══════════════════════════════════════════════════════════════════
 // CLASS DEFINITIONS (shared across races)
@@ -218,13 +230,6 @@ function buildPrefab(race: RaceId, classId: ClassId): CharacterPrefab {
   };
 
   const armor = armorVariant[classId];
-  const classIcon: Record<ClassId, string> = {
-    warrior: "abilities/ability_shield_bash",
-    mage: "abilities/ability_arcane_bolt",
-    ranger: "abilities/ability_arrow_storm",
-    worge: "abilities/ability_bear_form",
-  };
-
   const loreMap: Record<string, string> = {
     human_warrior: "A disciplined soldier of the Western Kingdoms, trained in sword and shield from birth.",
     human_mage: "A scholar of Odin's wisdom, channeling arcane forces through ancient staves.",
@@ -277,7 +282,9 @@ function buildPrefab(race: RaceId, classId: ClassId): CharacterPrefab {
     animationPack: classCfg.animPack,
     baseStats: { ...classCfg.baseStats },
     skills: classCfg.skills.map(s => ({ ...s })),
-    iconUrl: `${ICONS_BASE}/${classIcon[classId]}.png`,
+    iconUrl: prefabRaceIconUrl(race),
+    raceIconUrl: prefabRaceIconUrl(race),
+    classIconUrl: prefabClassIconUrl(classId),
     classColor: classCfg.color,
     lore: loreMap[`${race}_${classId}`] || `A ${raceNames[race]} ${classNames[classId]} of the ${raceMeta.faction} faction.`,
   };

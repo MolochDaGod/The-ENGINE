@@ -8,6 +8,7 @@ import {
   getEquipmentMeshNames,
   type CharacterPrefab,
 } from "@shared/character-prefabs";
+import { portraitGlbUrl, raceIconUrl, classIconUrl } from "@shared/character-meshes";
 import { resolveAssetUrl } from "@/lib/weapon-skills";
 
 const OBJECTSTORE_BASE =
@@ -51,6 +52,8 @@ export interface CanonicalItem {
   source?: string;
   /** Grudge6 race×class prefab (kind === prefab) */
   prefab?: CharacterPrefab;
+  raceIconUrl?: string;
+  classIconUrl?: string;
   /** Visible wardrobe mesh names for toon-rts GLB */
   meshNames?: string[];
   /** Portable JSON for engine ingest */
@@ -140,6 +143,7 @@ function normalizeArmor(raw: Record<string, unknown>): CanonicalItem {
 
 function prefabToItem(prefab: CharacterPrefab): CanonicalItem {
   const meshNames = getEquipmentMeshNames(prefab);
+  const glbUrl = portraitGlbUrl(prefab.race);
   return {
     id: prefab.id,
     uuid: prefab.id,
@@ -147,12 +151,16 @@ function prefabToItem(prefab: CharacterPrefab): CanonicalItem {
     kind: "prefab",
     category: `${prefab.race}_${prefab.classId}`,
     tier: 1,
-    tierLabel: "Starter",
+    tierLabel: prefab.classId,
     tierColor: prefab.classColor,
-    iconUrl: prefab.iconUrl,
+    iconUrl: prefab.raceIconUrl,
+    raceIconUrl: prefab.raceIconUrl ?? raceIconUrl(prefab.race),
+    classIconUrl: prefab.classIconUrl ?? classIconUrl(prefab.classId),
     description: prefab.lore,
     stats: prefab.baseStats as unknown as Record<string, number>,
     meshNames,
+    modelUrl: glbUrl,
+    modelPath: `asset-packs/toon-rts-characters/glb/characters/${prefab.race}.glb`,
     prefab,
     prefabJson: {
       type: "character_prefab",
@@ -162,10 +170,12 @@ function prefabToItem(prefab: CharacterPrefab): CanonicalItem {
       faction: prefab.faction,
       prefix: prefab.prefix,
       modelPath: prefab.modelPath,
+      toonRtsGlb: glbUrl,
       cdnModelKey: prefab.cdnModelKey,
       equipment: prefab.equipment,
       meshNames,
-      toonRtsGlb: CANONICAL_SOURCES.toonRtsGlb(prefab.race),
+      raceIconUrl: prefab.raceIconUrl,
+      classIconUrl: prefab.classIconUrl,
       animationPack: prefab.animationPack,
       skills: prefab.skills,
     },
