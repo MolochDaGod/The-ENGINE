@@ -30,6 +30,46 @@ export const users = pgTable("users", {
     lastPlayedAt: string;
     playCount: number;
   }>>().default([]),
+  /**
+   * Cross-game play settings (graphics/audio/controls + super-engine forge presets).
+   * Fleet clients should read via GET /api/me/play-settings.
+   */
+  playSettings: jsonb("play_settings").$type<{
+    graphics?: {
+      quality?: "low" | "medium" | "high" | "ultra";
+      shadows?: boolean;
+      particleDensity?: number;
+      maxDpr?: number;
+    };
+    audio?: {
+      master?: number;
+      music?: number;
+      sfx?: number;
+      muted?: boolean;
+    };
+    controls?: {
+      mouseSensitivity?: number;
+      mouseInvertY?: boolean;
+      keybindPreset?: string;
+    };
+    forge?: {
+      lighting?: string;
+      camera?: string;
+      toneMapping?: string;
+      exposure?: number;
+      pixelRatio?: number;
+      showGrid?: boolean;
+      fogEnabled?: boolean;
+      autoRotate?: boolean;
+      shadows?: boolean;
+    };
+    accessibility?: {
+      reduceMotion?: boolean;
+      colorblindMode?: string | null;
+      subtitles?: boolean;
+    };
+    updatedAt?: string;
+  }>().default({}),
   createdAt: timestamp("created_at").defaultNow(),
   lastLoginAt: timestamp("last_login_at"),
 });

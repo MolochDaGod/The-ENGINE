@@ -88,7 +88,10 @@ export function defaultHomeIsland(displayName: string) {
   };
 }
 
-/** Fleet launch targets for universe loops */
+/**
+ * Fleet launch targets for universe loops — keep in sync with fleetRegistry
+ * + CANONICAL domains (prefer *.grudge-studio.com over raw vercel when live).
+ */
 export const UNIVERSE_LAUNCH = {
   warlords: {
     gameKey: "warlords",
@@ -97,6 +100,7 @@ export const UNIVERSE_LAUNCH = {
   },
   warlordGenesis: {
     gameKey: "warlord-genesis",
+    /** Until genesis.grudge-studio.com is wired, keep /play path on vercel. */
     route: "https://warlord-genesis.vercel.app/play",
     label: "Warlord Genesis",
   },
@@ -107,12 +111,13 @@ export const UNIVERSE_LAUNCH = {
   },
   metaverse: {
     gameKey: "grudge-metaverse",
-    route: "/grudge-metaverse",
+    route: "https://grudge-metaverse.vercel.app",
     label: "Metaverse",
   },
+  /** Island loop: crusade sandbox until islands.grudge-studio.com is DNS'd. */
   islands: {
-    gameKey: "grudge-islands",
-    route: "https://islands.grudge-studio.com",
+    gameKey: "island-crusade-combat-sandbox",
+    route: "https://island-crusade-combat-sandbox.vercel.app/arena",
     label: "Home Islands",
   },
 } as const;

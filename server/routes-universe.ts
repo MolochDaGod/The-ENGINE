@@ -56,7 +56,73 @@ const saveSchema = z.object({
   progress: z.record(z.string(), z.unknown()),
 });
 
+const DEFAULT_PLAY_SETTINGS = {
+  graphics: { quality: "high" as const, shadows: true, particleDensity: 1, maxDpr: 1.5 },
+  audio: { master: 0.8, music: 0.6, sfx: 0.85, muted: false },
+  controls: { mouseSensitivity: 1, mouseInvertY: false, keybindPreset: "default" },
+  forge: {
+    lighting: "forge",
+    camera: "orbit",
+    toneMapping: "aces",
+    exposure: 1.1,
+    pixelRatio: 1.5,
+    showGrid: true,
+    fogEnabled: true,
+    autoRotate: true,
+    shadows: true,
+  },
+  accessibility: { reduceMotion: false, colorblindMode: null, subtitles: true },
+};
+
+function deepMergeSettings(base: any, patch: any): any {
+  if (!patch || typeof patch !== "object") return base;
+  const out = { ...base };
+  for (const [k, v] of Object.entries(patch)) {
+    if (v && typeof v === "object" && !Array.isArray(v) && typeof (base as any)[k] === "object") {
+      out[k] = deepMergeSettings((base as any)[k] ?? {}, v);
+    } else if (v !== undefined) {
+      out[k] = v;
+    }
+  }
+  return out;
+}
+
 export function registerUniverseRoutes(app: Express): void {
+  // Cross-game play settings (graphics / audio / controls / forge)
+  app.get("/api/me/play-settings", requirePlayer, async (req, res) => {
+    try {
+      const player = getPlayer(req)!;
+      const stored = (player as any).playSettings ?? {};
+      const settings = deepMergeSettings(DEFAULT_PLAY_SETTINGS, stored);
+      return res.json({ settings, defaults: DEFAULT_PLAY_SETTINGS });
+    } catch (error) {
+      console.error("GET /api/me/play-settings", error);
+      return res.status(500).json({ error: "Failed to load play settings" });
+    }
+  });
+
+  app.patch("/api/me/play-settings", requirePlayer, async (req, res) => {
+    try {
+      const player = getPlayer(req)!;
+      const body = req.body?.settings ?? req.body ?? {};
+      if (!body || typeof body !== "object" || Array.isArray(body)) {
+        return res.status(400).json({ error: "settings object required" });
+      }
+      const current = (player as any).playSettings ?? {};
+      const merged = deepMergeSettings(
+        deepMergeSettings(DEFAULT_PLAY_SETTINGS, current),
+        body,
+      );
+      merged.updatedAt = new Date().toISOString();
+      const { storage } = await import("./storage");
+      const updated = await storage.updateUser(player.id, { playSettings: merged } as any);
+      return res.json({ settings: updated?.playSettings ?? merged });
+    } catch (error) {
+      console.error("PATCH /api/me/play-settings", error);
+      return res.status(500).json({ error: "Failed to save play settings" });
+    }
+  });
+
   // Full universe snapshot + bootstrap starter content
   app.get("/api/me/universe", requirePlayer, async (req, res) => {
     try {

@@ -210,6 +210,16 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  // Idempotent columns/indexes for account universe + play settings
+  try {
+    const { ensureAccountSchema } = await import("./db-ensure");
+    const result = await ensureAccountSchema();
+    if (result.ok) log(`db-ensure ok (applied ${result.applied})`);
+    else log(`db-ensure partial: ${result.error}`);
+  } catch (e: any) {
+    log(`db-ensure skipped: ${e?.message || e}`);
+  }
+
   const server = await registerRoutes(app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {

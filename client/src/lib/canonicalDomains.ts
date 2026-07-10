@@ -17,9 +17,16 @@ export const CANONICAL = {
   arena: "https://grudge-arena.grudge-studio.com",
   launcher: "https://launcher.grudge-studio.com",
   game: "https://game.grudge-studio.com",
+  nemesis: "https://nemesis.grudge-studio.com",
+  drive: "https://drive.grudge-studio.com",
+  survival: "https://grudges.grudge-studio.com",
   threePort: "https://grudge-three-port.vercel.app",
   warlords: "https://client.grudge-studio.com",
   warlordsLegacy: "https://grudgewarlords.com",
+  /** Pending DNS — fall back to vercel until CNAME live */
+  metaverse: "https://grudge-metaverse.vercel.app",
+  warlordGenesis: "https://warlord-genesis.vercel.app/play",
+  islands: "https://island-crusade-combat-sandbox.vercel.app/arena",
 } as const;
 
 /** Roles that unlock paid Forge IDE / premium studio tools. */
@@ -78,6 +85,10 @@ export function toCanonicalUrl(url: string): string {
     "https://wcs.grudge-studio.com": CANONICAL.client,
     "https://grudgewarlords.com": CANONICAL.warlords,
     "https://www.grudgewarlords.com": CANONICAL.warlords,
+    "https://nexus-nemesis-game.vercel.app": CANONICAL.nemesis,
+    "https://nemesis.grudge-studio.com/": CANONICAL.nemesis,
+    "https://islands.grudge-studio.com": CANONICAL.islands,
+    "https://islands.grudge-studio.com/": CANONICAL.islands,
   };
   const bare = url.replace(/\/$/, "");
   return map[bare] ?? map[url] ?? url;

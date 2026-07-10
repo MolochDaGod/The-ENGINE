@@ -81,6 +81,37 @@ export function GameTerminal({ games = FORGE_GAMES, defaultGameId }: GameTermina
   const [forgeSettings, setForgeSettings] = useState<ForgeRenderSettings>(DEFAULT_FORGE_SETTINGS);
   const searchRef = useRef<HTMLInputElement>(null);
 
+  // Hydrate super-engine forge presets from account play settings when signed in
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/me/play-settings", { credentials: "include" });
+        if (!res.ok) return;
+        const data = await res.json();
+        const forge = data?.settings?.forge;
+        if (!forge || cancelled) return;
+        setForgeSettings((prev) => ({
+          ...prev,
+          ...(forge.lighting ? { lighting: forge.lighting } : {}),
+          ...(forge.camera ? { camera: forge.camera } : {}),
+          ...(forge.toneMapping ? { toneMapping: forge.toneMapping } : {}),
+          ...(typeof forge.exposure === "number" ? { exposure: forge.exposure } : {}),
+          ...(typeof forge.pixelRatio === "number" ? { pixelRatio: forge.pixelRatio } : {}),
+          ...(typeof forge.showGrid === "boolean" ? { showGrid: forge.showGrid } : {}),
+          ...(typeof forge.fogEnabled === "boolean" ? { fogEnabled: forge.fogEnabled } : {}),
+          ...(typeof forge.autoRotate === "boolean" ? { autoRotate: forge.autoRotate } : {}),
+          ...(typeof forge.shadows === "boolean" ? { shadows: forge.shadows } : {}),
+        }));
+      } catch {
+        /* guest / offline */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const resolvedLegacy = legacyId ? resolveFleetGameId(legacyId) : null;
 
   useEffect(() => {
