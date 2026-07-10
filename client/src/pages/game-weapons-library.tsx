@@ -371,6 +371,11 @@ export default function GameWeaponsLibraryPage() {
                       ? "border-[hsl(43,85%,55%)]/60 bg-[hsl(43,85%,55%)]/8"
                       : "border-[hsl(43,60%,30%)]/20 bg-[hsl(225,25%,10%)]/60"
                   }`}
+                  style={
+                    item.kind === "weapon" && item.tier >= 4
+                      ? { boxShadow: `0 0 12px ${item.tierColor}18` }
+                      : undefined
+                  }
                 >
                   <div className="aspect-square rounded bg-[#0d0908] mb-2 flex items-center justify-center overflow-hidden">
                     {item.kind === "prefab" ? (
@@ -470,7 +475,14 @@ export default function GameWeaponsLibraryPage() {
               )}
 
               {selected.modelUrl && !selected.prefab && (
-                <ItemModelPreview modelUrl={selected.modelUrl} />
+                <ItemModelPreview
+                  key={`${selected.id}-${selected.tier}`}
+                  modelUrl={selected.modelUrl}
+                  tier={selected.tier}
+                  tierColor={selected.tierColor}
+                  tierLabel={selected.tierLabel}
+                  className="relative w-full h-[260px] rounded-lg border overflow-hidden bg-[#0d0908]"
+                />
               )}
 
               {selected.stats && Object.keys(selected.stats).length > 0 && (

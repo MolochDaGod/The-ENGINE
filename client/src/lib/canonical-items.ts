@@ -90,7 +90,7 @@ function normalizeWeapon(raw: Record<string, unknown>): CanonicalItem {
     abilities: Array.isArray(raw.abilities) ? (raw.abilities as string[]) : undefined,
     passives: Array.isArray(raw.passives) ? (raw.passives as string[]) : undefined,
     signature: raw.signature as string | undefined,
-    modelUrl: raw.modelUrl as string | undefined,
+    modelUrl: resolveAssetUrl(String(raw.modelUrl || raw.modelPath || "")),
     modelPath: raw.modelPath as string | undefined,
     subCategory: raw.subCategory as string | undefined,
     source: raw.source as string | undefined,
