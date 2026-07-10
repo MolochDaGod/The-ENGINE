@@ -9,7 +9,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Sparkles, Users, ExternalLink, ArrowLeft, Swords } from "lucide-react";
+import { Sparkles, Users, ExternalLink, ArrowLeft, Swords, BookOpen } from "lucide-react";
 import CharacterViewport from "@/components/character-viewport";
 import {
   CHARACTER_PREFABS,
@@ -179,6 +179,11 @@ export default function CharacterViewerPage() {
               <Sparkles className="w-3.5 h-3.5 mr-1" />
               VFX {vfxMode ? "on" : "off"}
             </Button>
+            <Link href="/game/weapons">
+              <Button variant="outline" size="sm" className="border-[hsl(43,60%,30%)]/40">
+                <BookOpen className="w-3.5 h-3.5 mr-1" /> Items
+              </Button>
+            </Link>
             <Link href="/roster">
               <Button variant="outline" size="sm" className="border-[hsl(43,60%,30%)]/40">
                 <Swords className="w-3.5 h-3.5 mr-1" /> Roster

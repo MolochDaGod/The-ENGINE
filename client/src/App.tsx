@@ -52,6 +52,7 @@ import AssetPipeline from "@/pages/asset-pipeline";
 import ComingSoon from "@/pages/coming-soon";
 import CharacterViewerPage from "@/pages/character-viewer";
 import CharacterRosterPage from "@/pages/character-roster";
+import GameWeaponsLibraryPage from "@/pages/game-weapons-library";
 import ConanInfoPage from "@/pages/conan-info";
 import VoxelSandbox from "@/pages/voxel-sandbox";
 import PolyFighter from "@/pages/polyfighter";
@@ -130,6 +131,7 @@ function Router() {
       <Route path="/grudge-brawl" component={GrudgeBrawl} />
       <Route path="/viewer" component={CharacterViewerPage} />
       <Route path="/roster" component={CharacterRosterPage} />
+      <Route path="/game/weapons" component={GameWeaponsLibraryPage} />
       <Route path="/conan" component={ConanInfoPage} />
       <Route path="/starway-gruda" component={ComingSoon} />
       <Route path="/rts-star-armada" component={ComingSoon} />
@@ -153,6 +155,7 @@ function AppShell() {
   const isViewerRoute =
     location === "/viewer" || location.startsWith("/viewer?") ||
     location === "/roster" || location.startsWith("/roster?") ||
+    location === "/game/weapons" || location.startsWith("/game/weapons?") ||
     location === "/conan" || location.startsWith("/conan?");
   const isSuperEngineRoute =
     location === "/super-engine" ||
