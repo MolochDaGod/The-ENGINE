@@ -67,6 +67,15 @@ const FORGE_CARD_META: Record<string, ForgeCardMeta> = {
     previewType: "threejs",
     cardImage: gameImgWargus,
   },
+  "grudge-forge": {
+    type: "IDE / Paid",
+    emoji: "🛠️",
+    color: "from-orange-900/60 to-stone-900/40",
+    gradientBorder: "from-orange-500 via-amber-500 to-yellow-500",
+    icon: Cpu,
+    capabilities: ["3D", "Physics", "Multiplayer"],
+    previewType: "static",
+  },
   "rts-grudge": {
     type: "RTS",
     emoji: "⚔️",
@@ -294,6 +303,7 @@ function entryToCard(entry: FleetRegistryEntry): FleetGameCard {
 /** Ordered forge grid — flagship first, then live fleet, then portal demos. */
 const FORGE_ORDER = [
   "warlords",
+  "grudge-forge",
   "survival-game",
   "betta-warlords",
   "grudge-arena",

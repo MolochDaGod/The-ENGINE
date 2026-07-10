@@ -162,7 +162,12 @@
       "destination": "/api/auth/page"
     },
     {
-      "source": "/((?!api/|ws/).*)",
+      "source": "/",
+      "has": [{ "type": "host", "value": "forge.grudge-studio.com" }],
+      "destination": "/forge"
+    },
+    {
+      "source": "/((?!api/|ws/|emulator\\.html|catalog/|assets/|games/|models/|embed/|vendor/|favicon|apple-touch|grudge-|sw\\.js|manifest).*)",
       "destination": "/index.html"
     }
   ],

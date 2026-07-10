@@ -56,6 +56,7 @@ import ConanInfoPage from "@/pages/conan-info";
 import VoxelSandbox from "@/pages/voxel-sandbox";
 import PolyFighter from "@/pages/polyfighter";
 import TerraForge from "@/pages/terraforge";
+import ForgeAccessPage from "@/pages/forge-access";
 import GrudgeBrawl from "@/pages/grudge-brawl";
 import AdminGuard from "@/components/admin-guard";
 import AdminEntryButton from "@/components/admin-entry-button";
@@ -87,7 +88,9 @@ function Router() {
       <Route path="/cloud" component={CloudPage} />
       <Route path="/games" component={GameLibrary} />
       <Route path="/game-library" component={GameLibrary} />
+      <Route path="/play/fleet/:id" component={GamePlayer} />
       <Route path="/play/:id" component={GamePlayer} />
+      <Route path="/forge" component={ForgeAccessPage} />
       <Route path="/scraping" component={withAdminGuard(Scraping)} />
       <Route path="/store" component={Store} />
       <Route path="/tower-defense" component={TowerDefense} />

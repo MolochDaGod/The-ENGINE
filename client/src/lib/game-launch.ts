@@ -86,6 +86,15 @@ export function openGameTab(url: string): void {
 }
 
 export function navigateGame(route: string, navigate: (path: string) => void): void {
+  // Paid Forge IDE — always use portal gate
+  if (
+    route === "https://forge.grudge-studio.com" ||
+    route.startsWith("https://forge.grudge-studio.com/") ||
+    route === "/forge"
+  ) {
+    navigate("/forge");
+    return;
+  }
   if (isInternalRoute(route)) {
     navigate(route);
     return;

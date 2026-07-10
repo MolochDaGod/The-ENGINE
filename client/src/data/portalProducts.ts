@@ -23,7 +23,7 @@ const _PORTAL_PRODUCTS_RAW = [
   {
     id: "warlords",
     name: "Grudge Warlords",
-    href: "https://grudgewarlords.com",
+    href: "https://client.grudge-studio.com",
     description: "The main live product: character creation, combat, islands, professions, and Warlords progression.",
     status: "live",
     section: "featured",
@@ -182,7 +182,7 @@ const _PORTAL_PRODUCTS_RAW = [
   {
     id: "grudge-studio-puter",
     name: "Grudge Studio",
-    href: "https://grudgewarlords.com",
+    href: "https://client.grudge-studio.com",
     description: "The Grudge Studio hub on Puter — gateway to grudgewarlords.com with character creation and crafting.",
     status: "live",
     section: "featured",
@@ -343,13 +343,13 @@ const _PORTAL_PRODUCTS_RAW = [
   {
     id: "grudge-forge",
     name: "Grudge Studio Forge",
-    href: "https://grudge-studio-forge.vercel.app",
-    description: "Game-making IDE for the Grudge ecosystem. Build scenes, edit assets, and deploy games directly from the browser.",
+    href: "/forge",
+    description: "Paid game-making IDE. Build scenes, edit assets, and deploy — requires premium / paid Grudge ID.",
     status: "live",
     section: "studio",
-    external: true,
+    external: false,
     authRequired: true,
-    note: "IDE",
+    note: "Paid IDE · forge.grudge-studio.com",
   },
   {
     id: "grudge-coder",

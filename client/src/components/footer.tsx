@@ -42,7 +42,8 @@ export default function Footer() {
           <div>
             <h4 className="font-heading text-[hsl(43,85%,55%)] text-sm uppercase tracking-wider mb-4">Connect</h4>
             <ul className="space-y-2">
-              <li><a href="https://grudgewarlords.com" target="_blank" rel="noopener noreferrer" className="text-[hsl(45,15%,55%)] hover:text-[hsl(43,85%,55%)] text-sm transition-colors font-body">Grudge Warlords</a></li>
+              <li><a href="https://client.grudge-studio.com" target="_blank" rel="noopener noreferrer" className="text-[hsl(45,15%,55%)] hover:text-[hsl(43,85%,55%)] text-sm transition-colors font-body">Grudge Warlords</a></li>
+              <li><a href="/forge" className="text-[hsl(45,15%,55%)] hover:text-[hsl(43,85%,55%)] text-sm transition-colors font-body">Studio Forge</a></li>
               <li><button onClick={() => openAuthModal({ initialTab: "signin" })} className="text-[hsl(45,15%,55%)] hover:text-[hsl(43,85%,55%)] text-sm transition-colors font-body text-left">Sign In</button></li>
               <li><Link href="/account" className="text-[hsl(45,15%,55%)] hover:text-[hsl(43,85%,55%)] text-sm transition-colors font-body">My Account</Link></li>
             </ul>

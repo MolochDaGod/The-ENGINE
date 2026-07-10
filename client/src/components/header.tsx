@@ -87,13 +87,14 @@ export default function Header() {
   }, [location]);
 
   const navLinks = [
-    { name: "Warlords", href: "https://grudgewarlords.com", icon: Swords, external: true, authRequired: true },
+    { name: "Warlords", href: "https://client.grudge-studio.com", icon: Swords, external: true, authRequired: true },
     { name: "Nexus", href: "/#products", icon: Layers3 },
     { name: "Armada", href: "/#play", icon: Flame },
     { name: "Compete", href: "/leaderboards", icon: Trophy },
     { name: "Treaty Chat", href: "/chat", icon: MessageSquare },
     { name: "Play", href: "/super-engine", icon: Gamepad },
     { name: "Games", href: "/games", icon: Library },
+    { name: "Forge", href: "/forge", icon: Wrench },
     { name: "Studio", href: "/#studio", icon: Wrench },
   ] as const;
 
