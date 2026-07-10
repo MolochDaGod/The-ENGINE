@@ -19,9 +19,22 @@ import {
   type RaceId,
   type ClassId,
 } from "@shared/character-prefabs";
+import {
+  loadWeaponSkillsCatalog,
+  getDefaultHotbar,
+  type WeaponSkill,
+} from "@/lib/weapon-skills";
 
 const RACES: RaceId[] = ["human", "barbarian", "elf", "dwarf", "orc", "undead"];
 const CLASSES: ClassId[] = ["warrior", "mage", "ranger", "worge"];
+
+/** Default mainhand weapon type per class (ObjectStore master-weaponSkills). */
+const CLASS_WEAPON: Record<ClassId, string> = {
+  warrior: "SWORD",
+  mage: "STAFF",
+  ranger: "BOW",
+  worge: "SPEAR",
+};
 
 const RACE_LABELS: Record<RaceId, string> = {
   human: "Human",
@@ -58,6 +71,8 @@ export default function CharacterViewerPage() {
   const [vfxMode, setVfxMode] = useState(parsed.vfx);
   const [raceFilter, setRaceFilter] = useState<RaceId>(parsed.race);
   const [classFilter, setClassFilter] = useState<ClassId>(parsed.classId);
+  const [skillBar, setSkillBar] = useState<WeaponSkill[]>([]);
+  const [catalogMeta, setCatalogMeta] = useState<{ version: string; total: number } | null>(null);
 
   const selectedPrefab = useMemo(() => {
     if (parsed.id) {
@@ -77,6 +92,24 @@ export default function CharacterViewerPage() {
       ),
     [raceFilter, classFilter],
   );
+
+  // Canonical ObjectStore weapon skills (icons via assets CDN)
+  useEffect(() => {
+    let cancelled = false;
+    const weaponId = CLASS_WEAPON[selectedPrefab.classId] || "SWORD";
+    loadWeaponSkillsCatalog()
+      .then((cat) => {
+        if (cancelled) return;
+        setCatalogMeta({ version: cat.version, total: cat.totalSkills });
+        setSkillBar(getDefaultHotbar(weaponId, 4));
+      })
+      .catch(() => {
+        if (!cancelled) setSkillBar([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedPrefab.classId]);
 
   const syncUrl = useCallback(
     (prefab: CharacterPrefab, vfx: boolean) => {
@@ -249,6 +282,52 @@ export default function CharacterViewerPage() {
 
         <main className="min-h-[420px] flex flex-col gap-3 min-h-0">
           <CharacterViewport key={selectedPrefab.id + (vfxMode ? "-vfx" : "")} prefab={selectedPrefab} vfxMode={vfxMode} />
+          {skillBar.length > 0 && (
+            <div className="px-1">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-[10px] uppercase tracking-wider text-[hsl(43,85%,55%)]">
+                  {CLASS_WEAPON[selectedPrefab.classId]} skills
+                </span>
+                {catalogMeta && (
+                  <a
+                    href="https://browse.grudge-studio.com/WEAPON_SKILLS"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-[10px] text-[hsl(45,15%,50%)] hover:text-[hsl(43,85%,55%)]"
+                  >
+                    ObjectStore v{catalogMeta.version} · {catalogMeta.total} skills →
+                  </a>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {skillBar.map((sk, i) => (
+                  <div
+                    key={sk.id}
+                    title={`${sk.name}${sk.description ? ` — ${sk.description}` : ""}`}
+                    className="flex items-center gap-2 rounded-md border border-[hsl(43,60%,30%)]/35 bg-[hsl(225,25%,10%)] px-2 py-1.5 min-w-[120px]"
+                  >
+                    <span className="text-[9px] text-[hsl(45,15%,45%)] w-3">{i + 1}</span>
+                    <img
+                      src={sk.iconUrl}
+                      alt=""
+                      className="w-8 h-8 object-contain rounded bg-[hsl(225,30%,8%)]"
+                      loading="lazy"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).style.visibility = "hidden";
+                      }}
+                    />
+                    <div className="min-w-0">
+                      <div className="text-[11px] font-medium truncate max-w-[100px]">{sk.name}</div>
+                      <div className="text-[9px] text-[hsl(45,15%,50%)]">
+                        {sk.slotType}
+                        {sk.cooldown != null && sk.cooldown > 0 ? ` · ${sk.cooldown}s` : ""}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           <p className="text-[11px] text-[hsl(45,15%,50%)] leading-relaxed px-1">
             {selectedPrefab.lore}
           </p>

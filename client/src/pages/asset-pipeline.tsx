@@ -471,10 +471,10 @@ export default function AssetPipeline() {
               </p>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 {[
-                  { name: "Weapons", count: 843, url: "https://grudge-objectstore.pages.dev/api/v1/master-weapons.json" },
-                  { name: "Armor", count: 1218, url: "https://grudge-objectstore.pages.dev/api/v1/master-armor.json" },
-                  { name: "Consumables", count: 137, url: "https://grudge-objectstore.pages.dev/api/v1/master-consumables.json" },
-                  { name: "Materials", count: "93+", url: "https://grudge-objectstore.pages.dev/api/v1/master-materials.json" },
+                  { name: "Weapons", count: 843, url: "https://objectstore.grudge-studio.com/api/v1/master-weapons.json" },
+                  { name: "Weapon Skills", count: 268, url: "https://objectstore.grudge-studio.com/api/v1/master-weaponSkills.json" },
+                  { name: "Armor", count: 1218, url: "https://objectstore.grudge-studio.com/api/v1/master-armor.json" },
+                  { name: "Materials", count: "93+", url: "https://objectstore.grudge-studio.com/api/v1/master-materials.json" },
                 ].map(db => (
                   <a
                     key={db.name}

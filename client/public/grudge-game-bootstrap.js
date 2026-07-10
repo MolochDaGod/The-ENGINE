@@ -27,15 +27,26 @@
   var ID_KEY = 'grudge_id';
   var USER_KEY = 'grudge_username';
 
+  // ONE TRUTH fleet endpoints — prefer these over hard-coded per-game URLs.
+  // gameData = Railway Postgres SSOT (characters/wallet/island).
+  // api.grudge-studio.com is DEPRECATED (redirects to portal HTML).
   var FLEET = {
     auth: 'https://id.grudge-studio.com',
-    api: 'https://api.grudge-studio.com',
-    account: 'https://account.grudge-studio.com',
+    /** @deprecated use gameData / same-origin /api on portal */
+    api: 'https://grudge-api-production-0d46.up.railway.app',
+    gameData: 'https://grudge-api-production-0d46.up.railway.app',
+    account: 'https://grudge-api-production-0d46.up.railway.app',
     assets: 'https://assets.grudge-studio.com',
     objectstore: 'https://objectstore.grudge-studio.com',
+    info: 'https://info.grudge-studio.com',
+    browse: 'https://browse.grudge-studio.com',
+    weaponSkills: 'https://objectstore.grudge-studio.com/api/v1/master-weaponSkills.json',
     ai: 'https://ai.grudge-studio.com',
-    ws: 'wss://ws.grudge-studio.com',
-    portal: 'https://client.grudge-studio.com',
+    ws: 'wss://grudge-api-production-0d46.up.railway.app',
+    world: 'wss://world.grudge-studio.com',
+    portal: 'https://grudge-studio.com',
+    engine: 'https://the-engine-snowy.vercel.app',
+    open: 'https://gameopen.vercel.app',
     puterSdk: 'https://js.puter.com/v2/'
   };
 
