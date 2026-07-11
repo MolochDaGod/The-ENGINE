@@ -37,7 +37,7 @@
 body {
   font-family: var(--font-body);
   color: var(--text);
-  background: var(--bg);
+  background: #05050a;
   min-height: 100vh;
   display: flex;
   align-items: center;
@@ -46,20 +46,38 @@ body {
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
 }
+/* Racalvin The Pirate King — full-page brand backdrop (also used by fleet modal) */
 .bg {
   position: fixed;
   inset: 0;
   pointer-events: none;
+  z-index: 0;
+  background-color: #05050a;
+  background-image:
+    linear-gradient(180deg, rgba(5, 5, 10, 0.55) 0%, rgba(5, 5, 10, 0.72) 45%, rgba(5, 5, 10, 0.88) 100%),
+    radial-gradient(ellipse 70% 55% at 18% 40%, rgba(0, 0, 0, 0.15), transparent 60%),
+    url("https://id.grudge-studio.com/auth-bg-racalvin.jpg");
+  background-size: cover, cover, cover;
+  background-position: center, center, left center;
+  background-repeat: no-repeat;
+}
+.bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
   background:
-    radial-gradient(ellipse 80% 50% at 50% -10%, rgba(201, 162, 39, 0.12), transparent 55%),
-    radial-gradient(ellipse 60% 40% at 100% 100%, rgba(201, 162, 39, 0.04), transparent 50%);
+    radial-gradient(ellipse 90% 70% at 50% 50%, transparent 30%, rgba(0, 0, 0, 0.55) 100%),
+    linear-gradient(90deg, rgba(5, 5, 10, 0.35) 0%, transparent 40%, rgba(5, 5, 10, 0.5) 100%);
+  pointer-events: none;
 }
 .shell { position: relative; z-index: 1; width: 100%; max-width: 400px; }
 .card {
-  background: var(--surface);
-  border: 1px solid var(--border);
+  background: rgba(17, 17, 24, 0.82);
+  backdrop-filter: blur(16px) saturate(1.15);
+  -webkit-backdrop-filter: blur(16px) saturate(1.15);
+  border: 1px solid rgba(201, 162, 39, 0.18);
   border-radius: var(--radius-lg);
-  box-shadow: var(--shadow);
+  box-shadow: var(--shadow), 0 0 0 1px rgba(0, 0, 0, 0.35) inset;
   padding: 36px 32px 28px;
   animation: enter 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
@@ -188,7 +206,7 @@ body {
 }
 .oauth-row {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 8px;
 }
 .oauth, .prov {
@@ -207,6 +225,34 @@ body {
   background: #1e1e26;
 }
 .oauth svg, .prov svg { width: 20px; height: 20px; }
+/* 4th option: Grudge ID via Puter (branded, labeled) */
+.oauth.oauth-grudge {
+  aspect-ratio: auto;
+  min-height: 72px;
+  padding: 8px 4px 6px;
+  gap: 4px;
+  grid-template-rows: 1fr auto;
+  border-color: rgba(201, 162, 39, 0.35);
+  background: linear-gradient(180deg, rgba(201, 162, 39, 0.08), var(--surface-raised));
+}
+.oauth.oauth-grudge:hover:not(:disabled) {
+  border-color: var(--gold);
+  background: linear-gradient(180deg, rgba(201, 162, 39, 0.16), #1e1e26);
+}
+.oauth.oauth-grudge img {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  object-fit: cover;
+  display: block;
+}
+.oauth.oauth-grudge .oauth-label {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--gold);
+  line-height: 1.1;
+}
 .more-panel {
   margin-top: 12px;
   padding-top: 12px;
@@ -414,7 +460,16 @@ body {
 .foot-links a { margin: 0 6px; }
 @media (max-width: 440px) {
   body { padding: 0; align-items: stretch; }
-  .card { min-height: 100vh; border-radius: 0; border: none; padding: 40px 24px 28px; display: flex; flex-direction: column; justify-content: center; }
+  .bg { background-position: center, center, 15% center; }
+  .card {
+    min-height: 100vh; border-radius: 0; border: none; border-top: 1px solid rgba(201,162,39,0.12);
+    padding: 40px 24px 28px; display: flex; flex-direction: column; justify-content: center;
+    background: rgba(8, 8, 12, 0.88);
+  }
+}
+@media (min-width: 900px) {
+  .shell { max-width: 420px; margin-right: min(8vw, 72px); margin-left: auto; }
+  .bg { background-position: center, center, left center; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
@@ -428,7 +483,8 @@ body {
 <main class="card" role="main" aria-label="Grudge Studio sign in">
   <header class="brand">
     <div class="logo" aria-hidden="true">
-      <img src="https://grudge-studio.com/grudge-logo.png" alt="Grudge Studio" width="40" height="40" style="border-radius:8px;object-fit:contain" />
+      <img src="https://id.grudge-studio.com/grudge-id-logo.png" alt="" width="40" height="40" style="border-radius:50%;object-fit:cover" onerror="this.onerror=null;this.src='https://id.grudge-studio.com/brand/logo.png';if(!this.complete){this.style.display='none';this.nextElementSibling.style.display='block'}" />
+      <svg viewBox="0 0 32 32" fill="none" style="display:none"><path d="M16 2l11 5v8c0 7-4.7 12.4-11 15-6.3-2.6-11-8-11-15V7l11-5z" stroke="url(#g)" stroke-width="1.6" stroke-linejoin="round"/><path d="M16 9.5l2.2 4.6 5 .6-3.7 3.4 1 5-4.5-2.5L11.5 23l1-5L8.8 14.7l5-.6L16 9.5z" fill="url(#g)"/><defs><linearGradient id="g" x1="5" y1="2" x2="27" y2="30"><stop stop-color="#e8c547"/><stop offset="1" stop-color="#8c7420"/></linearGradient></defs></svg>
     </div>
     <h1>Grudge Studio</h1>
     <p id="brand-sub">One account for every game</p>
@@ -447,10 +503,15 @@ body {
     </button>
     <button class="btn btn-secondary" id="btn-email" type="button">Continue with email</button>
     <div class="divider"><span>or</span></div>
-    <div class="oauth-row">
-      <button class="oauth" id="btn-google" type="button" title="Google" aria-label="Sign in with Google"><svg viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.27-4.74 3.27-8.1z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84A11 11 0 0 0 12 23z"/><path fill="#FBBC05" d="M5.84 14.1a6.6 6.6 0 0 1 0-4.2V7.06H2.18a11 11 0 0 0 0 9.88l3.66-2.84z"/><path fill="#EA4335" d="M12 4.75c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 1.48 14.97.5 12 .5A11 11 0 0 0 2.18 7.06l3.66 2.84C6.71 7.3 9.14 4.75 12 4.75z"/></svg></button>
-      <button class="oauth" id="btn-discord" type="button" title="Discord" aria-label="Sign in with Discord"><svg viewBox="0 0 24 24" fill="#5865F2"><path d="M20.32 4.37A19.8 19.8 0 0 0 15.4 2.9a13.6 13.6 0 0 0-.62 1.27 18.3 18.3 0 0 0-5.55 0A13 13 0 0 0 8.6 2.9a19.7 19.7 0 0 0-4.93 1.47C.55 9.04-.3 13.58.13 18.06a19.9 19.9 0 0 0 6.04 3.06c.49-.66.92-1.36 1.29-2.1-.71-.27-1.39-.6-2.03-.99.17-.12.34-.25.5-.38a14.2 14.2 0 0 0 12.14 0c.16.14.33.26.5.38-.64.39-1.32.72-2.03.99.37.74.8 1.44 1.29 2.1a19.8 19.8 0 0 0 6.04-3.06c.5-5.18-.85-9.68-3.55-13.69zM8.02 15.33c-1.18 0-2.15-1.08-2.15-2.4 0-1.32.95-2.4 2.15-2.4s2.17 1.09 2.15 2.4c0 1.32-.95 2.4-2.15 2.4zm7.96 0c-1.18 0-2.15-1.08-2.15-2.4 0-1.32.95-2.4 2.15-2.4s2.17 1.09 2.15 2.4c0 1.32-.94 2.4-2.15 2.4z"/></svg></button>
-      <button class="oauth" id="btn-github" type="button" title="GitHub" aria-label="Sign in with GitHub"><svg viewBox="0 0 24 24" fill="#e4e4e7"><path d="M12 2C6.48 2 2 6.48 2 12c0 4.42 2.87 8.17 6.84 9.5.5.08.66-.23.66-.5v-1.69c-2.77.6-3.36-1.34-3.36-1.34-.46-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.87 1.52 2.34 1.07 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.92 0-1.11.38-2 1.03-2.71-.1-.25-.45-1.29.1-2.64 0 0 .84-.27 2.75 1.02.79-.22 1.65-.33 2.5-.33.85 0 1.71.11 2.5.33 1.91-1.29 2.75-1.02 2.75-1.02.55 1.35.2 2.39.1 2.64.65.71 1.03 1.6 1.03 2.71 0 3.82-2.34 4.66-4.57 4.91.36.31.69.92.69 1.85V21c0 .27.16.59.67.5C19.14 20.16 22 16.42 22 12A10 10 0 0 0 12 2z"/></svg></button>
+    <div class="oauth-row" role="group" aria-label="Sign-in providers">
+      <button class="oauth" id="btn-google" type="button" title="Google" aria-label="Sign in with Google"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.27-4.74 3.27-8.1z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84A11 11 0 0 0 12 23z"/><path fill="#FBBC05" d="M5.84 14.1a6.6 6.6 0 0 1 0-4.2V7.06H2.18a11 11 0 0 0 0 9.88l3.66-2.84z"/><path fill="#EA4335" d="M12 4.75c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 1.48 14.97.5 12 .5A11 11 0 0 0 2.18 7.06l3.66 2.84C6.71 7.3 9.14 4.75 12 4.75z"/></svg></button>
+      <button class="oauth" id="btn-discord" type="button" title="Discord" aria-label="Sign in with Discord"><svg viewBox="0 0 24 24" fill="#5865F2" aria-hidden="true"><path d="M20.32 4.37A19.8 19.8 0 0 0 15.4 2.9a13.6 13.6 0 0 0-.62 1.27 18.3 18.3 0 0 0-5.55 0A13 13 0 0 0 8.6 2.9a19.7 19.7 0 0 0-4.93 1.47C.55 9.04-.3 13.58.13 18.06a19.9 19.9 0 0 0 6.04 3.06c.49-.66.92-1.36 1.29-2.1-.71-.27-1.39-.6-2.03-.99.17-.12.34-.25.5-.38a14.2 14.2 0 0 0 12.14 0c.16.14.33.26.5.38-.64.39-1.32.72-2.03.99.37.74.8 1.44 1.29 2.1a19.8 19.8 0 0 0 6.04-3.06c.5-5.18-.85-9.68-3.55-13.69zM8.02 15.33c-1.18 0-2.15-1.08-2.15-2.4 0-1.32.95-2.4 2.15-2.4s2.17 1.09 2.15 2.4c0 1.32-.95 2.4-2.15 2.4zm7.96 0c-1.18 0-2.15-1.08-2.15-2.4 0-1.32.95-2.4 2.15-2.4s2.17 1.09 2.15 2.4c0 1.32-.94 2.4-2.15 2.4z"/></svg></button>
+      <button class="oauth" id="btn-github" type="button" title="GitHub" aria-label="Sign in with GitHub"><svg viewBox="0 0 24 24" fill="#e4e4e7" aria-hidden="true"><path d="M12 2C6.48 2 2 6.48 2 12c0 4.42 2.87 8.17 6.84 9.5.5.08.66-.23.66-.5v-1.69c-2.77.6-3.36-1.34-3.36-1.34-.46-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.87 1.52 2.34 1.07 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.92 0-1.11.38-2 1.03-2.71-.1-.25-.45-1.29.1-2.64 0 0 .84-.27 2.75 1.02.79-.22 1.65-.33 2.5-.33.85 0 1.71.11 2.5.33 1.91-1.29 2.75-1.02 2.75-1.02.55 1.35.2 2.39.1 2.64.65.71 1.03 1.6 1.03 2.71 0 3.82-2.34 4.66-4.57 4.91.36.31.69.92.69 1.85V21c0 .27.16.59.67.5C19.14 20.16 22 16.42 22 12A10 10 0 0 0 12 2z"/></svg></button>
+      <!-- Grudge (4th): Puter SDK sign-in → /api/auth/puter-sso (fleet best practice + connections) -->
+      <button class="oauth oauth-grudge" id="btn-grudge" type="button" title="Grudge ID" aria-label="Sign in with Grudge">
+        <img src="https://id.grudge-studio.com/grudge-id-logo.png" width="28" height="28" alt="" decoding="async" />
+        <span class="oauth-label">Grudge</span>
+      </button>
     </div>
     <button class="btn-more" id="btn-more-toggle" type="button" aria-expanded="false" aria-controls="more-panel">
       More options
@@ -481,7 +542,7 @@ body {
     <button class="btn btn-primary" id="em-submit" type="button"><span class="lead">Sign in</span></button>
     <div style="text-align:center;margin-top:14px">
       <button class="btn-link" id="em-toggle" type="button">Create an account</button>
-      <button class="btn-link back-link" id="em-back" type="button">← Back</button>
+      <button class="btn-link back-link" id="em-back" type="button">Back</button>
     </div>
   </section>
 
@@ -491,7 +552,7 @@ body {
     <div class="field" id="ph-num-wrap"><label for="ph-number">Phone number</label><input class="input" id="ph-number" type="tel" placeholder="+1 555 123 4567" /><div class="hint">Include country code (E.164), e.g. +15551234567</div></div>
     <div class="field" id="ph-code-wrap" style="display:none"><label for="ph-code">Verification code</label><input class="input" id="ph-code" inputmode="numeric" placeholder="123456" maxlength="8" /></div>
     <button class="btn btn-primary" id="ph-submit" type="button"><span class="lead">Send code</span></button>
-    <button class="btn-link back-link" id="ph-back" type="button">← Back</button>
+    <button class="btn-link back-link" id="ph-back" type="button">Back</button>
   </section>
 
   <section class="view" id="view-returning">
@@ -525,7 +586,7 @@ body {
     </div>
     <a class="btn btn-secondary" id="acct-nexus" href="https://nexus.grudge-studio.com" style="text-decoration:none;margin-bottom:8px">Open Nexus Hub</a>
     <button class="btn btn-ghost" id="acct-signout" type="button">Sign out everywhere</button>
-    <button class="btn-link back-link" id="acct-back" type="button">← Sign in page</button>
+    <button class="btn-link back-link" id="acct-back" type="button">Sign in page</button>
   </section>
 
   <section class="view" id="view-loading">
@@ -571,7 +632,28 @@ const CONFIG = { apiBase: resolveApiBase() };
 
 const qs = new URLSearchParams(location.search);
 const isPopup = (() => { try { return !!window.opener && window.opener !== window; } catch { return false; } })();
-const returnTo = qs.get("redirect") || qs.get("return_to") || null;
+/**
+ * Fleet return URL after login.
+ * Browser bar keeps the public path query (e.g. /login?redirect_uri=https://grudge-crafting.puter.site/)
+ * while the gateway may map upstream to ?redirect= — accept every fleet alias.
+ */
+let returnTo =
+  qs.get("redirect_uri") ||
+  qs.get("redirect") ||
+  qs.get("return_to") ||
+  qs.get("return") ||
+  qs.get("returnUrl") ||
+  null;
+// Recover return if OAuth hop dropped query (sessionStorage set in startOAuth)
+if (!returnTo) {
+  try {
+    const stashed = sessionStorage.getItem("grudge_auth_return");
+    if (stashed && /^https?:\/\//i.test(stashed)) returnTo = stashed;
+  } catch (_) {}
+}
+if (returnTo) {
+  try { sessionStorage.setItem("grudge_auth_return", returnTo); } catch (_) {}
+}
 const appKey = (qs.get("app") || "").toLowerCase();
 const isAccountMode = location.pathname === "/account" || qs.get("view") === "account";
 let openerOrigin = qs.get("origin") || qs.get("audience") || null;
@@ -581,10 +663,18 @@ const urlLaunchToken = qs.get("grudge_token");
 window.addEventListener("message", (e) => { if (e?.data?.type === "grudge-auth:init" && typeof e.data.origin === "string") openerOrigin = e.data.origin; });
 if (isPopup) { try { window.opener.postMessage({ type: "grudge-auth:ready" }, "*"); } catch {} }
 
+/* DOM helpers — must exist before applyContextBanner / isAccountMode title setup */
+const $ = (id) => document.getElementById(id);
+const views = ["choose","profile","email","phone","returning","done","account","loading"];
+function show(name){ views.forEach(v => $("view-"+v).classList.toggle("active", v === name)); }
+
 const APP_LABELS = {
   nexus: "Nexus Hub",
   warlords: "Grudge Warlords",
+  genesis: "Warlord Genesis",
+  warlord: "Warlord Genesis",
   wcs: "Warlord Crafting Suite",
+  crafting: "Warlord Crafting Suite",
   dash: "Dashboard",
   fleet: "Fleet",
   game: "Grudge Tactics",
@@ -598,19 +688,32 @@ const APP_LABELS = {
   character: "Character Hub",
   wallet: "Wallet",
   puter: "Puter Cloud",
+  gameopen: "Grudge Open",
+  open: "Grudge Open",
+  voxgrudge: "VoxGrudge",
+  vox: "VoxGrudge",
 };
 const HOST_LABELS = {
   "nexus.grudge-studio.com": "Nexus Hub",
   "grudachain.grudge-studio.com": "Nexus Hub",
   "grudgewarlords.com": "Grudge Warlords",
   "www.grudgewarlords.com": "Grudge Warlords",
+  "warlord-genesis.vercel.app": "Warlord Genesis",
+  "warstrat.grudge-studio.com": "Warlord Genesis",
   "client.grudge-studio.com": "Grudge Portal",
   "wcs.grudge-studio.com": "Warlord Crafting Suite",
+  "grudge-crafting.puter.site": "Warlord Crafting Suite",
   "dash.grudge-studio.com": "Dashboard",
   "game.grudge-studio.com": "Grudge Tactics",
   "coder.grudge-studio.com": "grudgeDot",
   "apps.grudge-studio.com": "Grudge Platform",
   "ai.grudge-studio.com": "Legion AI",
+  "character.grudge-studio.com": "Character Studio",
+  "water.grudge-studio.com": "Tethical",
+  "gameopen.vercel.app": "Grudge Open",
+  "voxgrudge.vercel.app": "VoxGrudge",
+  "open.grudge-studio.com": "Grudge Open",
+  "id.grudge-studio.com": "Grudge Studio",
 };
 
 function resolveAppLabel(){
@@ -624,13 +727,27 @@ function resolveAppLabel(){
         if (APP_LABELS[slug]) return APP_LABELS[slug];
         return slug.split("-").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
       }
-      if (host.endsWith(".vercel.app")) return "Grudge App";
+      if (host.endsWith(".puter.site") || host.endsWith(".puter.work")) {
+        const slug = host.split(".")[0];
+        if (slug === "grudge-crafting" || slug.includes("craft")) return "Warlord Crafting Suite";
+        if (APP_LABELS[slug]) return APP_LABELS[slug];
+        return slug.split("-").map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+      }
+      if (host.endsWith(".vercel.app")) {
+        if (host.startsWith("warlord-genesis")) return "Warlord Genesis";
+        if (host.startsWith("voxgrudge")) return "VoxGrudge";
+        if (host.startsWith("flare")) return "Flare Boss Arena";
+        return "Grudge App";
+      }
     } catch {}
   }
   if (isPopup && openerOrigin) {
     try {
       const host = new URL(openerOrigin).hostname.toLowerCase();
       if (HOST_LABELS[host]) return HOST_LABELS[host];
+      if (host.startsWith("warlord-genesis")) return "Warlord Genesis";
+      if (host.startsWith("voxgrudge")) return "VoxGrudge";
+      if (host.startsWith("flare")) return "Flare Boss Arena";
     } catch {}
   }
   return null;
@@ -659,10 +776,6 @@ if (isAccountMode) {
 } else {
   applyContextBanner();
 }
-
-const $ = (id) => document.getElementById(id);
-const views = ["choose","profile","email","phone","returning","done","account","loading"];
-function show(name){ views.forEach(v => $("view-"+v).classList.toggle("active", v === name)); }
 
 let toastTimer;
 function toast(msg, kind){
@@ -719,12 +832,96 @@ function showReturning(label){
   if (icon && label) icon.textContent = label.charAt(0).toUpperCase();
   show("returning");
 }
+/**
+ * Dual handoff for satellite pass-through:
+ * - grudge_token: short launch JWT (bridge via grudge-bridge / session/exchange)
+ * - sso_token: full session JWT when available (direct Bearer store)
+ * Session also mirrored in the URL hash (less referrer leakage).
+ *
+ * CRITICAL: /api/auth/me does NOT return a JWT body — always mint via refresh
+ * when handoffing to puter.site / external origins, or satellites get no Bearer.
+ */
+function buildHandoffUrl(returnUrl, launchToken, sessionToken, user){
+  try {
+    const u = new URL(returnUrl);
+    if (launchToken) u.searchParams.set("grudge_token", launchToken);
+    if (sessionToken) {
+      u.searchParams.set("sso_token", sessionToken);
+      u.searchParams.set("token", sessionToken);
+    }
+    const gid = user && (user.grudgeId || user.grudge_id);
+    const uname = user && (user.displayName || user.username);
+    if (gid) { u.searchParams.set("grudge_id", gid); u.searchParams.set("grudgeId", gid); }
+    if (uname) { u.searchParams.set("username", uname); u.searchParams.set("grudge_username", uname); }
+    const hp = new URLSearchParams(u.hash.startsWith("#") ? u.hash.slice(1) : (u.hash || ""));
+    if (sessionToken) hp.set("sso_token", sessionToken);
+    if (launchToken) hp.set("grudge_token", launchToken);
+    if (gid) hp.set("grudge_id", gid);
+    u.hash = hp.toString();
+    return u.toString();
+  } catch {
+    const sep = returnUrl.includes("?") ? "&" : "?";
+    let q = "";
+    if (launchToken) q += "grudge_token=" + encodeURIComponent(launchToken);
+    if (sessionToken) q += (q ? "&" : "") + "sso_token=" + encodeURIComponent(sessionToken) + "&token=" + encodeURIComponent(sessionToken);
+    return returnUrl + sep + q;
+  }
+}
+/** Last successful session JWT (login/SSO body) — /me never returns token. */
+let lastSessionToken = "";
+
+/** Mint a full session JWT from body or HttpOnly cookie (me endpoint strips token). */
+async function resolveSessionToken(user){
+  let t =
+    (user && (user.token || user.sessionToken)) ||
+    (user && user.user && (user.user.token || user.user.sessionToken)) ||
+    lastSessionToken ||
+    "";
+  if (t && t.length > 20) {
+    lastSessionToken = t;
+    return t;
+  }
+  try {
+    const r = await api("/api/auth/refresh", { method: "POST", body: "{}" });
+    t = r.token || r.sessionToken || "";
+    if (t) {
+      lastSessionToken = t;
+      return t;
+    }
+  } catch (e) {
+    console.warn("[auth] refresh for handoff failed:", e);
+  }
+  return lastSessionToken || "";
+}
 async function handoff(user){
   const destLabel = resolveAppLabel();
+  // Capture tokens from SSO/login JSON before they are lost
+  if (user && (user.token || user.sessionToken)) {
+    lastSessionToken = user.token || user.sessionToken;
+  }
+  const sessionToken = await resolveSessionToken(user);
   if (isPopup && window.opener){
     const audience = openerOrigin || qs.get("audience") || qs.get("origin") || null;
-    const token = await mintLaunchToken(audience || undefined);
-    postAuthToOpener(audience, token, user);
+    let token = "";
+    try { token = await mintLaunchToken(audience || undefined); } catch (e) {
+      if (!sessionToken) throw e;
+    }
+    // Prefer session JWT for opener; launch is secondary
+    postAuthToOpener(audience, sessionToken || token, Object.assign({}, user || {}, {
+      launchToken: token || undefined,
+      sessionToken: sessionToken || undefined,
+      token: sessionToken || token,
+    }));
+    try {
+      window.opener.postMessage({
+        type: "grudge-auth:success",
+        source: "grudge-id",
+        token: sessionToken || token,
+        sessionToken: sessionToken || undefined,
+        launchToken: token || undefined,
+        user: user,
+      }, audience && audience !== "*" ? audience : "*");
+    } catch {}
     renderDone(user, true, destLabel); return;
   }
   if (returnTo){
@@ -733,13 +930,36 @@ async function handoff(user){
       const origin = new URL(returnTo).origin;
       if (origin !== location.origin){
         if (destLabel) showReturning(destLabel);
-        const token = await mintLaunchToken(origin);
-        const sep = returnTo.includes("?") ? "&" : "?";
-        dest = returnTo + sep + "grudge_token=" + encodeURIComponent(token);
-        await new Promise((r) => setTimeout(r, destLabel ? 650 : 0));
+        let launchToken = "";
+        try {
+          launchToken = await mintLaunchToken(origin);
+        } catch (e) {
+          // Cookie race: proceed with session token only
+          console.warn("[auth] popup-token mint failed, using session only", e);
+        }
+        if (!sessionToken && !launchToken) {
+          // Still signed in on id — force user to continue rather than silent stuck
+          toast("Signed in — click Continue to return to " + (destLabel || "app") + ".", "error");
+          renderDone(user, false, destLabel);
+          return;
+        }
+        dest = buildHandoffUrl(returnTo, launchToken, sessionToken, user);
+        await new Promise((r) => setTimeout(r, destLabel ? 450 : 0));
+      } else if (sessionToken) {
+        dest = buildHandoffUrl(returnTo, "", sessionToken, user);
       }
     }
-    (window.top || window).location.replace(dest); return;
+    try { sessionStorage.removeItem("grudge_auth_return"); } catch (_) {}
+    try {
+      (window.top || window).location.replace(dest);
+    } catch (e) {
+      window.location.href = dest;
+    }
+    // Fallback if replace is blocked (rare iframe cases)
+    setTimeout(function () {
+      try { window.location.href = dest; } catch (_) {}
+    }, 1200);
+    return;
   }
   renderDone(user, false, destLabel);
 }
@@ -764,9 +984,43 @@ function renderDone(user, autoClose, destLabel){
   $("done-continue").style.display = (isPopup || returnTo) ? "flex" : "none";
   show("done");
   if (autoClose) setTimeout(() => { try { window.close(); } catch {} }, 900);
+  // If we still have a return destination, never leave the user stranded on id —
+  // re-attempt handoff (Continue) after a short delay with stashed JWT.
+  if (returnTo && !autoClose) {
+    setTimeout(function () {
+      try {
+        if (document.getElementById("view-done") && document.getElementById("view-done").classList.contains("active")) {
+          $("done-continue").click();
+        }
+      } catch (_) {}
+    }, 1600);
+  }
+}
+function hasAccountUsername(user){
+  if (!user) return false;
+  const n = String(user.displayName || user.username || "").trim();
+  if (!n || n.length < 2) return false;
+  // Provider-prefixed / auto usernames still need a real claim
+  if (/^(puter:|Puter_|guest_|Guest_|wallet:|discord:|phone:|google:|github:)/i.test(n)) return false;
+  if (/^puter_[a-f0-9]+$/i.test(n) || /^guest_[a-f0-9]+$/i.test(n)) return false;
+  return true;
 }
 async function afterAuth(user, puterEmail){
-  if (user && user.needsProfile){ openProfileStep(user, puterEmail); return; }
+  // Stash JWT from login/SSO body immediately (never rely only on cookie race)
+  if (user && (user.token || user.sessionToken)) {
+    lastSessionToken = user.token || user.sessionToken;
+  }
+  // Fleet practice: if account DB / SSO already has username, never force name form.
+  if (user && user.needsProfile && hasAccountUsername(user)) {
+    try {
+      const body = {};
+      if (puterEmail) body.email = puterEmail;
+      // empty username = keep existing account displayName
+      user = await api("/api/auth/complete-profile", { method:"POST", body: JSON.stringify(body) });
+      user.needsProfile = false;
+    } catch { user.needsProfile = false; }
+  }
+  if (user && user.needsProfile && !hasAccountUsername(user)){ openProfileStep(user, puterEmail); return; }
   try { await handoff(user); }
   catch (e) { toast(e.message || "Could not complete sign-in.", "error"); show("choose"); refreshPuterButton(); }
 }
@@ -819,8 +1073,34 @@ function refreshPuterButton(){
     small.textContent = "Tap to link your Grudge Studio account";
   }).catch(() => {});
 }
-$("btn-puter").addEventListener("click", async () => {
-  const btn = $("btn-puter");
+
+function startOAuth(provider){
+  // Fleet return: prefer app redirect_uri, then popup self handoff, then current origin
+  let redirect;
+  if (returnTo) redirect = returnTo;
+  else if (isPopup) redirect = selfUrl({ handoff:"1", origin: openerOrigin || "" });
+  else redirect = selfUrl({ signedin:"1" });
+  // Persist return across OAuth hops (state can be dropped by some providers)
+  try {
+    if (returnTo) sessionStorage.setItem("grudge_auth_return", returnTo);
+  } catch (_) {}
+  // Discord start accepts return|redirect|redirect_uri — dual-write all aliases
+  const q =
+    "return=" + encodeURIComponent(redirect) +
+    "&redirect=" + encodeURIComponent(redirect) +
+    "&redirect_uri=" + encodeURIComponent(redirect) +
+    "&return_to=" + encodeURIComponent(redirect);
+  location.href = CONFIG.apiBase + "/api/auth/" + provider + "/start?" + q;
+}
+/**
+ * Grudge / Puter best-practice login (user gesture only):
+ * 1. puter.auth.signIn() popup from click
+ * 2. puter.auth.getUser() → uuid / username / email
+ * 3. POST /api/auth/puter-sso → Grudge ID + JWT + linked connections
+ * 4. handoff → redirect_uri with grudge_token / sso_token
+ * Google also routes here (Puter hosts Google as a connection).
+ */
+async function runPuterGrudgeLogin(btn){
   if (!puterReady()){ toast("Sign-in is still loading — try again in a moment.", "error"); return; }
   const already = puter.auth.isSignedIn();
   busy(btn, true, already ? "Linking…" : "Opening…");
@@ -830,18 +1110,15 @@ $("btn-puter").addEventListener("click", async () => {
   } catch (e){
     const code = e?.error || e?.code;
     if (code !== "auth_window_closed") toast(puterAuthMessage(e), "error");
-  } finally { busy(btn, false); refreshPuterButton(); }
-});
-
-function startOAuth(provider){
-  let redirect;
-  if (isPopup) redirect = selfUrl({ handoff:"1", origin: openerOrigin || "" });
-  else if (returnTo) redirect = returnTo;
-  else redirect = selfUrl({ signedin:"1" });
-  location.href = CONFIG.apiBase + "/api/auth/" + provider + "/start?redirect=" + encodeURIComponent(redirect);
+  } finally {
+    busy(btn, false);
+    refreshPuterButton();
+  }
 }
-// Google sign-in routes through Puter SDK (grudge-api returns puter_sdk for /google/start)
-$("btn-google").addEventListener("click", () => $("btn-puter").click());
+$("btn-puter").addEventListener("click", () => runPuterGrudgeLogin($("btn-puter")));
+$("btn-grudge").addEventListener("click", () => runPuterGrudgeLogin($("btn-grudge")));
+// Google sign-in routes through Puter SDK (connections / Google via Puter)
+$("btn-google").addEventListener("click", () => runPuterGrudgeLogin($("btn-google")));
 $("btn-discord").addEventListener("click", () => startOAuth("discord"));
 $("btn-github").addEventListener("click", () => startOAuth("github"));
 
@@ -936,9 +1213,20 @@ $("btn-guest").addEventListener("click", async () => {
 
 let pendingUser = null;
 function openProfileStep(user, puterEmail){
-  pendingUser = user; $("pf-username").value = user.username || "";
+  // If we already have a username on the account, skip straight to handoff
+  if (hasAccountUsername(user)) {
+    pendingUser = user;
+    $("pf-skip").click();
+    return;
+  }
+  pendingUser = user;
+  $("pf-username").value = user.username || user.displayName || "";
   if (puterEmail) $("pf-email").value = puterEmail;
-  $("pf-username-hint").className = "hint"; $("pf-username-hint").textContent = "3–30 letters, numbers, _ or -";
+  $("pf-username-hint").className = "hint";
+  $("pf-username-hint").textContent = "Optional if you already signed in with Grudge ID — 3–30 letters, numbers, _ or -";
+  // Label: optional
+  const lab = document.querySelector('label[for="pf-username"]');
+  if (lab) lab.innerHTML = 'Username <span style="font-weight:400;color:var(--text-muted)">(optional if already set)</span>';
   show("profile"); setTimeout(() => $("pf-username").focus(), 60);
 }
 let lookupTimer;
@@ -959,6 +1247,7 @@ $("pf-username").addEventListener("input", () => {
 });
 $("pf-save").addEventListener("click", async () => {
   const btn = $("pf-save"), username = $("pf-username").value.trim(), email = $("pf-email").value.trim();
+  // Empty username is OK when account already has one (complete-profile keeps it)
   if (username && !/^[a-zA-Z0-9_\-]{3,30}$/.test(username)){ toast("Usernames are 3–30 letters, numbers, _ or -.", "error"); return; }
   busy(btn, true);
   try {
@@ -967,17 +1256,67 @@ $("pf-save").addEventListener("click", async () => {
   } catch (e){ toast(e.message || "Could not save your profile.", "error"); }
   finally { busy(btn, false); }
 });
-$("pf-skip").addEventListener("click", () => { if (pendingUser) handoff(pendingUser); });
+$("pf-skip").addEventListener("click", async () => {
+  // Persist profile-complete flag even on skip so we don't re-prompt next time
+  try {
+    if (pendingUser) {
+      await api("/api/auth/complete-profile", { method:"POST", body: "{}" });
+    }
+  } catch { /* offline / already complete */ }
+  if (pendingUser) handoff(pendingUser);
+});
 $("pf-username").addEventListener("keydown", (e) => { if (e.key === "Enter") $("pf-save").click(); });
 
-$("done-continue").addEventListener("click", async () => { try { const me = await api("/api/auth/me"); handoff(normalizeMe(me)); } catch {} });
+$("done-continue").addEventListener("click", async () => {
+  try {
+    // Prefer last JWT from login; /me never returns token
+    let user = { token: lastSessionToken, sessionToken: lastSessionToken };
+    try {
+      const me = await api("/api/auth/me");
+      user = Object.assign(normalizeMe(me), {
+        token: lastSessionToken || me.token || me.sessionToken,
+        sessionToken: lastSessionToken || me.sessionToken || me.token,
+      });
+    } catch (_) {
+      if (!lastSessionToken && !returnTo) throw _;
+    }
+    if (returnTo && (user.token || lastSessionToken)) {
+      await handoff(user);
+      return;
+    }
+    if (returnTo) {
+      // Absolute last resort: return without tokens so app can claim cookie / re-login
+      (window.top || window).location.replace(returnTo);
+      return;
+    }
+    await handoff(user);
+  } catch (e) {
+    toast((e && e.message) || "Could not return to app.", "error");
+    if (returnTo) {
+      try { (window.top || window).location.href = returnTo; } catch (_) {}
+    }
+  }
+});
 $("done-switch").addEventListener("click", async () => {
   await signOutAll();
   show("choose");
   applyContextBanner();
 });
 
-function normalizeMe(me){ return { id: me.id, username: me.username, displayName: me.displayName, grudgeId: me.grudgeId, needsProfile: !!me.needsProfile, isNew: false, role: me.role }; }
+/** Keep JWT fields from login responses; /me has none — handoff uses resolveSessionToken. */
+function normalizeMe(me){
+  return {
+    id: me.id,
+    username: me.username,
+    displayName: me.displayName,
+    grudgeId: me.grudgeId,
+    needsProfile: !!me.needsProfile,
+    isNew: false,
+    role: me.role,
+    token: me.token || me.sessionToken || undefined,
+    sessionToken: me.sessionToken || me.token || undefined,
+  };
+}
 
 async function signOutAll(){
   try { await api("/api/auth/logout", { method:"POST", body:"{}" }); } catch {}
@@ -1086,5 +1425,6 @@ async function boot(){
 boot();
 })();
 </script>
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js/v4513226cdae34746b4dedf0b4dfa099e1781791509496" integrity="sha512-ZE9pZaUXND66v380QUtch/5sE9tPFh2zg45pR2PB0CVkCtOREv2AJKkSidISWkysEuQ0EH8faUU5du78bx87UQ==" data-cf-beacon='{"version":"2024.11.0","token":"466184703ece43238c37b349e74b19c5","r":1,"server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
 </body>
 </html>
