@@ -2,7 +2,7 @@
  * System Development console — admin/master operators + agents.
  * Data from /api/admin/system*
  */
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { Badge } from "@/components/ui/badge";
@@ -10,16 +10,22 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   Activity,
+  ChevronRight,
   Database,
   ExternalLink,
   Loader2,
   RefreshCw,
+  Search,
   Server,
   Shield,
   Terminal,
   Wrench,
 } from "lucide-react";
 import { checkAdminSession, loginAdmin } from "@/lib/admin-auth";
+import {
+  SystemDevUserSheet,
+  type SystemDevUserRow,
+} from "@/components/system-dev/SystemDevUserSheet";
 
 async function fetchJSON<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, { credentials: "include", ...init });
@@ -30,11 +36,19 @@ async function fetchJSON<T>(url: string, init?: RequestInit): Promise<T> {
   return res.json();
 }
 
+function clip(s: string | null | undefined, n = 14) {
+  if (!s) return "—";
+  return s.length > n ? `${s.slice(0, n)}…` : s;
+}
+
 export default function SystemDevPage() {
   const qc = useQueryClient();
   const [pass, setPass] = useState("");
   const [grudgeLookup, setGrudgeLookup] = useState("");
   const [authErr, setAuthErr] = useState("");
+  const [userSearch, setUserSearch] = useState("");
+  const [selectedUser, setSelectedUser] = useState<SystemDevUserRow | null>(null);
+  const [sheetOpen, setSheetOpen] = useState(false);
 
   const sessionQ = useQuery({
     queryKey: ["admin-session"],
@@ -82,6 +96,28 @@ export default function SystemDevPage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["/api/admin/system/user", grudgeLookup] }),
   });
 
+  const openUser = (u: SystemDevUserRow) => {
+    setSelectedUser(u);
+    setSheetOpen(true);
+  };
+
+  const recentUsers: SystemDevUserRow[] = systemQ.data?.recentUsers ?? [];
+
+  const filteredUsers = useMemo(() => {
+    const q = userSearch.trim().toLowerCase();
+    if (!q) return recentUsers;
+    return recentUsers.filter(
+      (u) =>
+        u.username?.toLowerCase().includes(q) ||
+        u.grudgeId?.toLowerCase().includes(q) ||
+        u.email?.toLowerCase().includes(q) ||
+        u.puterId?.toLowerCase().includes(q) ||
+        u.phone?.toLowerCase().includes(q) ||
+        u.discordId?.toLowerCase().includes(q) ||
+        u.solanaAddress?.toLowerCase().includes(q),
+    );
+  }, [recentUsers, userSearch]);
+
   if (sessionQ.isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[hsl(225,30%,6%)]">
@@ -128,14 +164,23 @@ export default function SystemDevPage() {
 
   return (
     <div className="min-h-screen bg-[hsl(225,30%,6%)] text-[hsl(45,30%,90%)]">
-      <div className="max-w-6xl mx-auto px-4 py-8 space-y-6">
+      <SystemDevUserSheet
+        user={selectedUser}
+        open={sheetOpen}
+        onOpenChange={(o) => {
+          setSheetOpen(o);
+          if (!o) setSelectedUser(null);
+        }}
+      />
+
+      <div className="max-w-7xl mx-auto px-4 py-8 space-y-6">
         <header className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="text-2xl font-heading gold-text flex items-center gap-2">
               <Terminal className="w-6 h-6" /> System Development
             </h1>
             <p className="text-xs text-[hsl(45,15%,55%)] font-body mt-1">
-              Account DB · universe loops · fleet canonical audit · agent contracts
+              Account DB · player registry · Puter assets · fleet audit · agent contracts
             </p>
           </div>
           <div className="flex gap-2">
@@ -185,6 +230,76 @@ export default function SystemDevPage() {
                   <div className="text-2xl font-heading gold-text mt-1">{String(n)}</div>
                 </div>
               ))}
+            </section>
+
+            {/* Player registry */}
+            <section className="fantasy-panel p-5 space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <h2 className="font-heading text-base">Player registry</h2>
+                <div className="relative w-full sm:w-72">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[hsl(45,15%,50%)]" />
+                  <Input
+                    value={userSearch}
+                    onChange={(e) => setUserSearch(e.target.value)}
+                    placeholder="Filter by name, Grudge ID, Puter, email…"
+                    className="pl-8 bg-black/30 border-[hsl(43,60%,30%)]/30 text-sm h-9"
+                  />
+                </div>
+              </div>
+              <div className="overflow-x-auto -mx-1">
+                <table className="w-full text-[11px] min-w-[900px]">
+                  <thead className="text-[hsl(45,15%,50%)] text-left border-b border-[hsl(43,60%,30%)]/20">
+                    <tr>
+                      <th className="py-2 pr-2">Player</th>
+                      <th className="pr-2">Grudge ID</th>
+                      <th className="pr-2">Puter ID</th>
+                      <th className="pr-2">Puter user</th>
+                      <th className="pr-2">Wallet</th>
+                      <th className="pr-2">Email</th>
+                      <th className="pr-2">Phone</th>
+                      <th className="pr-2">Discord</th>
+                      <th className="pr-2">Role</th>
+                      <th className="pr-2">Last login</th>
+                      <th />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredUsers.map((u) => (
+                      <tr
+                        key={u.id}
+                        className="border-t border-[hsl(43,60%,30%)]/10 hover:bg-black/20 cursor-pointer transition-colors"
+                        onClick={() => openUser(u)}
+                      >
+                        <td className="py-2 pr-2 font-medium">{u.displayName || u.username}</td>
+                        <td className="pr-2 font-mono text-[hsl(43,85%,55%)]">{clip(u.grudgeId, 12)}</td>
+                        <td className="pr-2 font-mono text-[hsl(45,15%,60%)]">{clip(u.puterId, 10)}</td>
+                        <td className="pr-2">{u.puterId ? (u.displayName || u.username) : "—"}</td>
+                        <td className="pr-2 font-mono">{clip(u.solanaAddress, 8)}</td>
+                        <td className="pr-2">{clip(u.email, 16)}</td>
+                        <td className="pr-2">{clip(u.phone, 12)}</td>
+                        <td className="pr-2 font-mono">{clip(u.discordId, 10)}</td>
+                        <td className="pr-2">
+                          <Badge variant="outline" className="text-[9px] capitalize">
+                            {u.role}
+                          </Badge>
+                        </td>
+                        <td className="pr-2 text-[hsl(45,15%,55%)] whitespace-nowrap">
+                          {u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleString() : "—"}
+                        </td>
+                        <td className="text-right">
+                          <ChevronRight className="w-4 h-4 text-[hsl(43,85%,55%)] inline" />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {filteredUsers.length === 0 && (
+                  <p className="text-center text-xs text-[hsl(45,15%,50%)] py-6">No players match filter.</p>
+                )}
+              </div>
+              <p className="text-[10px] text-[hsl(45,15%,50%)]">
+                Click any row to open player info, Puter assets dropdown, and admin actions.
+              </p>
             </section>
 
             <section className="grid lg:grid-cols-2 gap-4">
@@ -288,7 +403,7 @@ export default function SystemDevPage() {
                 <Input
                   value={grudgeLookup}
                   onChange={(e) => setGrudgeLookup(e.target.value)}
-                  placeholder="grudgeId e.g. GS-…"
+                  placeholder="grudgeId or numeric user id"
                   className="bg-black/30 border-[hsl(43,60%,30%)]/30 font-mono text-sm"
                 />
                 <Button
@@ -308,34 +423,6 @@ export default function SystemDevPage() {
               {userQ.isError && (
                 <p className="text-xs text-red-400">{(userQ.error as Error).message}</p>
               )}
-            </section>
-
-            <section className="fantasy-panel p-5">
-              <h2 className="font-heading text-base mb-2">Recent users</h2>
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs">
-                  <thead className="text-[hsl(45,15%,50%)] text-left">
-                    <tr>
-                      <th className="py-1">User</th>
-                      <th>Grudge ID</th>
-                      <th>Role</th>
-                      <th>Last login</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(sys.recentUsers || []).map((u: any) => (
-                      <tr key={u.id} className="border-t border-[hsl(43,60%,30%)]/10">
-                        <td className="py-1.5">{u.username}</td>
-                        <td className="font-mono text-[hsl(43,85%,55%)]">{u.grudgeId}</td>
-                        <td>{u.role}</td>
-                        <td className="text-[hsl(45,15%,55%)]">
-                          {u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleString() : "—"}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
             </section>
           </>
         )}

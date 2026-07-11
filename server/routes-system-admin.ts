@@ -11,6 +11,7 @@ import {
   playerDecks,
   playerIslands,
   playerGameSaves,
+  walletConnections,
 } from "@shared/schema";
 import { getPlayer } from "./auth";
 import { ensureAccountSchema } from "./db-ensure";
@@ -19,6 +20,7 @@ import { UNIVERSE_LAUNCH } from "@shared/universe-catalog";
 import { buildCanonicalAudit, SYSTEM_CANONICAL } from "@shared/system-audit";
 import crypto from "crypto";
 import * as universe from "./universe-store";
+import { getGBuxBalance, listPlayerAssets } from "./grudachain";
 
 function verifyAdminSession(req: any): boolean {
   const secret = process.env.ADMIN_SESSION_SECRET || process.env.SESSION_SECRET;
@@ -76,6 +78,57 @@ async function tableStats() {
   return out;
 }
 
+function publicUserRow(u: typeof users.$inferSelect) {
+  return {
+    id: u.id,
+    username: u.username,
+    displayName: u.displayName,
+    grudgeId: u.grudgeId,
+    puterId: u.puterId,
+    puterUsername: u.puterId ? (u.displayName || u.username) : null,
+    email: u.email,
+    phone: u.phone,
+    discordId: u.discordId,
+    solanaAddress: u.solanaAddress,
+    githubId: u.githubId,
+    googleId: u.googleId,
+    gbuxBalance: u.gbuxBalance,
+    role: u.role,
+    avatarUrl: u.avatarUrl,
+    needsProfile: u.needsProfile,
+    createdAt: u.createdAt,
+    lastLoginAt: u.lastLoginAt,
+  };
+}
+
+async function loadUserDetail(user: typeof users.$inferSelect) {
+  const [wallets, assets, universeSnap, gbux] = await Promise.all([
+    db
+      .select()
+      .from(walletConnections)
+      .where(eq(walletConnections.userId, user.id))
+      .catch(() => [] as typeof walletConnections.$inferSelect[]),
+    listPlayerAssets(user.grudgeId),
+    universe.bootstrapUniverse(user.id, user.displayName || user.username).catch(() => null),
+    getGBuxBalance(user.grudgeId, user.solanaAddress || undefined).catch(() => null),
+  ]);
+
+  return {
+    user: publicUserRow(user),
+    wallets: wallets.map((w) => ({
+      id: w.id,
+      address: w.walletAddress,
+      provider: w.provider,
+      chain: w.chain,
+      isActive: w.isActive,
+      connectedAt: w.connectedAt,
+    })),
+    assets,
+    gbux,
+    universe: universeSnap,
+  };
+}
+
 async function columnCheck() {
   try {
     const r = await db.execute(sql`
@@ -103,14 +156,21 @@ export function registerSystemAdminRoutes(app: Express): void {
           .select({
             id: users.id,
             username: users.username,
+            displayName: users.displayName,
             grudgeId: users.grudgeId,
+            puterId: users.puterId,
+            email: users.email,
+            phone: users.phone,
+            discordId: users.discordId,
+            solanaAddress: users.solanaAddress,
+            gbuxBalance: users.gbuxBalance,
             role: users.role,
             lastLoginAt: users.lastLoginAt,
             createdAt: users.createdAt,
           })
           .from(users)
           .orderBy(desc(users.lastLoginAt))
-          .limit(15)
+          .limit(50)
           .catch(() => [] as any[]),
         (async () => {
           try {
@@ -179,27 +239,62 @@ export function registerSystemAdminRoutes(app: Express): void {
 
   app.get("/api/admin/system/user/:grudgeId", requireSystemAdmin, async (req, res) => {
     try {
+      const key = req.params.grudgeId;
+      const isNumeric = /^\d+$/.test(key);
       const [user] = await db
         .select()
         .from(users)
-        .where(eq(users.grudgeId, req.params.grudgeId))
+        .where(isNumeric ? eq(users.id, Number(key)) : eq(users.grudgeId, key))
         .limit(1);
       if (!user) return res.status(404).json({ error: "User not found" });
-      const snap = await universe.bootstrapUniverse(user.id, user.displayName || user.username);
+      const detail = await loadUserDetail(user);
       res.json({
-        user: {
-          id: user.id,
-          username: user.username,
-          grudgeId: user.grudgeId,
-          role: user.role,
-          playSettings: (user as any).playSettings,
-          recentPlays: user.recentPlays,
-        },
-        universe: snap,
+        ...detail,
+        playSettings: user.playSettings,
+        recentPlays: user.recentPlays,
       });
     } catch (error) {
       console.error("GET /api/admin/system/user", error);
       res.status(500).json({ error: "Failed to load user universe" });
+    }
+  });
+
+  app.get("/api/admin/system/user/:grudgeId/assets", requireSystemAdmin, async (req, res) => {
+    try {
+      const key = req.params.grudgeId;
+      const isNumeric = /^\d+$/.test(key);
+      const [user] = await db
+        .select({ grudgeId: users.grudgeId })
+        .from(users)
+        .where(isNumeric ? eq(users.id, Number(key)) : eq(users.grudgeId, key))
+        .limit(1);
+      if (!user) return res.status(404).json({ error: "User not found" });
+      const assets = await listPlayerAssets(user.grudgeId);
+      res.json({ grudgeId: user.grudgeId, assets });
+    } catch (error) {
+      console.error("GET /api/admin/system/user/assets", error);
+      res.status(500).json({ error: "Failed to list assets" });
+    }
+  });
+
+  app.patch("/api/admin/system/user/:grudgeId/role", requireSystemAdmin, async (req, res) => {
+    try {
+      const key = req.params.grudgeId;
+      const isNumeric = /^\d+$/.test(key);
+      const { role } = req.body;
+      const validRoles = ["guest", "player", "member", "admin", "master"];
+      if (!role || !validRoles.includes(role)) {
+        return res.status(400).json({ error: `Invalid role. Valid: ${validRoles.join(", ")}` });
+      }
+      const [updated] = await db
+        .update(users)
+        .set({ role })
+        .where(isNumeric ? eq(users.id, Number(key)) : eq(users.grudgeId, key))
+        .returning();
+      if (!updated) return res.status(404).json({ error: "User not found" });
+      res.json({ id: updated.id, username: updated.username, role: updated.role });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update role" });
     }
   });
 

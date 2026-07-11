@@ -274,6 +274,52 @@ export async function getPlayerAssetURL(
   }
 }
 
+export interface PlayerAssetEntry {
+  name: string;
+  path: string;
+  url: string | null;
+  size?: number;
+}
+
+/**
+ * List files under PlayerAssets/{grudgeId}/ on Puter FS.
+ */
+export async function listPlayerAssets(grudgeId: string): Promise<PlayerAssetEntry[]> {
+  const puter = await getPuter();
+  if (!puter?.fs) return [];
+
+  const dir = `PlayerAssets/${grudgeId}`;
+  try {
+    let raw: unknown;
+    if (typeof puter.fs.readdir === "function") {
+      raw = await puter.fs.readdir(dir);
+    } else if (typeof puter.fs.list === "function") {
+      raw = await puter.fs.list(dir);
+    } else {
+      return [];
+    }
+
+    const names: string[] = Array.isArray(raw)
+      ? raw.map((e: any) => (typeof e === "string" ? e : e?.name ?? e?.path ?? "")).filter(Boolean)
+      : [];
+
+    const entries: PlayerAssetEntry[] = [];
+    for (const name of names) {
+      const filename = String(name).replace(/^.*\//, "");
+      const path = `${dir}/${filename}`;
+      let url: string | null = null;
+      try {
+        url = await puter.fs.getReadURL(path, { ttl: 3600 });
+      } catch { /* unreadable */ }
+      entries.push({ name: filename, path, url });
+    }
+    return entries.sort((a, b) => a.name.localeCompare(b.name));
+  } catch (err) {
+    console.warn("[grudachain] listPlayerAssets failed:", (err as Error).message);
+    return [];
+  }
+}
+
 // ═══ HEALTH CHECK ═══
 
 export async function getGrudaChainStatus(): Promise<{
