@@ -89,10 +89,11 @@ export async function resolveWeaponTextures(
       }
 
       for (const [channel, suffixes] of Object.entries(CHANNEL_SUFFIXES)) {
-        if ((std as Record<string, unknown>)[channel]) continue;
+        const matAny = std as unknown as Record<string, unknown>;
+        if (matAny[channel]) continue;
         const tex = await discoverChannel(baseDir, modelBase, suffixes);
         if (tex) {
-          (std as Record<string, THREE.Texture>)[channel] = tex;
+          matAny[channel] = tex;
           std.needsUpdate = true;
           if (channel === "map") discovered++;
         }

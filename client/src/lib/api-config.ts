@@ -95,4 +95,17 @@ export function solanaExplorerAccountUrl(address: string): string {
   return `https://solscan.io/account/${address}${cluster}`;
 }
 
-export const WS_URL = import.meta.env.VITE_WS_URL || "https://ws.grudge-studio.com";
+/**
+ * WebSocket origin for Treaty Chat + engine presence.
+ * Must hit the process that runs `WebSocketServer({ path: "/ws/chat" })` (The-ENGINE / Railway).
+ * Do NOT default to ws.grudge-studio.com — that host does not run /ws/chat.
+ *
+ * Priority: VITE_WS_URL → VITE_ENGINE_WS_ORIGIN → Railway ENGINE host.
+ */
+export const ENGINE_WS_ORIGIN =
+  import.meta.env.VITE_WS_URL ||
+  import.meta.env.VITE_ENGINE_WS_ORIGIN ||
+  "https://the-engine.up.railway.app";
+
+/** Engine Socket.IO + legacy alias — same origin as chat WS (Railway process). */
+export const WS_URL = ENGINE_WS_ORIGIN;

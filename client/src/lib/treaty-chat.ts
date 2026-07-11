@@ -3,7 +3,7 @@
  * Used by /chat and GrudgePanel Social tab.
  */
 
-import { ENGINE_WS_ORIGIN } from "./api-config";
+import { ENGINE_WS_ORIGIN, apiUrl } from "./api-config";
 import type { PlayerProfile } from "./player-auth";
 
 export type TreatyChannelCategory = "community" | "play" | "economy";
@@ -136,32 +136,41 @@ export function isValidChannelId(id: string | null): id is TreatyChannelId {
   return TREATY_CHANNELS.some((c) => c.id === id);
 }
 
-/** HTTP fallback — works when WebSocket path is down (Railway/edge) */
+/** Map server treaty/HTTP row → client message shape (fields are not always present). */
+export function normalizeTreatyMessage(m: {
+  id?: string | number;
+  from?: TreatyIdentity;
+  text?: string;
+  message?: string;
+  ts?: string;
+  createdAt?: string;
+  username?: string;
+  displayName?: string;
+  grudgeId?: string | null;
+  room?: string;
+  roomId?: string;
+}): TreatyWsMessage {
+  return {
+    type: "message",
+    id: m.id != null ? Number(m.id) || undefined : undefined,
+    grudgeId: m.from?.grudgeId ?? m.grudgeId ?? null,
+    username: m.from?.username || m.username,
+    displayName: m.from?.displayName || m.from?.username || m.displayName || m.username,
+    message: m.text || m.message,
+    room: m.room || m.roomId,
+    createdAt: m.ts || m.createdAt,
+  };
+}
+
+/** HTTP fallback — works when WebSocket path is down (uses apiUrl, not bare relative). */
 export async function fetchTreatyMessages(roomId: string): Promise<TreatyWsMessage[]> {
-  const res = await fetch(`/api/treaty/room/${encodeURIComponent(roomId)}/messages`, { credentials: "include" });
+  const res = await fetch(apiUrl(`/api/treaty/room/${encodeURIComponent(roomId)}/messages`), {
+    credentials: "include",
+  });
   if (!res.ok) return [];
-  const data = await res.json();
-  return (data.messages || []).map(
-    (m: {
-      id?: string | number;
-      from?: TreatyIdentity;
-      text?: string;
-      message?: string;
-      ts?: string;
-      createdAt?: string;
-      username?: string;
-      displayName?: string;
-      grudgeId?: string | null;
-    }) => ({
-      type: "message" as const,
-      id: m.id != null ? Number(m.id) || undefined : undefined,
-      grudgeId: m.from?.grudgeId ?? m.grudgeId ?? null,
-      username: m.from?.username || m.username,
-      displayName: m.from?.displayName || m.from?.username || m.displayName || m.username,
-      message: m.text || m.message,
-      createdAt: m.ts || m.createdAt,
-    }),
-  );
+  const data = await res.json().catch(() => ({}));
+  const rows = Array.isArray(data?.messages) ? data.messages : Array.isArray(data) ? data : [];
+  return rows.map(normalizeTreatyMessage);
 }
 
 export async function sendTreatyHttp(
@@ -169,7 +178,7 @@ export async function sendTreatyHttp(
   text: string,
   identity: TreatyIdentity,
 ): Promise<{ ok: boolean; message?: unknown }> {
-  const res = await fetch(`/api/treaty/room/${encodeURIComponent(roomId)}/send`, {
+  const res = await fetch(apiUrl(`/api/treaty/room/${encodeURIComponent(roomId)}/send`), {
     method: "POST",
     credentials: "include",
     headers: { "Content-Type": "application/json" },
@@ -181,6 +190,9 @@ export async function sendTreatyHttp(
       displayName: identity.displayName,
     }),
   });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  if (!res.ok) {
+    const errBody = await res.text().catch(() => "");
+    throw new Error(`HTTP ${res.status}${errBody ? `: ${errBody.slice(0, 120)}` : ""}`);
+  }
   return res.json();
 }

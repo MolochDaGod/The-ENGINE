@@ -11,6 +11,13 @@ import {
   toWsPayload,
   shareUrl as treatyShareUrl,
 } from "./treaty-chat";
+import {
+  chatClients,
+  sendChatJson,
+  broadcastChatToRoom,
+  getRoomUsers,
+  pushPresence,
+} from "./chat-presence";
 import { storage } from "./storage";
 import { insertScrapingJobSchema, insertOrderSchema, insertGameSchema, insertArticleSchema, gameLibrary, scores, users, walletConnections } from "@shared/schema";
 import { z } from "zod";
@@ -3597,6 +3604,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       const message = toTreatyMessage(saved, sender.grudgeId);
+      // Fan out to live WS clients — was missing, so HTTP fallback looked "sent" but never arrived live
+      broadcastChatToRoom(roomId, toWsPayload(saved, sender.grudgeId));
       res.json({ ok: true, message });
     } catch {
       res.status(500).json({ error: "Failed to send treaty message" });
@@ -3809,47 +3818,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // perMessageDeflate off — Railway/edge proxies corrupt compressed frames (RSV1 errors)
   const wss = new WebSocketServer({ server: httpServer, path: "/ws/chat", perMessageDeflate: false });
-  const clients = new Map<WebSocket, { username: string; displayName: string; grudgeId: string | null; room: string; userId: number | null }>();
-
-  function sendJson(ws: WebSocket, data: object) {
-    if (ws.readyState === WebSocket.OPEN) {
-      try {
-        ws.send(JSON.stringify(data));
-      } catch (err) {
-        console.warn("[ws/chat] send failed", err);
-      }
-    }
-  }
-
-  function broadcastToRoom(room: string, data: object, except?: WebSocket) {
-    const msg = JSON.stringify(data);
-    for (const [client, info] of clients) {
-      if (info.room === room && client.readyState === WebSocket.OPEN && client !== except) {
-        try {
-          client.send(msg);
-        } catch { /* drop */ }
-      }
-    }
-  }
-
-  function getRoomUsers(room: string): string[] {
-    const users: string[] = [];
-    for (const [client, info] of clients) {
-      if (info.room === room && client.readyState === WebSocket.OPEN) {
-        const label = (info.displayName || info.username || "Guest").trim();
-        if (label) users.push(label);
-      }
-    }
-    return [...new Set(users)];
-  }
-
-  /** Push presence to one socket + rest of room (joiner always gets a users list). */
-  function pushPresence(room: string, to?: WebSocket) {
-    const users = getRoomUsers(room);
-    const payload = { type: "users" as const, room, users };
-    if (to) sendJson(to, payload);
-    broadcastToRoom(room, payload, to);
-  }
 
   wss.on("connection", (ws, req) => {
     const sock = ws as WebSocket & { isAlive?: boolean };
@@ -3888,16 +3856,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
             console.warn("[ws/chat] session resolve failed", authErr);
           }
 
-          const prev = clients.get(ws);
+          const prev = chatClients.get(ws);
           if (prev && prev.room !== room) {
-            clients.delete(ws);
+            chatClients.delete(ws);
             pushPresence(prev.room);
-            broadcastToRoom(prev.room, { type: "system", message: `${prev.displayName} left the room` });
+            broadcastChatToRoom(prev.room, { type: "system", message: `${prev.displayName} left the room` });
           }
 
-          clients.set(ws, { username, displayName, grudgeId, room, userId });
+          chatClients.set(ws, { username, displayName, grudgeId, room, userId });
           // Critical: ack joiner with users[] first — was broadcast-only and easy to miss
-          sendJson(ws, {
+          sendChatJson(ws, {
             type: "joined",
             ok: true,
             room,
@@ -3906,19 +3874,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
             users: getRoomUsers(room),
           });
           pushPresence(room, ws);
-          broadcastToRoom(room, { type: "system", message: `${displayName} joined the room` }, ws);
+          broadcastChatToRoom(room, { type: "system", message: `${displayName} joined the room` }, ws);
           return;
         }
 
-        if (data.type === "ping") {
-          sendJson(ws, { type: "system", message: "pong" });
+        if (data.type === "ping" || data.type === "heartbeat") {
+          sock.isAlive = true;
+          sendChatJson(ws, { type: "system", message: "pong" });
           return;
         }
 
         if (data.type === "message") {
-          const info = clients.get(ws);
+          const info = chatClients.get(ws);
           if (!info) {
-            sendJson(ws, { type: "error", message: "Join a room before sending messages" });
+            sendChatJson(ws, { type: "error", message: "Join a room before sending messages" });
             return;
           }
           const text = (data.message || "").slice(0, 500).trim();
@@ -3931,14 +3900,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
             userId: info.userId,
           });
 
-          broadcastToRoom(info.room, toWsPayload(saved, info.grudgeId));
+          // Include sender — clients do not optimistically render own WS messages
+          broadcastChatToRoom(info.room, toWsPayload(saved, info.grudgeId));
           return;
         }
 
         if (data.type === "switch_room") {
-          const info = clients.get(ws);
+          const info = chatClients.get(ws);
           if (!info) {
-            sendJson(ws, { type: "error", message: "Not joined" });
+            sendChatJson(ws, { type: "error", message: "Not joined" });
             return;
           }
           const oldRoom = info.room;
@@ -3947,11 +3917,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
             pushPresence(newRoom, ws);
             return;
           }
-          broadcastToRoom(oldRoom, { type: "system", message: `${info.displayName} left the room` });
+          broadcastChatToRoom(oldRoom, { type: "system", message: `${info.displayName} left the room` });
           info.room = newRoom;
-          clients.set(ws, info);
-          pushPresence(oldRoom); // was missing — old room stayed stale
-          sendJson(ws, {
+          chatClients.set(ws, info);
+          pushPresence(oldRoom);
+          sendChatJson(ws, {
             type: "joined",
             ok: true,
             room: newRoom,
@@ -3960,21 +3930,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
             users: getRoomUsers(newRoom),
           });
           pushPresence(newRoom, ws);
-          broadcastToRoom(newRoom, { type: "system", message: `${info.displayName} joined the room` }, ws);
+          broadcastChatToRoom(newRoom, { type: "system", message: `${info.displayName} joined the room` }, ws);
           return;
         }
       } catch (e) {
         console.warn("[ws/chat] message error", e);
-        sendJson(ws, { type: "error", message: "Invalid message" });
+        sendChatJson(ws, { type: "error", message: "Invalid message" });
       }
     });
 
     ws.on("close", () => {
-      const info = clients.get(ws);
+      const info = chatClients.get(ws);
       if (info) {
-        clients.delete(ws);
+        chatClients.delete(ws);
         pushPresence(info.room);
-        broadcastToRoom(info.room, { type: "system", message: `${info.displayName} left the room` });
+        broadcastChatToRoom(info.room, { type: "system", message: `${info.displayName} left the room` });
       }
     });
 
@@ -3984,12 +3954,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   const chatHeartbeat = setInterval(() => {
-    for (const [client] of clients) {
+    for (const [client] of chatClients) {
       const s = client as WebSocket & { isAlive?: boolean };
       if (s.isAlive === false) {
         try { client.terminate(); } catch { /* */ }
-        const info = clients.get(client);
-        clients.delete(client);
+        const info = chatClients.get(client);
+        chatClients.delete(client);
         if (info) pushPresence(info.room);
         continue;
       }

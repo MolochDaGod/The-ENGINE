@@ -22,7 +22,9 @@ import {
   isValidChannelId,
   sendTreatyHttp,
   fetchTreatyMessages,
+  normalizeTreatyMessage,
 } from "@/lib/treaty-chat";
+import { apiUrl } from "@/lib/api-config";
 
 function getRandomName(): string {
   const adjectives = ["Shadow", "Crimson", "Phantom", "Golden", "Arcane", "Dark", "Iron", "Storm", "Frost", "Ember"];
@@ -96,11 +98,12 @@ export default function Chat() {
   const { data: history = [] } = useQuery<ChatMessage[]>({
     queryKey: ["/api/chat/messages", currentRoom],
     queryFn: async () => {
-      const resp = await fetch(`/api/chat/messages?room=${encodeURIComponent(currentRoom)}`, {
-        credentials: "include",
-      });
+      const resp = await fetch(
+        apiUrl(`/api/chat/messages?room=${encodeURIComponent(currentRoom)}`),
+        { credentials: "include" },
+      );
       if (!resp.ok) return [];
-      const data = await resp.json();
+      const data = await resp.json().catch(() => []);
       return Array.isArray(data) ? data : [];
     },
     enabled: hasJoined,
@@ -175,7 +178,7 @@ export default function Chat() {
       setOnlineUsers((prev) => (prev.includes(self) ? prev : [self, ...prev]));
       try {
         ws.send(JSON.stringify(buildJoinPayload(id, room)));
-      } catch (err) {
+      } catch {
         setWsError("Failed to send join");
       }
     };
@@ -189,12 +192,15 @@ export default function Chat() {
       }
 
       if (data.type === "users" || data.type === "joined") {
-        applyUsersPayload(data, identityRef.current.displayName || identityRef.current.username, setOnlineUsers);
-        if (data.type === "joined" && data.room) {
-          // keep room in sync if server normalized it
-        }
+        const self =
+          identityRef.current.displayName || identityRef.current.username || "Guest";
+        applyUsersPayload(data, self, setOnlineUsers);
       } else if (data.type === "message" || data.type === "system") {
-        setMessages((prev) => [...prev, data]);
+        setMessages((prev) => {
+          // Dedupe optimistic HTTP/WS echoes by id or content+time
+          if (data.id && prev.some((p) => p.id === data.id)) return prev;
+          return [...prev, data];
+        });
       } else if (data.type === "error") {
         setWsError(data.message || "Chat error");
       }
@@ -206,6 +212,10 @@ export default function Chat() {
 
     ws.onclose = () => {
       setConnected(false);
+      // Keep self visible during reconnect so Online doesn't flash (0)
+      const self =
+        identityRef.current.displayName || identityRef.current.username || "Guest";
+      setOnlineUsers((prev) => (prev.length ? prev : self ? [self] : []));
       wsRef.current = null;
       if (!intentionalClose.current && hasJoinedRef.current) {
         reconnectTimer.current = setTimeout(() => {
@@ -214,6 +224,22 @@ export default function Chat() {
       }
     };
   }, []);
+
+  // App-level heartbeat — keeps NAT/proxies from dropping idle sockets; server marks isAlive
+  useEffect(() => {
+    if (!hasJoined || !connected) return;
+    const t = window.setInterval(() => {
+      const ws = wsRef.current;
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        try {
+          ws.send(JSON.stringify({ type: "heartbeat" }));
+        } catch {
+          /* ignore */
+        }
+      }
+    }, 20_000);
+    return () => window.clearInterval(t);
+  }, [hasJoined, connected]);
 
   // Connect once on join; reconnect handled inside onclose
   useEffect(() => {
@@ -305,40 +331,35 @@ export default function Chat() {
 
     const ws = wsRef.current;
     if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({ type: "message", message: text }));
-      return;
+      try {
+        ws.send(JSON.stringify({ type: "message", message: text }));
+        return;
+      } catch {
+        setWsError("Send failed on live socket — trying HTTP…");
+      }
     }
 
-    // HTTP fallback when WebSocket is down (still persists + shows locally)
+    // HTTP fallback when WebSocket is down (persists + local echo; server also fans out to WS)
     try {
       const result = await sendTreatyHttp(currentRoom, text, activeIdentity);
-      const m = result?.message as
-        | {
-            id?: string | number;
-            from?: TreatyIdentity;
-            text?: string;
-            message?: string;
-            ts?: string;
-            createdAt?: string;
-            username?: string;
-            displayName?: string;
-            grudgeId?: string | null;
-          }
-        | undefined;
-      setMessages((prev) => [
-        ...prev,
-        {
-          type: "message",
-          id: m?.id != null ? Number(m.id) || undefined : undefined,
-          grudgeId: m?.from?.grudgeId ?? m?.grudgeId ?? activeIdentity.grudgeId,
-          username: m?.from?.username || m?.username || activeIdentity.username,
-          displayName:
-            m?.from?.displayName || m?.displayName || m?.from?.username || activeIdentity.displayName,
-          message: m?.text || m?.message || text,
-          room: currentRoom,
-          createdAt: m?.ts || m?.createdAt || new Date().toISOString(),
-        },
-      ]);
+      const m = result?.message as Parameters<typeof normalizeTreatyMessage>[0] | undefined;
+      const normalized = m
+        ? normalizeTreatyMessage({ ...m, room: currentRoom })
+        : {
+            type: "message" as const,
+            grudgeId: activeIdentity.grudgeId,
+            username: activeIdentity.username,
+            displayName: activeIdentity.displayName,
+            message: text,
+            room: currentRoom,
+            createdAt: new Date().toISOString(),
+          };
+      if (!normalized.message) normalized.message = text;
+      if (!normalized.displayName) normalized.displayName = activeIdentity.displayName;
+      setMessages((prev) => {
+        if (normalized.id && prev.some((p) => p.id === normalized.id)) return prev;
+        return [...prev, normalized];
+      });
       setWsError(null);
     } catch {
       setWsError("Send failed — chat backend unreachable");
@@ -548,7 +569,9 @@ export default function Chat() {
                             {name}
                           </span>
                           {msg.grudgeId && (
-                            <Shield className="w-3 h-3 text-[hsl(270,60%,60%)]" title="Grudge ID verified" />
+                            <span title="Grudge ID verified" className="inline-flex">
+                              <Shield className="w-3 h-3 text-[hsl(270,60%,60%)]" aria-hidden />
+                            </span>
                           )}
                           <span className="text-[10px] text-[hsl(45,15%,35%)] opacity-0 group-hover:opacity-100 transition-opacity">
                             {msg.createdAt
@@ -572,15 +595,18 @@ export default function Chat() {
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSend()}
-                  placeholder={connected ? `Message #${activeChannel.name}…` : "Connecting…"}
+                  placeholder={
+                    connected
+                      ? `Message #${activeChannel.name}…`
+                      : `Message #${activeChannel.name} (offline queue)…`
+                  }
                   className="bg-[hsl(225,25%,12%)] border-[hsl(43,60%,30%)]/20 text-[hsl(45,30%,90%)] placeholder:text-[hsl(45,15%,30%)] focus:border-[hsl(43,85%,55%)]/40"
                   maxLength={500}
-                  disabled={!connected}
                   autoFocus
                 />
                 <Button
                   onClick={handleSend}
-                  disabled={!input.trim() || !connected}
+                  disabled={!input.trim()}
                   className="gilded-button px-4"
                   size="icon"
                 >
@@ -588,7 +614,7 @@ export default function Chat() {
                 </Button>
               </div>
               <p className="text-[10px] text-[hsl(45,15%,38%)] font-body mt-1.5 hidden sm:block">
-                Enter to send · Presence is live WebSocket roster (not DB last_seen)
+                Enter to send · Online = live WS roster · HTTP fallback if socket drops
               </p>
             </div>
           </div>

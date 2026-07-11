@@ -57,7 +57,13 @@ import { useAuth } from "@/components/auth-provider";
 import { useAuthModal } from "@/components/auth-modal";
 import { GameCover } from "@/components/game-cover";
 import { completeProfile } from "@/lib/player-auth";
-import { buildJoinPayload, getTreatyWsUrl, identityFromPlayer, TREATY_CHANNELS } from "@/lib/treaty-chat";
+import {
+  buildJoinPayload,
+  buildSwitchRoomPayload,
+  getTreatyWsUrl,
+  identityFromPlayer,
+  TREATY_CHANNELS,
+} from "@/lib/treaty-chat";
 import TreatyChannelPicker, { treatyChannelById } from "@/components/treaty/TreatyChannelPicker";
 
 // ── Context ──────────────────────────────────────────────────────
@@ -488,39 +494,93 @@ function SocialTab() {
   const [chatMessages, setChatMessages] = useState<any[]>([]);
   const [chatConnected, setChatConnected] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
+  const roomRef = useRef(chatRoom);
+  const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const intentionalClose = useRef(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const activeChannel = treatyChannelById(chatRoom) ?? TREATY_CHANNELS[0];
+  roomRef.current = chatRoom;
 
-  // Mini Treaty Chat — Grudge ID + channel picker
+  // Connect once per player — do NOT tear down on room change (that zeroed presence)
   useEffect(() => {
     if (!player) return;
 
     const identity = identityFromPlayer(player);
-    const ws = new WebSocket(getTreatyWsUrl());
-    wsRef.current = ws;
+    intentionalClose.current = false;
+    let closed = false;
 
-    ws.onopen = () => {
-      setChatConnected(true);
-      ws.send(JSON.stringify(buildJoinPayload(identity, chatRoom)));
-    };
-
-    ws.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      if (data.type === "message" || data.type === "system") {
-        setChatMessages((prev) => [...prev.slice(-50), data]);
+    const connect = () => {
+      if (closed) return;
+      if (wsRef.current && (wsRef.current.readyState === WebSocket.OPEN || wsRef.current.readyState === WebSocket.CONNECTING)) {
+        return;
       }
+      let ws: WebSocket;
+      try {
+        ws = new WebSocket(getTreatyWsUrl());
+      } catch {
+        setChatConnected(false);
+        reconnectTimer.current = setTimeout(connect, 3000);
+        return;
+      }
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        if (closed) return;
+        setChatConnected(true);
+        try {
+          ws.send(JSON.stringify(buildJoinPayload(identity, roomRef.current)));
+        } catch {
+          /* */
+        }
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type === "message" || data.type === "system") {
+            setChatMessages((prev) => [...prev.slice(-50), data]);
+          }
+        } catch {
+          /* ignore */
+        }
+      };
+
+      ws.onclose = () => {
+        setChatConnected(false);
+        if (wsRef.current === ws) wsRef.current = null;
+        if (!intentionalClose.current && !closed) {
+          reconnectTimer.current = setTimeout(connect, 2500);
+        }
+      };
     };
 
-    ws.onclose = () => {
-      setChatConnected(false);
-      wsRef.current = null;
-    };
+    connect();
 
     return () => {
-      ws.close();
+      closed = true;
+      intentionalClose.current = true;
+      if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
+      try {
+        wsRef.current?.close();
+      } catch {
+        /* */
+      }
       wsRef.current = null;
     };
-  }, [player, chatRoom]);
+  }, [player]);
+
+  // switch_room on open socket — was reconnecting and dropping the roster
+  useEffect(() => {
+    if (!player) return;
+    const ws = wsRef.current;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      try {
+        ws.send(JSON.stringify(buildSwitchRoomPayload(chatRoom)));
+      } catch {
+        /* */
+      }
+    }
+  }, [chatRoom, player]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -528,9 +588,15 @@ function SocialTab() {
 
   const sendChat = () => {
     const text = chatInput.trim();
-    if (!text || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
-    wsRef.current.send(JSON.stringify({ type: "message", message: text }));
-    setChatInput("");
+    if (!text) return;
+    const ws = wsRef.current;
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    try {
+      ws.send(JSON.stringify({ type: "message", message: text }));
+      setChatInput("");
+    } catch {
+      /* keep input so user can retry */
+    }
   };
 
   return (
