@@ -2,11 +2,14 @@
  * Legion AI — Grudge Studio AI Agent Hub
  *
  * Routes AI calls through:
- *  1. grudge-ai-hub CF Worker (primary — rate-limited, logged to D1)
- *  2. Puter AI agents (fallback — user-pays model)
- *  3. Direct Anthropic API (emergency fallback)
+ *  1. Groq (GROQ_API_KEY) — fast, preferred for Treaty @ale
+ *  2. grudge-ai-hub CF Worker (rate-limited, logged to D1)
+ *  3. Puter AI agents (user-pays model)
+ *  4. Direct Anthropic API (emergency)
+ *  5. Hardcoded fallback
  *
  * Capabilities:
+ *  - Treaty @ale companion
  *  - NPC dialogue generation
  *  - Lore / quest text
  *  - Content moderation
@@ -14,7 +17,7 @@
  *  - Fleet diagnosis (AI Captain)
  */
 
-export type LegionModel = 'claude' | 'gpt4o' | 'auto';
+export type LegionModel = 'claude' | 'gpt4o' | 'auto' | 'groq';
 export type LegionTask = 'dialogue' | 'lore' | 'moderation' | 'balance' | 'captain' | 'general' | 'ale';
 
 export interface LegionRequest {
@@ -29,7 +32,7 @@ export interface LegionRequest {
 export interface LegionResponse {
   text: string;
   model: string;
-  source: 'ai-hub' | 'puter' | 'direct' | 'fallback';
+  source: 'groq' | 'ai-hub' | 'puter' | 'direct' | 'fallback';
   tokensUsed: number;
   latencyMs: number;
 }
@@ -64,6 +67,59 @@ Rules:
 - Never invent private user data. Don't claim you can spend GBUX or change accounts.
 - You may be playful but stay helpful. Sign off vibe: crewmate, not support ticket.`,
 };
+
+// ═══ GROQ (OpenAI-compatible, fast) ═══
+const GROQ_API_KEY = process.env.GROQ_API_KEY || '';
+const GROQ_MODEL =
+  process.env.GROQ_MODEL ||
+  // solid default — override with GROQ_MODEL if needed
+  'llama-3.3-70b-versatile';
+const GROQ_URL = process.env.GROQ_API_URL || 'https://api.groq.com/openai/v1/chat/completions';
+
+async function callGroq(req: LegionRequest): Promise<LegionResponse | null> {
+  if (!GROQ_API_KEY) return null;
+
+  const start = Date.now();
+  try {
+    const resp = await fetch(GROQ_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${GROQ_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: GROQ_MODEL,
+        messages: [
+          { role: 'system', content: SYSTEM_PROMPTS[req.task] },
+          { role: 'user', content: req.prompt },
+        ],
+        max_tokens: Math.min(req.maxTokens || 500, 1024),
+        temperature: req.temperature ?? 0.7,
+      }),
+      signal: AbortSignal.timeout(20000),
+    });
+
+    if (!resp.ok) {
+      const errText = await resp.text().catch(() => '');
+      console.warn('[legion-ai] Groq HTTP', resp.status, errText.slice(0, 200));
+      return null;
+    }
+    const data = (await resp.json()) as any;
+    const text = data.choices?.[0]?.message?.content || '';
+    if (!text) return null;
+
+    return {
+      text,
+      model: data.model || GROQ_MODEL,
+      source: 'groq',
+      tokensUsed: data.usage?.total_tokens || 0,
+      latencyMs: Date.now() - start,
+    };
+  } catch (err) {
+    console.warn('[legion-ai] Groq failed', err instanceof Error ? err.message : err);
+    return null;
+  }
+}
 
 // ═══ AI HUB (CF Worker) ═══
 const AI_HUB_URL = process.env.AI_HUB_URL || 'https://ai.grudge-studio.com/api';
@@ -186,22 +242,26 @@ async function callAnthropicDirect(req: LegionRequest): Promise<LegionResponse |
 
 /**
  * Send a request to the Legion AI system.
- * Tries: AI Hub → Puter AI → Direct Anthropic → hardcoded fallback.
+ * Tries: Groq → AI Hub → Puter → Anthropic → hardcoded fallback.
  */
 export async function legionAI(req: LegionRequest): Promise<LegionResponse> {
-  // 1. Try AI Hub (CF Worker)
+  // 1. Groq first (fast + configured for Treaty @ale)
+  const groqResult = await callGroq(req);
+  if (groqResult?.text) return groqResult;
+
+  // 2. AI Hub (CF Worker)
   const hubResult = await callAIHub(req);
-  if (hubResult) return hubResult;
+  if (hubResult?.text) return hubResult;
 
-  // 2. Try Puter AI
+  // 3. Puter AI
   const puterResult = await callPuterAI(req);
-  if (puterResult) return puterResult;
+  if (puterResult?.text) return puterResult;
 
-  // 3. Try direct Anthropic
+  // 4. Direct Anthropic
   const directResult = await callAnthropicDirect(req);
-  if (directResult) return directResult;
+  if (directResult?.text) return directResult;
 
-  // 4. Hardcoded fallback (no AI service available)
+  // 5. Hardcoded fallback (no AI service available)
   return {
     text: getFallbackResponse(req.task),
     model: 'fallback',
