@@ -1,9 +1,8 @@
 /**
- * /auth/callback — Phantom Connect OAuth redirect handler.
+ * /auth/callback — canonical Grudge ID SSO handoff + legacy Phantom fallback.
  *
- * After a user signs in with Google or Apple via Phantom Connect,
- * they are redirected here. The Phantom SDK auto-reconnects the
- * session, then we finalize auth with the Grudge backend.
+ * Preferred path: return from id.grudge-studio.com with ?grudge_token= / ?sso_token=
+ * Optional: ?next=/chat?room=trading to land back on the intended surface.
  */
 
 import { useEffect, useState } from "react";
@@ -13,6 +12,44 @@ import { useAuth } from "@/components/auth-provider";
 import { phantomSignIn } from "@/lib/player-auth";
 
 type CallbackState = "connecting" | "success" | "error";
+
+const TOKEN_KEYS = ["grudge_token", "sso_token", "token"] as const;
+
+function takeTokenFromUrl(): string | null {
+  if (typeof window === "undefined") return null;
+  const url = new URL(window.location.href);
+  for (const key of TOKEN_KEYS) {
+    const q = url.searchParams.get(key);
+    if (q) return q;
+    const hash = new URLSearchParams(url.hash.replace(/^#/, ""));
+    const h = hash.get(key);
+    if (h) return h;
+  }
+  return null;
+}
+
+function nextPathFromUrl(): string {
+  if (typeof window === "undefined") return "/";
+  const n = new URLSearchParams(window.location.search).get("next");
+  if (n && n.startsWith("/") && !n.startsWith("//")) return n;
+  return "/chat";
+}
+
+function storeToken(token: string) {
+  try {
+    localStorage.setItem("grudge_auth_token", token);
+    localStorage.setItem("grudge_token", token);
+    localStorage.setItem("sso_token", token);
+  } catch {
+    /* ignore */
+  }
+  // Also set cookie for same-origin API
+  try {
+    document.cookie = `grudge_auth_token=${encodeURIComponent(token)}; Path=/; Max-Age=${30 * 24 * 3600}; SameSite=Lax`;
+  } catch {
+    /* ignore */
+  }
+}
 
 export default function AuthCallback() {
   const [state, setState] = useState<CallbackState>("connecting");
@@ -25,22 +62,39 @@ export default function AuthCallback() {
 
     async function finalize() {
       try {
-        // The Phantom SDK's autoConnect picks up the OAuth session.
-        // We then run the server-side nonce/verify flow to get a Grudge session cookie.
+        const token = takeTokenFromUrl();
+        if (token) {
+          storeToken(token);
+          // Strip tokens from URL
+          try {
+            const url = new URL(window.location.href);
+            for (const k of TOKEN_KEYS) url.searchParams.delete(k);
+            window.history.replaceState({}, "", url.pathname + url.search);
+          } catch {
+            /* ignore */
+          }
+          await refresh();
+          if (cancelled) return;
+          setState("success");
+          const next = nextPathFromUrl();
+          setTimeout(() => {
+            if (!cancelled) setLocation(next);
+          }, 600);
+          return;
+        }
+
+        // Legacy Phantom Connect OAuth path only if no Grudge token present
         const result = await phantomSignIn("phantom");
-
         if (cancelled) return;
-
         if (result.ok) {
           setState("success");
           await refresh();
-          // Redirect to account page after short delay
           setTimeout(() => {
-            if (!cancelled) setLocation("/account");
-          }, 1200);
+            if (!cancelled) setLocation(nextPathFromUrl());
+          }, 800);
         } else {
           setState("error");
-          setError(result.error);
+          setError(result.error || "No session token received from Grudge ID.");
         }
       } catch (err: any) {
         if (cancelled) return;
@@ -49,8 +103,7 @@ export default function AuthCallback() {
       }
     }
 
-    // Small delay to let the SDK initialize autoConnect
-    const timer = setTimeout(finalize, 500);
+    const timer = setTimeout(finalize, 200);
     return () => {
       cancelled = true;
       clearTimeout(timer);
@@ -70,10 +123,10 @@ export default function AuthCallback() {
               className="font-heading text-lg text-[hsl(43,85%,65%)] mb-2"
               style={{ WebkitTextFillColor: "unset" }}
             >
-              Connecting wallet…
+              Signing in with Grudge ID…
             </h2>
             <p className="text-sm text-[hsl(45,15%,60%)] font-body">
-              Finalizing your Phantom session with Grudge Studio.
+              Completing secure handoff from id.grudge-studio.com.
             </p>
           </>
         )}
@@ -85,10 +138,10 @@ export default function AuthCallback() {
               className="font-heading text-lg text-[hsl(43,85%,65%)] mb-2"
               style={{ WebkitTextFillColor: "unset" }}
             >
-              Connected!
+              Signed in
             </h2>
             <p className="text-sm text-[hsl(45,15%,60%)] font-body">
-              Redirecting to your account…
+              Returning you to chat…
             </p>
           </>
         )}
@@ -100,16 +153,22 @@ export default function AuthCallback() {
               className="font-heading text-lg text-[hsl(0,70%,65%)] mb-2"
               style={{ WebkitTextFillColor: "unset" }}
             >
-              Connection failed
+              Sign-in failed
             </h2>
             <p className="text-sm text-[hsl(45,15%,60%)] font-body mb-4">
-              {error || "Something went wrong during wallet authentication."}
+              {error || "Something went wrong during Grudge ID authentication."}
             </p>
             <button
-              onClick={() => setLocation("/login")}
+              onClick={() => {
+                window.location.assign(
+                  `https://id.grudge-studio.com/login?redirect_uri=${encodeURIComponent(
+                    `${window.location.origin}/auth/callback?next=/chat`,
+                  )}`,
+                );
+              }}
               className="gilded-button px-4 py-2 text-sm"
             >
-              Try again
+              Try Grudge ID again
             </button>
           </>
         )}

@@ -548,4 +548,17 @@
     handleOAuthCallback();
   }
 
+
+// ── Canonical override (ONE TRUTH) ─────────────────────────────────
+// Never show multi-provider grid — always send users to Grudge ID.
+window.openGrudgeAuthModal = function (opts) {
+  var ret = (opts && (opts.returnUrl || opts.redirectTo)) || window.GRUDGE_AUTH_RETURN || (window.location.pathname + window.location.search);
+  if (ret.indexOf("http") !== 0) {
+    ret = window.location.origin + (ret.charAt(0) === "/" ? ret : "/" + ret);
+  }
+  var cb = window.location.origin + "/auth/callback?next=" + encodeURIComponent(ret.replace(window.location.origin, "") || "/");
+  window.location.assign("https://id.grudge-studio.com/login?redirect_uri=" + encodeURIComponent(cb));
+};
+window.closeGrudgeAuthModal = function () {};
 })();
+

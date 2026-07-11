@@ -7,7 +7,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Send, Users, MessageSquare, Circle, Shield, Share2, Wifi, WifiOff, Check } from "lucide-react";
 import type { ChatMessage } from "@shared/schema";
 import { useAuth } from "@/components/auth-provider";
-import { useAuthModal } from "@/components/auth-modal";
+import { redirectToCanonicalLogin } from "@/lib/canonicalAuth";
 import TreatyChannelPicker, { treatyChannelById } from "@/components/treaty/TreatyChannelPicker";
 import {
   TREATY_CHANNELS,
@@ -36,7 +36,6 @@ function roomFromSearch(): string {
 
 export default function Chat() {
   const { player } = useAuth();
-  const { open: openAuthModal } = useAuthModal();
 
   const identity = useMemo(() => identityFromPlayer(player), [player]);
   const [guestName, setGuestName] = useState(identity.displayName === "Guest" ? "" : identity.displayName);
@@ -205,7 +204,7 @@ export default function Chat() {
           <div className="fantasy-panel p-6 space-y-4">
             <Button
               className="w-full gilded-button h-11"
-              onClick={() => openAuthModal({ redirectTo: `/chat?room=${currentRoom}`, initialTab: "signin", reason: "Sign in with Grudge ID to chat as yourself." })}
+              onClick={() => redirectToCanonicalLogin(`/chat?room=${currentRoom}`)}
             >
               <Shield className="w-4 h-4 mr-2" /> Sign in with Grudge ID
             </Button>
@@ -300,7 +299,7 @@ export default function Chat() {
               ) : (
                 <button
                   type="button"
-                  onClick={() => openAuthModal({ redirectTo: `/chat?room=${currentRoom}`, initialTab: "signin" })}
+                  onClick={() => redirectToCanonicalLogin(`/chat?room=${currentRoom}`)}
                   className="text-[10px] text-[hsl(43,85%,55%)] hover:underline font-body"
                 >
                   Verify with Grudge ID
