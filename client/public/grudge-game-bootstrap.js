@@ -42,10 +42,12 @@
     browse: 'https://browse.grudge-studio.com',
     weaponSkills: 'https://objectstore.grudge-studio.com/api/v1/master-weaponSkills.json',
     ai: 'https://ai.grudge-studio.com',
-    ws: 'wss://grudge-api-production-0d46.up.railway.app',
+    /** Treaty chat + presence — The-ENGINE Railway (owns /ws/chat) */
+    ws: 'wss://the-engine.up.railway.app/ws/chat',
+    engineApi: 'https://the-engine.up.railway.app',
     world: 'wss://world.grudge-studio.com',
     portal: 'https://grudge-studio.com',
-    engine: 'https://the-engine-snowy.vercel.app',
+    engine: 'https://grudge-studio.com',
     open: 'https://gameopen.vercel.app',
     puterSdk: 'https://js.puter.com/v2/'
   };
@@ -176,10 +178,148 @@
     return fetch(url, opts);
   }
 
+  /**
+   * Treaty in-game chat — one WebSocket room per game for the whole fleet.
+   *
+   *   GrudgeTreaty.connect({ gameId: 'avernus-3d', gameTitle: 'Avernus 3D' })
+   *   GrudgeTreaty.send('gg everyone')
+   *   GrudgeTreaty.onMessage(function (msg) { ... })
+   *   GrudgeTreaty.disconnect()
+   */
+  var treatyWs = null;
+  var treatyRoom = null;
+  var treatyHandlers = { message: [], system: [], users: [], error: [], open: [], close: [] };
+  var treatyReconnect = null;
+  var treatyClosed = true;
+
+  function treatyGameRoom(gameKey) {
+    var slug = String(gameKey || 'lobby').toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 48);
+    return 'game:' + (slug || 'lobby');
+  }
+
+  function treatyEmit(kind, payload) {
+    (treatyHandlers[kind] || []).forEach(function (fn) {
+      try { fn(payload); } catch (e) {}
+    });
+  }
+
+  function treatyConnect(opts) {
+    opts = opts || {};
+    var gameKey = opts.gameId || opts.gameKey || opts.slug || 'lobby';
+    var gameTitle = opts.gameTitle || opts.title || gameKey;
+    treatyRoom = treatyGameRoom(gameKey);
+    treatyClosed = false;
+
+    if (treatyWs && (treatyWs.readyState === 0 || treatyWs.readyState === 1)) {
+      try {
+        treatyWs.send(JSON.stringify({ type: 'switch_room', room: treatyRoom, gameTitle: gameTitle }));
+      } catch (e) {}
+      return treatyWs;
+    }
+
+    var url = opts.wsUrl || FLEET.ws;
+    if (url.indexOf('/ws/chat') < 0) {
+      url = url.replace(/\/$/, '') + (url.indexOf('ws') === 0 ? '' : '');
+      if (url.indexOf('wss:') !== 0 && url.indexOf('ws:') !== 0) {
+        url = 'wss://the-engine.up.railway.app/ws/chat';
+      } else if (url.indexOf('/ws/chat') < 0) {
+        url = url.replace(/\/$/, '') + '/ws/chat';
+      }
+    }
+
+    try {
+      treatyWs = new WebSocket(url);
+    } catch (e) {
+      treatyEmit('error', { message: String(e && e.message || e) });
+      return null;
+    }
+
+    treatyWs.onopen = function () {
+      var sess = getSession();
+      var username = opts.username || sess.username || ('Guest' + Math.floor(Math.random() * 999));
+      try {
+        treatyWs.send(JSON.stringify({
+          type: 'join',
+          username: username,
+          grudgeId: sess.grudgeId || null,
+          room: treatyRoom,
+          gameTitle: gameTitle
+        }));
+      } catch (e) {}
+      treatyEmit('open', { room: treatyRoom });
+    };
+
+    treatyWs.onmessage = function (ev) {
+      var data;
+      try { data = JSON.parse(ev.data); } catch (e) { return; }
+      if (data.type === 'message') treatyEmit('message', data);
+      else if (data.type === 'system') treatyEmit('system', data);
+      else if (data.type === 'users' || data.type === 'joined') treatyEmit('users', data);
+      else if (data.type === 'error') treatyEmit('error', data);
+    };
+
+    treatyWs.onclose = function () {
+      treatyEmit('close', {});
+      treatyWs = null;
+      if (!treatyClosed) {
+        clearTimeout(treatyReconnect);
+        treatyReconnect = setTimeout(function () {
+          if (!treatyClosed) treatyConnect(opts);
+        }, 2500);
+      }
+    };
+
+    treatyWs.onerror = function () {
+      treatyEmit('error', { message: 'Treaty socket error' });
+    };
+
+    return treatyWs;
+  }
+
+  function treatySend(text) {
+    if (!treatyWs || treatyWs.readyState !== 1) return false;
+    var msg = String(text || '').trim().slice(0, 500);
+    if (!msg) return false;
+    try {
+      treatyWs.send(JSON.stringify({ type: 'message', message: msg }));
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function treatyOn(kind, fn) {
+    if (!treatyHandlers[kind]) treatyHandlers[kind] = [];
+    treatyHandlers[kind].push(fn);
+    return function () {
+      treatyHandlers[kind] = treatyHandlers[kind].filter(function (f) { return f !== fn; });
+    };
+  }
+
+  function treatyDisconnect() {
+    treatyClosed = true;
+    clearTimeout(treatyReconnect);
+    try { if (treatyWs) treatyWs.close(); } catch (e) {}
+    treatyWs = null;
+  }
+
   handleSsoCallback();
   listenAuthPopup();
 
   global.GRUDGE_FLEET = FLEET;
+  global.GrudgeTreaty = {
+    connect: treatyConnect,
+    send: treatySend,
+    disconnect: treatyDisconnect,
+    onMessage: function (fn) { return treatyOn('message', fn); },
+    onSystem: function (fn) { return treatyOn('system', fn); },
+    onUsers: function (fn) { return treatyOn('users', fn); },
+    onError: function (fn) { return treatyOn('error', fn); },
+    on: treatyOn,
+    gameRoom: treatyGameRoom,
+    get room() { return treatyRoom; },
+    get connected() { return !!(treatyWs && treatyWs.readyState === 1); }
+  };
   global.GrudgeGameBootstrap = {
     fleet: FLEET,
     getSession: getSession,
@@ -188,6 +328,7 @@
     buildLoginUrl: buildLoginUrl,
     openLogin: openLogin,
     apiFetch: apiFetch,
-    exchangeLaunchToken: exchangeLaunchToken
+    exchangeLaunchToken: exchangeLaunchToken,
+    treaty: global.GrudgeTreaty
   };
 })(typeof window !== 'undefined' ? window : this);

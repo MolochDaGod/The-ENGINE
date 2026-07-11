@@ -63,6 +63,8 @@ import {
   getTreatyWsUrl,
   identityFromPlayer,
   TREATY_CHANNELS,
+  fetchTreatyFriends,
+  type TreatyFriend,
 } from "@/lib/treaty-chat";
 import TreatyChannelPicker, { treatyChannelById } from "@/components/treaty/TreatyChannelPicker";
 
@@ -661,30 +663,83 @@ function SocialTab() {
         </div>
       </div>
 
-      {/* Friends */}
-      <div>
-        <span className="text-xs font-heading text-[hsl(45,15%,50%)] uppercase tracking-wider">
-          <Users className="w-3 h-3 inline mr-1" /> Friends
-        </span>
-        <div className="mt-2 rounded border border-[hsl(225,20%,15%)] bg-[hsl(225,30%,8%)] p-4 text-center">
-          <Users className="w-6 h-6 text-[hsl(45,15%,35%)] mx-auto mb-2" />
-          <p className="text-[11px] text-[hsl(45,15%,45%)] font-body">
-            Friends list coming soon. Challenge players from the PvP Hub to build your network.
-          </p>
-        </div>
-      </div>
+      {/* Friends — live Treaty presence */}
+      <SocialFriendsBlock
+        enabled={!!player}
+        onMessage={(room) => {
+          close();
+          window.location.href = `/chat?room=${encodeURIComponent(room)}`;
+        }}
+      />
 
-      {/* Messages */}
+      {/* DMs shortcut */}
       <div>
         <span className="text-xs font-heading text-[hsl(45,15%,50%)] uppercase tracking-wider">
           <MessageCircle className="w-3 h-3 inline mr-1" /> Messages
         </span>
-        <div className="mt-2 rounded border border-[hsl(225,20%,15%)] bg-[hsl(225,30%,8%)] p-4 text-center">
-          <MessageCircle className="w-6 h-6 text-[hsl(45,15%,35%)] mx-auto mb-2" />
-          <p className="text-[11px] text-[hsl(45,15%,45%)] font-body">
-            Direct messages between Grudge ID holders. Coming soon.
+        <div className="mt-2 rounded border border-[hsl(225,20%,15%)] bg-[hsl(225,30%,8%)] p-3 text-center">
+          <p className="text-[11px] text-[hsl(45,15%,45%)] font-body mb-2">
+            Friends, DMs, and in-game chat live in Treaty.
           </p>
+          <Link href="/chat?tab=dms" onClick={close}>
+            <span className="text-[11px] text-[hsl(43,85%,55%)] hover:underline font-body">Open Treaty DMs →</span>
+          </Link>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function SocialFriendsBlock({
+  enabled,
+  onMessage,
+}: {
+  enabled: boolean;
+  onMessage: (dmRoom: string) => void;
+}) {
+  const friendsQ = useQuery({
+    queryKey: ["/api/treaty/friends"],
+    queryFn: fetchTreatyFriends,
+    enabled,
+    refetchInterval: 20_000,
+  });
+
+  return (
+    <div>
+      <span className="text-xs font-heading text-[hsl(45,15%,50%)] uppercase tracking-wider">
+        <Users className="w-3 h-3 inline mr-1" /> Friends
+      </span>
+      <div className="mt-2 rounded border border-[hsl(225,20%,15%)] bg-[hsl(225,30%,8%)] p-3">
+        {!enabled ? (
+          <p className="text-[11px] text-[hsl(45,15%,45%)] font-body text-center">Sign in to see friends.</p>
+        ) : friendsQ.isLoading ? (
+          <Loader2 className="w-4 h-4 animate-spin mx-auto text-[hsl(43,85%,55%)]" />
+        ) : !(friendsQ.data?.length) ? (
+          <p className="text-[11px] text-[hsl(45,15%,45%)] font-body text-center">
+            No friends yet.{" "}
+            <Link href="/chat">
+              <span className="text-[hsl(43,85%,55%)] hover:underline">Open Treaty</span>
+            </Link>
+          </p>
+        ) : (
+          <ul className="space-y-1.5 max-h-40 overflow-y-auto">
+            {(friendsQ.data as TreatyFriend[]).map((f) => (
+              <li key={f.friendshipId || f.id} className="flex items-center gap-2 text-xs">
+                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${f.isOnline ? "bg-emerald-400" : "bg-[hsl(45,15%,30%)]"}`} />
+                <span className="truncate flex-1 text-[hsl(45,30%,85%)]">{f.displayName || f.username}</span>
+                {f.dmRoom && (
+                  <button
+                    type="button"
+                    className="text-[10px] text-[hsl(43,85%,55%)] hover:underline shrink-0"
+                    onClick={() => onMessage(f.dmRoom!)}
+                  >
+                    DM
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     </div>
   );

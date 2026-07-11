@@ -10,6 +10,12 @@ import {
   toTreatyMessage,
   toWsPayload,
   shareUrl as treatyShareUrl,
+  dmRoomId,
+  parseDmRoom,
+  gameRoomId,
+  roomKind,
+  canAccessRoom,
+  dmPeerId,
 } from "./treaty-chat";
 import {
   chatClients,
@@ -17,12 +23,18 @@ import {
   broadcastChatToRoom,
   getRoomUsers,
   pushPresence,
+  isUserOnline,
+  listActiveGameRooms,
+  getOnlinePresence,
+  sendToUserId,
 } from "./chat-presence";
 import { createPathWss, attachWsUpgrade } from "./ws-upgrade";
+import { registerStudioFeatures } from "./routes/studio-features";
+import { chatMessages, friends, users as usersTable } from "@shared/schema";
 import { storage } from "./storage";
 import { insertScrapingJobSchema, insertOrderSchema, insertGameSchema, insertArticleSchema, gameLibrary, scores, users, walletConnections } from "@shared/schema";
 import { z } from "zod";
-import { eq, sql } from "drizzle-orm";
+import { eq, sql, and, or } from "drizzle-orm";
 import { db } from "./db";
 import * as cheerio from "cheerio";
 import * as fs from "fs";
@@ -2199,6 +2211,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerUniverseRoutes(app);
   // Admin system-dev console for agents + operators
   registerSystemAdminRoutes(app);
+  // Friends + tournaments + studio admin (was never mounted)
+  registerStudioFeatures(app);
 
   app.get("/api/games/top", async (req, res) => {
     try {
@@ -3539,9 +3553,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json(TREATY_ROOMS);
   });
 
-  // Treaty Chat HTTP — GrudaNode / Grudge ID parity (polling + shareable rooms)
+  // Treaty Chat HTTP — community + DMs + per-game rooms
   app.get("/api/treaty/rooms", (_req, res) => {
-    res.json({ rooms: TREATY_ROOMS });
+    res.json({
+      rooms: TREATY_ROOMS,
+      kinds: ["community", "dm", "game"],
+      gameRoomExample: "game:avernus-3d",
+      dmRoomExample: "dm:1_2",
+    });
   });
 
   app.get("/api/treaty/config", (req, res) => {
@@ -3550,14 +3569,228 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({
       rooms: TREATY_ROOMS,
       room,
+      kind: roomKind(room),
       shareUrl: treatyShareUrl(portal, room),
-      mode: "account-room",
+      mode: "treaty-social",
+      wsPath: "/ws/chat",
     });
+  });
+
+  app.get("/api/treaty/presence", (_req, res) => {
+    res.json({
+      online: getOnlinePresence(),
+      games: listActiveGameRooms(),
+    });
+  });
+
+  app.get("/api/treaty/games", (_req, res) => {
+    res.json({ games: listActiveGameRooms() });
+  });
+
+  /** Friends with live Treaty WS online (not lastLogin guess). */
+  app.get("/api/treaty/friends", requirePlayer, async (req, res) => {
+    try {
+      const player = getPlayer(req)!;
+      const rows = await db
+        .select()
+        .from(friends)
+        .where(
+          and(
+            or(eq(friends.requesterId, player.id), eq(friends.recipientId, player.id)),
+            eq(friends.status, "accepted"),
+          ),
+        );
+
+      const friendIds = rows.map((r) =>
+        r.requesterId === player.id ? r.recipientId : r.requesterId,
+      );
+      if (friendIds.length === 0) return res.json({ friends: [] });
+
+      const friendUsers = await db
+        .select({
+          id: usersTable.id,
+          username: usersTable.username,
+          displayName: usersTable.displayName,
+          avatarUrl: usersTable.avatarUrl,
+          grudgeId: usersTable.grudgeId,
+        })
+        .from(usersTable)
+        .where(sql`${usersTable.id} IN (${sql.join(friendIds.map((id) => sql`${id}`), sql`, `)})`);
+
+      const result = rows.map((r) => {
+        const friendId = r.requesterId === player.id ? r.recipientId : r.requesterId;
+        const u = friendUsers.find((x) => x.id === friendId);
+        const online = isUserOnline(friendId);
+        const presence = getOnlinePresence().find((p) => p.userId === friendId);
+        return {
+          friendshipId: r.id,
+          id: friendId,
+          username: u?.username,
+          displayName: u?.displayName || u?.username,
+          avatarUrl: u?.avatarUrl,
+          grudgeId: u?.grudgeId,
+          isOnline: online,
+          room: presence?.room ?? null,
+          gameKey: presence?.gameKey ?? null,
+          dmRoom: dmRoomId(player.id, friendId),
+        };
+      });
+
+      result.sort((a, b) => Number(b.isOnline) - Number(a.isOnline));
+      res.json({ friends: result });
+    } catch (error) {
+      console.error("[treaty/friends]", error);
+      res.status(500).json({ error: "Failed to list friends" });
+    }
+  });
+
+  /** Open or resolve a DM room with another player (by id, username, or grudgeId). */
+  app.post("/api/treaty/dm", requirePlayer, async (req, res) => {
+    try {
+      const player = getPlayer(req)!;
+      const body = req.body || {};
+      let peerId = body.userId != null ? parseInt(String(body.userId), 10) : NaN;
+
+      if (!Number.isFinite(peerId)) {
+        if (body.grudgeId) {
+          const u = await storage.getUserByGrudgeId(String(body.grudgeId));
+          if (u) peerId = u.id;
+        } else if (body.username) {
+          const u = await storage.getUserByUsername(String(body.username));
+          if (u) peerId = u.id;
+        }
+      }
+
+      if (!Number.isFinite(peerId) || peerId === player.id) {
+        return res.status(400).json({ error: "Valid peer userId, username, or grudgeId required" });
+      }
+
+      const peer = await storage.getUser(peerId);
+      if (!peer) return res.status(404).json({ error: "Player not found" });
+
+      // Soft-block check
+      const [rel] = await db
+        .select()
+        .from(friends)
+        .where(
+          or(
+            and(eq(friends.requesterId, player.id), eq(friends.recipientId, peerId)),
+            and(eq(friends.requesterId, peerId), eq(friends.recipientId, player.id)),
+          ),
+        )
+        .limit(1);
+      if (rel?.status === "blocked") {
+        return res.status(403).json({ error: "Cannot message this player" });
+      }
+
+      const room = dmRoomId(player.id, peerId);
+      const portal = (process.env.PORTAL_ORIGIN || "https://grudge-studio.com").replace(/\/$/, "");
+      res.json({
+        ok: true,
+        room,
+        peer: {
+          id: peer.id,
+          username: peer.username,
+          displayName: peer.displayName || peer.username,
+          grudgeId: peer.grudgeId,
+          isOnline: isUserOnline(peer.id),
+        },
+        areFriends: rel?.status === "accepted",
+        shareUrl: treatyShareUrl(portal, room),
+      });
+    } catch (error) {
+      console.error("[treaty/dm]", error);
+      res.status(500).json({ error: "Failed to open DM" });
+    }
+  });
+
+  /** Inbox: recent DM threads for the signed-in player. */
+  app.get("/api/treaty/dms", requirePlayer, async (req, res) => {
+    try {
+      const player = getPlayer(req)!;
+      const rows = await db
+        .select({
+          room: chatMessages.room,
+          message: chatMessages.message,
+          username: chatMessages.username,
+          userId: chatMessages.userId,
+          createdAt: chatMessages.createdAt,
+        })
+        .from(chatMessages)
+        .where(sql`${chatMessages.room} LIKE 'dm:%'`)
+        .orderBy(sql`${chatMessages.createdAt} DESC`)
+        .limit(400);
+
+      const threads = new Map<
+        string,
+        { room: string; lastMessage: string; lastAt: string | null; lastFrom: string }
+      >();
+      for (const row of rows) {
+        const dm = parseDmRoom(row.room);
+        if (!dm) continue;
+        if (dm.a !== player.id && dm.b !== player.id) continue;
+        if (threads.has(row.room)) continue;
+        threads.set(row.room, {
+          room: row.room,
+          lastMessage: row.message,
+          lastAt: row.createdAt ? new Date(row.createdAt).toISOString() : null,
+          lastFrom: row.username,
+        });
+      }
+
+      const peerIds = [...threads.keys()]
+        .map((r) => dmPeerId(r, player.id))
+        .filter((id): id is number => id != null);
+
+      const peers =
+        peerIds.length === 0
+          ? []
+          : await db
+              .select({
+                id: usersTable.id,
+                username: usersTable.username,
+                displayName: usersTable.displayName,
+                grudgeId: usersTable.grudgeId,
+                avatarUrl: usersTable.avatarUrl,
+              })
+              .from(usersTable)
+              .where(sql`${usersTable.id} IN (${sql.join(peerIds.map((id) => sql`${id}`), sql`, `)})`);
+
+      const inbox = [...threads.values()].map((t) => {
+        const peerId = dmPeerId(t.room, player.id);
+        const peer = peers.find((p) => p.id === peerId);
+        return {
+          ...t,
+          peer: peer
+            ? {
+                id: peer.id,
+                username: peer.username,
+                displayName: peer.displayName || peer.username,
+                grudgeId: peer.grudgeId,
+                avatarUrl: peer.avatarUrl,
+                isOnline: isUserOnline(peer.id),
+              }
+            : null,
+        };
+      });
+
+      res.json({ dms: inbox });
+    } catch (error) {
+      console.error("[treaty/dms]", error);
+      res.status(500).json({ error: "Failed to list DMs" });
+    }
   });
 
   app.get("/api/treaty/room/:id/messages", async (req, res) => {
     try {
       const roomId = normalizeRoomId(req.params.id);
+      let userId: number | null = null;
+      const player = getPlayer(req);
+      if (player) userId = player.id;
+
+      const access = canAccessRoom(roomId, userId);
+      if (!access.ok) return res.status(403).json({ error: access.reason || "Forbidden" });
+
       const rows = await storage.listChatMessages(roomId, 100);
       const grudgeIds = new Map<number, string>();
       for (const row of rows) {
@@ -3569,7 +3802,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const messages = rows.reverse().map((row) =>
         toTreatyMessage(row, row.userId ? grudgeIds.get(row.userId) : null),
       );
-      res.json({ roomId, messages });
+      res.json({ roomId, kind: access.kind, messages });
     } catch {
       res.status(500).json({ error: "Failed to fetch treaty messages" });
     }
@@ -3584,17 +3817,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let sender = normalizeSender(req.body);
       let userId: number | null = null;
 
-      const cookies = parsePlayerCookies(req.headers.cookie);
-      const token = cookies[PLAYER_COOKIE];
-      if (token) {
-        const resolvedId = verifyPlayerToken(token);
-        if (resolvedId !== null) {
-          const player = await storage.getUser(resolvedId);
-          if (player) {
-            sender = normalizeSender(undefined, player);
-            userId = player.id;
+      const player = getPlayer(req);
+      if (player) {
+        sender = normalizeSender(undefined, player);
+        userId = player.id;
+      } else {
+        // cookie fallback if middleware missed
+        const cookies = parsePlayerCookies(req.headers.cookie);
+        const token = cookies[PLAYER_COOKIE];
+        if (token) {
+          const resolvedId = verifyPlayerToken(token);
+          if (resolvedId !== null) {
+            const p = await storage.getUser(resolvedId);
+            if (p) {
+              sender = normalizeSender(undefined, p);
+              userId = p.id;
+            }
           }
         }
+      }
+
+      const access = canAccessRoom(roomId, userId);
+      if (!access.ok) return res.status(403).json({ error: access.reason || "Forbidden" });
+      if (access.kind === "dm" && !userId) {
+        return res.status(401).json({ error: "Sign in to send DMs" });
       }
 
       const saved = await storage.createChatMessage({
@@ -3605,12 +3851,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       const message = toTreatyMessage(saved, sender.grudgeId);
-      // Fan out to live WS clients — was missing, so HTTP fallback looked "sent" but never arrived live
-      broadcastChatToRoom(roomId, toWsPayload(saved, sender.grudgeId));
+      const payload = toWsPayload(saved, sender.grudgeId);
+      broadcastChatToRoom(roomId, payload);
+
+      // Notify peer on DM even if they're in another room (badge/inbox)
+      if (access.kind === "dm" && userId) {
+        const peer = dmPeerId(roomId, userId);
+        if (peer) {
+          sendToUserId(peer, { type: "dm_notify", room: roomId, message: payload });
+        }
+      }
+
       res.json({ ok: true, message });
     } catch {
       res.status(500).json({ error: "Failed to send treaty message" });
     }
+  });
+
+  /** Resolve game room id for embeds. */
+  app.get("/api/treaty/game/:key", (req, res) => {
+    const room = gameRoomId(req.params.key);
+    const portal = (process.env.PORTAL_ORIGIN || "https://grudge-studio.com").replace(/\/$/, "");
+    const live = listActiveGameRooms().find((g) => g.room === room);
+    res.json({
+      room,
+      gameKey: req.params.key,
+      online: live?.online ?? 0,
+      users: live?.users ?? [],
+      shareUrl: treatyShareUrl(portal, room),
+    });
   });
 
   // ═══════════════════════════════════════════════════════════════
@@ -3837,7 +4106,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           let displayName = username;
           let grudgeId: string | null = String(data.grudgeId || "").trim() || null;
           let userId: number | null = null;
-          const room = normalizeRoomId(data.room || "general").slice(0, 50);
+          const room = normalizeRoomId(data.room || "general").slice(0, 64);
+          const gameTitle =
+            typeof data.gameTitle === "string"
+              ? data.gameTitle.slice(0, 80)
+              : typeof data.game_title === "string"
+                ? data.game_title.slice(0, 80)
+                : null;
 
           try {
             const cookies = parsePlayerCookies(req.headers.cookie);
@@ -3858,6 +4133,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
             console.warn("[ws/chat] session resolve failed", authErr);
           }
 
+          const access = canAccessRoom(room, userId);
+          if (!access.ok) {
+            sendChatJson(ws, { type: "error", message: access.reason || "Cannot join room" });
+            return;
+          }
+
           const prev = chatClients.get(ws);
           if (prev && prev.room !== room) {
             chatClients.delete(ws);
@@ -3865,12 +4146,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
             broadcastChatToRoom(prev.room, { type: "system", message: `${prev.displayName} left the room` });
           }
 
-          chatClients.set(ws, { username, displayName, grudgeId, room, userId });
-          // Critical: ack joiner with users[] first — was broadcast-only and easy to miss
+          chatClients.set(ws, { username, displayName, grudgeId, room, userId, gameTitle });
           sendChatJson(ws, {
             type: "joined",
             ok: true,
             room,
+            kind: access.kind,
             displayName,
             grudgeId,
             users: getRoomUsers(room),
@@ -3914,10 +4195,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
             return;
           }
           const oldRoom = info.room;
-          const newRoom = normalizeRoomId(data.room || "general").slice(0, 50);
+          const newRoom = normalizeRoomId(data.room || "general").slice(0, 64);
+          const access = canAccessRoom(newRoom, info.userId);
+          if (!access.ok) {
+            sendChatJson(ws, { type: "error", message: access.reason || "Cannot join room" });
+            return;
+          }
           if (oldRoom === newRoom) {
             pushPresence(newRoom, ws);
             return;
+          }
+          if (typeof data.gameTitle === "string") {
+            info.gameTitle = data.gameTitle.slice(0, 80);
           }
           broadcastChatToRoom(oldRoom, { type: "system", message: `${info.displayName} left the room` });
           info.room = newRoom;
@@ -3927,6 +4216,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             type: "joined",
             ok: true,
             room: newRoom,
+            kind: access.kind,
             displayName: info.displayName,
             grudgeId: info.grudgeId,
             users: getRoomUsers(newRoom),

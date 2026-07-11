@@ -218,17 +218,22 @@ function FriendsTab() {
         ) : (
           <ul className="space-y-2">
             {friends.data.map((f: any) => (
-              <li key={f.friendshipId || f.id} className="flex items-center justify-between p-2.5 rounded border border-[hsl(43,60%,30%)]/15">
-                <div className="flex items-center gap-3">
-                  <div className={`w-2 h-2 rounded-full ${f.isOnline ? "bg-[hsl(120,60%,50%)] shadow-[0_0_4px_hsl(120,60%,50%)]" : "bg-[hsl(45,15%,30%)]"}`} />
-                  <div>
-                    <div className="text-sm font-medium">{f.displayName || f.username}</div>
-                    <div className="text-[10px] text-[hsl(45,15%,50%)] font-body">{f.grudgeId}</div>
+              <li key={f.friendshipId || f.id} className="flex items-center justify-between p-2.5 rounded border border-[hsl(43,60%,30%)]/15 gap-2">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className={`w-2 h-2 rounded-full shrink-0 ${f.isOnline ? "bg-[hsl(120,60%,50%)] shadow-[0_0_4px_hsl(120,60%,50%)]" : "bg-[hsl(45,15%,30%)]"}`} />
+                  <div className="min-w-0">
+                    <div className="text-sm font-medium truncate">{f.displayName || f.username}</div>
+                    <div className="text-[10px] text-[hsl(45,15%,50%)] font-body truncate">{f.grudgeId}</div>
                   </div>
                 </div>
-                <Badge variant="outline" className="text-[9px] border-[hsl(43,60%,30%)]/30 text-[hsl(45,15%,55%)]">
-                  {f.isOnline ? "Online" : "Offline"}
-                </Badge>
+                <div className="flex items-center gap-2 shrink-0">
+                  <Link href={`/chat?room=${encodeURIComponent(f.dmRoom || "general")}`}>
+                    <Button size="sm" variant="outline" className="h-7 text-[10px]">Message</Button>
+                  </Link>
+                  <Badge variant="outline" className="text-[9px] border-[hsl(43,60%,30%)]/30 text-[hsl(45,15%,55%)]">
+                    {f.isOnline ? "Online" : "Offline"}
+                  </Badge>
+                </div>
               </li>
             ))}
           </ul>
