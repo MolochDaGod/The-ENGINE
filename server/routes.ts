@@ -3807,64 +3807,120 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   const httpServer = createServer(app);
 
-  const wss = new WebSocketServer({ server: httpServer, path: "/ws/chat" });
+  // perMessageDeflate off — Railway/edge proxies corrupt compressed frames (RSV1 errors)
+  const wss = new WebSocketServer({ server: httpServer, path: "/ws/chat", perMessageDeflate: false });
   const clients = new Map<WebSocket, { username: string; displayName: string; grudgeId: string | null; room: string; userId: number | null }>();
 
-  function broadcastToRoom(room: string, data: object) {
+  function sendJson(ws: WebSocket, data: object) {
+    if (ws.readyState === WebSocket.OPEN) {
+      try {
+        ws.send(JSON.stringify(data));
+      } catch (err) {
+        console.warn("[ws/chat] send failed", err);
+      }
+    }
+  }
+
+  function broadcastToRoom(room: string, data: object, except?: WebSocket) {
     const msg = JSON.stringify(data);
-    for (const [ws, info] of clients) {
-      if (info.room === room && ws.readyState === WebSocket.OPEN) {
-        ws.send(msg);
+    for (const [client, info] of clients) {
+      if (info.room === room && client.readyState === WebSocket.OPEN && client !== except) {
+        try {
+          client.send(msg);
+        } catch { /* drop */ }
       }
     }
   }
 
   function getRoomUsers(room: string): string[] {
     const users: string[] = [];
-    for (const [ws, info] of clients) {
-      if (info.room === room && ws.readyState === WebSocket.OPEN) {
-        users.push(info.displayName || info.username);
+    for (const [client, info] of clients) {
+      if (info.room === room && client.readyState === WebSocket.OPEN) {
+        const label = (info.displayName || info.username || "Guest").trim();
+        if (label) users.push(label);
       }
     }
     return [...new Set(users)];
   }
 
+  /** Push presence to one socket + rest of room (joiner always gets a users list). */
+  function pushPresence(room: string, to?: WebSocket) {
+    const users = getRoomUsers(room);
+    const payload = { type: "users" as const, room, users };
+    if (to) sendJson(to, payload);
+    broadcastToRoom(room, payload, to);
+  }
+
   wss.on("connection", (ws, req) => {
+    const sock = ws as WebSocket & { isAlive?: boolean };
+    sock.isAlive = true;
+    ws.on("pong", () => {
+      sock.isAlive = true;
+    });
+
     ws.on("message", async (raw) => {
       try {
         const data = JSON.parse(raw.toString());
 
-        if (data.type === "join") {
-          let username = (data.username || "Anonymous").slice(0, 30);
+        if (data.type === "join" || data.type === "hello") {
+          let username = String(data.username || "Anonymous").slice(0, 30);
           let displayName = username;
           let grudgeId: string | null = String(data.grudgeId || "").trim() || null;
           let userId: number | null = null;
           const room = normalizeRoomId(data.room || "general").slice(0, 50);
 
-          // Grudge ID session cookie overrides client-supplied identity
-          const cookies = parsePlayerCookies(req.headers.cookie);
-          const token = cookies[PLAYER_COOKIE];
-          if (token) {
-            const resolvedId = verifyPlayerToken(token);
-            if (resolvedId !== null) {
-              const player = await storage.getUser(resolvedId);
-              if (player) {
-                username = player.username;
-                displayName = player.displayName || player.username;
-                grudgeId = player.grudgeId;
-                userId = player.id;
+          try {
+            const cookies = parsePlayerCookies(req.headers.cookie);
+            const token = cookies[PLAYER_COOKIE];
+            if (token) {
+              const resolvedId = verifyPlayerToken(token);
+              if (resolvedId !== null) {
+                const player = await storage.getUser(resolvedId);
+                if (player) {
+                  username = player.username;
+                  displayName = player.displayName || player.username;
+                  grudgeId = player.grudgeId;
+                  userId = player.id;
+                }
               }
             }
+          } catch (authErr) {
+            console.warn("[ws/chat] session resolve failed", authErr);
+          }
+
+          const prev = clients.get(ws);
+          if (prev && prev.room !== room) {
+            clients.delete(ws);
+            pushPresence(prev.room);
+            broadcastToRoom(prev.room, { type: "system", message: `${prev.displayName} left the room` });
           }
 
           clients.set(ws, { username, displayName, grudgeId, room, userId });
-          broadcastToRoom(room, { type: "users", users: getRoomUsers(room) });
-          broadcastToRoom(room, { type: "system", message: `${displayName} joined the room` });
+          // Critical: ack joiner with users[] first — was broadcast-only and easy to miss
+          sendJson(ws, {
+            type: "joined",
+            ok: true,
+            room,
+            displayName,
+            grudgeId,
+            users: getRoomUsers(room),
+          });
+          pushPresence(room, ws);
+          broadcastToRoom(room, { type: "system", message: `${displayName} joined the room` }, ws);
+          return;
+        }
+
+        if (data.type === "ping") {
+          sendJson(ws, { type: "system", message: "pong" });
+          return;
         }
 
         if (data.type === "message") {
           const info = clients.get(ws);
-          if (!info) return;
+          if (!info) {
+            sendJson(ws, { type: "error", message: "Join a room before sending messages" });
+            return;
+          }
           const text = (data.message || "").slice(0, 500).trim();
           if (!text) return;
 
@@ -3876,30 +3932,72 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
 
           broadcastToRoom(info.room, toWsPayload(saved, info.grudgeId));
+          return;
         }
 
         if (data.type === "switch_room") {
           const info = clients.get(ws);
-          if (!info) return;
+          if (!info) {
+            sendJson(ws, { type: "error", message: "Not joined" });
+            return;
+          }
           const oldRoom = info.room;
-          const newRoom = (data.room || "general").slice(0, 50);
+          const newRoom = normalizeRoomId(data.room || "general").slice(0, 50);
+          if (oldRoom === newRoom) {
+            pushPresence(newRoom, ws);
+            return;
+          }
           broadcastToRoom(oldRoom, { type: "system", message: `${info.displayName} left the room` });
           info.room = newRoom;
-          broadcastToRoom(newRoom, { type: "users", users: getRoomUsers(newRoom) });
-          broadcastToRoom(newRoom, { type: "system", message: `${info.displayName} joined the room` });
+          clients.set(ws, info);
+          pushPresence(oldRoom); // was missing — old room stayed stale
+          sendJson(ws, {
+            type: "joined",
+            ok: true,
+            room: newRoom,
+            displayName: info.displayName,
+            grudgeId: info.grudgeId,
+            users: getRoomUsers(newRoom),
+          });
+          pushPresence(newRoom, ws);
+          broadcastToRoom(newRoom, { type: "system", message: `${info.displayName} joined the room` }, ws);
+          return;
         }
-      } catch (e) {}
+      } catch (e) {
+        console.warn("[ws/chat] message error", e);
+        sendJson(ws, { type: "error", message: "Invalid message" });
+      }
     });
 
     ws.on("close", () => {
       const info = clients.get(ws);
       if (info) {
         clients.delete(ws);
-        broadcastToRoom(info.room, { type: "users", users: getRoomUsers(info.room) });
+        pushPresence(info.room);
         broadcastToRoom(info.room, { type: "system", message: `${info.displayName} left the room` });
       }
     });
+
+    ws.on("error", (err) => {
+      console.warn("[ws/chat] socket error", err);
+    });
   });
+
+  const chatHeartbeat = setInterval(() => {
+    for (const [client] of clients) {
+      const s = client as WebSocket & { isAlive?: boolean };
+      if (s.isAlive === false) {
+        try { client.terminate(); } catch { /* */ }
+        const info = clients.get(client);
+        clients.delete(client);
+        if (info) pushPresence(info.room);
+        continue;
+      }
+      s.isAlive = false;
+      try { client.ping(); } catch { /* */ }
+    }
+  }, 25_000);
+  httpServer.on("close", () => clearInterval(chatHeartbeat));
 
   setupArenaRooms(httpServer);
   setupEngineSocket(httpServer);

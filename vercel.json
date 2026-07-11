@@ -194,7 +194,7 @@
     },
     {
       "source": "/ws/:path*",
-      "destination": "https://ws.grudge.studio/ws/:path*"
+      "destination": "https://the-engine.up.railway.app/ws/:path*"
     },
     {
       "source": "/((?!api/|embed/).*)",

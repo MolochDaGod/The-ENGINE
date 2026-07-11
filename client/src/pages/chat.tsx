@@ -17,8 +17,11 @@ import {
   persistGuestName,
   getTreatyWsUrl,
   buildJoinPayload,
+  buildSwitchRoomPayload,
   shareTreatyUrl,
   isValidChannelId,
+  sendTreatyHttp,
+  fetchTreatyMessages,
 } from "@/lib/treaty-chat";
 
 function getRandomName(): string {
@@ -34,98 +37,240 @@ function roomFromSearch(): string {
   return isValidChannelId(room) ? room : "general";
 }
 
+function applyUsersPayload(
+  data: TreatyWsMessage,
+  selfName: string,
+  setOnlineUsers: (u: string[]) => void,
+) {
+  const list = Array.isArray(data.users) ? data.users.filter(Boolean) : [];
+  // Always show self if server list is empty but we're joined
+  if (list.length === 0 && selfName) {
+    setOnlineUsers([selfName]);
+    return;
+  }
+  if (selfName && !list.includes(selfName)) {
+    setOnlineUsers([selfName, ...list]);
+    return;
+  }
+  setOnlineUsers(list);
+}
+
 export default function Chat() {
   const { player } = useAuth();
 
   const identity = useMemo(() => identityFromPlayer(player), [player]);
-  const [guestName, setGuestName] = useState(identity.displayName === "Guest" ? "" : identity.displayName);
+  const [guestName, setGuestName] = useState(() =>
+    identity.displayName === "Guest" ? "" : identity.displayName,
+  );
   const [hasJoined, setHasJoined] = useState(identity.isVerified);
   const [currentRoom, setCurrentRoom] = useState(roomFromSearch);
   const [messages, setMessages] = useState<TreatyWsMessage[]>([]);
   const [input, setInput] = useState("");
   const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
   const [connected, setConnected] = useState(false);
+  const [wsError, setWsError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+
   const wsRef = useRef<WebSocket | null>(null);
+  const intentionalClose = useRef(false);
+  const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hasJoinedRef = useRef(hasJoined);
+  const roomRef = useRef(currentRoom);
+  const identityRef = useRef(identity);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const activeIdentity: TreatyIdentity = identity.isVerified
-    ? identity
-    : identityFromPlayer(null, guestName);
+  hasJoinedRef.current = hasJoined;
+  roomRef.current = currentRoom;
+
+  const activeIdentity: TreatyIdentity = useMemo(() => {
+    if (identity.isVerified) return identity;
+    return identityFromPlayer(null, guestName);
+  }, [identity, guestName]);
+
+  identityRef.current = activeIdentity;
 
   const activeChannel = treatyChannelById(currentRoom) ?? TREATY_CHANNELS[0];
+  const displayName = activeIdentity.displayName || activeIdentity.username || "Guest";
 
   const { data: history = [] } = useQuery<ChatMessage[]>({
     queryKey: ["/api/chat/messages", currentRoom],
     queryFn: async () => {
-      const resp = await fetch(`/api/chat/messages?room=${currentRoom}`, { credentials: "include" });
-      return resp.json();
+      const resp = await fetch(`/api/chat/messages?room=${encodeURIComponent(currentRoom)}`, {
+        credentials: "include",
+      });
+      if (!resp.ok) return [];
+      const data = await resp.json();
+      return Array.isArray(data) ? data : [];
     },
     enabled: hasJoined,
   });
 
+  // Seed history without wiping live WS messages that arrived first
   useEffect(() => {
-    if (history.length > 0 && hasJoined) {
-      const historyMsgs: TreatyWsMessage[] = history.map((m) => ({
-        type: "message" as const,
-        id: m.id,
-        username: m.username,
-        displayName: m.username,
-        message: m.message,
-        room: m.room,
-        createdAt: m.createdAt ? new Date(m.createdAt).toISOString() : undefined,
-      }));
-      setMessages(historyMsgs);
-    } else if (hasJoined) {
-      setMessages([]);
-    }
+    if (!hasJoined) return;
+    if (!history.length) return;
+    const historyMsgs: TreatyWsMessage[] = history.map((m) => ({
+      type: "message" as const,
+      id: m.id,
+      username: m.username,
+      displayName: m.username,
+      message: m.message,
+      room: m.room,
+      createdAt: m.createdAt ? new Date(m.createdAt).toISOString() : undefined,
+    }));
+    setMessages((prev) => {
+      const live = prev.filter((p) => p.type === "message" || p.type === "system");
+      const histIds = new Set(historyMsgs.map((h) => h.id).filter(Boolean));
+      const extra = live.filter((p) => !p.id || !histIds.has(p.id));
+      return [...historyMsgs, ...extra];
+    });
   }, [history, hasJoined, currentRoom]);
 
-  const connectWs = useCallback(() => {
-    if (!hasJoined || wsRef.current) return;
+  const clearReconnect = () => {
+    if (reconnectTimer.current) {
+      clearTimeout(reconnectTimer.current);
+      reconnectTimer.current = null;
+    }
+  };
 
-    const ws = new WebSocket(getTreatyWsUrl());
+  const connectWs = useCallback(() => {
+    if (!hasJoinedRef.current) return;
+    if (wsRef.current && (wsRef.current.readyState === WebSocket.OPEN || wsRef.current.readyState === WebSocket.CONNECTING)) {
+      return;
+    }
+
+    clearReconnect();
+    intentionalClose.current = false;
+    setWsError(null);
+
+    let url: string;
+    try {
+      url = getTreatyWsUrl();
+    } catch (e) {
+      setWsError("Could not resolve chat WebSocket URL");
+      return;
+    }
+
+    let ws: WebSocket;
+    try {
+      ws = new WebSocket(url);
+    } catch (e) {
+      setWsError(`WebSocket create failed: ${e instanceof Error ? e.message : String(e)}`);
+      reconnectTimer.current = setTimeout(() => {
+        if (hasJoinedRef.current) connectWs();
+      }, 3000);
+      return;
+    }
+
     wsRef.current = ws;
 
     ws.onopen = () => {
       setConnected(true);
-      ws.send(JSON.stringify(buildJoinPayload(activeIdentity, currentRoom)));
+      setWsError(null);
+      const id = identityRef.current;
+      const room = roomRef.current;
+      // Optimistic self so Online is never stuck at 0 after a successful open
+      const self = id.displayName || id.username || "Guest";
+      setOnlineUsers((prev) => (prev.includes(self) ? prev : [self, ...prev]));
+      try {
+        ws.send(JSON.stringify(buildJoinPayload(id, room)));
+      } catch (err) {
+        setWsError("Failed to send join");
+      }
     };
 
     ws.onmessage = (event) => {
-      const data: TreatyWsMessage = JSON.parse(event.data);
-      if (data.type === "users") {
-        setOnlineUsers(data.users || []);
+      let data: TreatyWsMessage;
+      try {
+        data = JSON.parse(event.data);
+      } catch {
+        return;
+      }
+
+      if (data.type === "users" || data.type === "joined") {
+        applyUsersPayload(data, identityRef.current.displayName || identityRef.current.username, setOnlineUsers);
+        if (data.type === "joined" && data.room) {
+          // keep room in sync if server normalized it
+        }
       } else if (data.type === "message" || data.type === "system") {
         setMessages((prev) => [...prev, data]);
+      } else if (data.type === "error") {
+        setWsError(data.message || "Chat error");
       }
+    };
+
+    ws.onerror = () => {
+      setWsError(`Chat socket error (${url})`);
     };
 
     ws.onclose = () => {
       setConnected(false);
       wsRef.current = null;
-      setTimeout(() => {
-        if (hasJoined) connectWs();
-      }, 3000);
+      if (!intentionalClose.current && hasJoinedRef.current) {
+        reconnectTimer.current = setTimeout(() => {
+          if (hasJoinedRef.current) connectWs();
+        }, 2500);
+      }
     };
-  }, [activeIdentity, currentRoom, hasJoined]);
+  }, []);
 
+  // Connect once on join; reconnect handled inside onclose
   useEffect(() => {
-    if (hasJoined) {
-      if (wsRef.current) {
-        wsRef.current.close();
-        wsRef.current = null;
-      }
-      connectWs();
-    }
+    if (!hasJoined) return;
+    connectWs();
     return () => {
+      intentionalClose.current = true;
+      clearReconnect();
       if (wsRef.current) {
-        wsRef.current.close();
+        try { wsRef.current.close(); } catch { /* */ }
         wsRef.current = null;
       }
     };
-  }, [hasJoined, currentRoom, connectWs]);
+  }, [hasJoined, connectWs]);
+
+  // Room change: switch_room on open socket; do not tear down WS (was zeroing presence)
+  useEffect(() => {
+    if (!hasJoined) return;
+    const ws = wsRef.current;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      setOnlineUsers([displayName]);
+      ws.send(JSON.stringify(buildSwitchRoomPayload(currentRoom)));
+    }
+  }, [currentRoom, hasJoined, displayName]);
+
+  // Poll HTTP history while socket is offline so guests still see traffic
+  useEffect(() => {
+    if (!hasJoined) return;
+    let cancelled = false;
+    const poll = async () => {
+      if (wsRef.current?.readyState === WebSocket.OPEN) return;
+      try {
+        const rows = await fetchTreatyMessages(currentRoom);
+        if (cancelled || !rows.length) return;
+        setMessages((prev) => {
+          const keys = new Set(prev.map((p) => `${p.id ?? ""}|${p.createdAt ?? ""}|${p.message ?? ""}`));
+          const next = [...prev];
+          for (const m of rows) {
+            const k = `${m.id ?? ""}|${m.createdAt ?? ""}|${m.message ?? ""}`;
+            if (!keys.has(k)) {
+              keys.add(k);
+              next.push(m);
+            }
+          }
+          return next;
+        });
+      } catch {
+        /* ignore */
+      }
+    };
+    poll();
+    const t = window.setInterval(poll, 4000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(t);
+    };
+  }, [hasJoined, currentRoom]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -135,6 +280,15 @@ export default function Chat() {
     if (player && !hasJoined) setHasJoined(true);
   }, [player, hasJoined]);
 
+  // If verified identity arrives after guest join, re-announce join with real name
+  useEffect(() => {
+    if (!hasJoined || !identity.isVerified) return;
+    const ws = wsRef.current;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify(buildJoinPayload(identity, roomRef.current)));
+    }
+  }, [hasJoined, identity.isVerified, identity.grudgeId, identity.displayName]);
+
   const handleJoin = (roomId?: string) => {
     const name = guestName.trim() || getRandomName();
     persistGuestName(name);
@@ -143,17 +297,49 @@ export default function Chat() {
     setHasJoined(true);
   };
 
-  const handleSend = () => {
+  const handleSend = async () => {
     const text = input.trim();
-    if (!text || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
-    wsRef.current.send(JSON.stringify({ type: "message", message: text }));
+    if (!text) return;
     setInput("");
     inputRef.current?.focus();
+
+    const ws = wsRef.current;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: "message", message: text }));
+      return;
+    }
+
+    // HTTP fallback when WebSocket is down (still persists + shows locally)
+    try {
+      const result = await sendTreatyHttp(currentRoom, text, activeIdentity);
+      const m = (result as { message?: TreatyWsMessage & { text?: string; ts?: string } })?.message;
+      setMessages((prev) => [
+        ...prev,
+        {
+          type: "message",
+          id: typeof m?.id === "number" ? m.id : undefined,
+          grudgeId: m?.grudgeId ?? activeIdentity.grudgeId,
+          username: m?.username || activeIdentity.username,
+          displayName: m?.displayName || activeIdentity.displayName,
+          message: m?.message || m?.text || text,
+          room: currentRoom,
+          createdAt: m?.createdAt || m?.ts || new Date().toISOString(),
+        },
+      ]);
+      setWsError(null);
+    } catch {
+      setWsError("Send failed — chat backend unreachable");
+      setMessages((prev) => [
+        ...prev,
+        { type: "system", message: "Message not delivered. Retry in a moment.", room: currentRoom },
+      ]);
+    }
   };
 
   const handleSwitchRoom = (roomId: string) => {
     if (roomId === currentRoom) return;
     setCurrentRoom(roomId);
+    setMessages([]);
     const url = new URL(window.location.href);
     url.searchParams.set("room", roomId);
     window.history.replaceState({}, "", url.toString());
@@ -164,14 +350,6 @@ export default function Chat() {
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
-
-  const formatTime = (ts?: string) => {
-    if (!ts) return "";
-    const d = new Date(ts);
-    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  };
-
-  const displayName = activeIdentity.displayName || activeIdentity.username;
 
   if (!hasJoined) {
     return (
@@ -232,7 +410,6 @@ export default function Chat() {
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: "hsl(225,30%,6%)" }}>
-      {/* Sticky channel bar — always visible */}
       <div className="sticky top-16 z-40 border-b border-[hsl(43,60%,30%)]/25 bg-[hsl(225,30%,7%)]/95 backdrop-blur-md px-3 sm:px-4 py-2">
         <div className="max-w-7xl mx-auto">
           <div className="flex items-center gap-2 mb-2">
@@ -244,11 +421,19 @@ export default function Chat() {
             >
               {connected ? <><Wifi className="w-2.5 h-2.5 mr-1 inline" />Live</> : <><WifiOff className="w-2.5 h-2.5 mr-1 inline" />Reconnecting</>}
             </Badge>
+            <span className="text-[10px] text-[hsl(45,15%,45%)] hidden sm:inline">
+              Online {onlineUsers.length}
+            </span>
             <div className="flex-1" />
             <button type="button" onClick={handleShare} className="text-[hsl(45,15%,50%)] hover:text-[hsl(43,85%,55%)] p-1" title="Copy invite link">
               {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Share2 className="w-4 h-4" />}
             </button>
           </div>
+          {wsError && (
+            <p className="text-[10px] text-amber-400/90 font-body mb-1 truncate" title={wsError}>
+              {wsError}
+            </p>
+          )}
           <TreatyChannelPicker currentRoom={currentRoom} onSelect={handleSwitchRoom} layout="bar" />
         </div>
       </div>
@@ -267,8 +452,10 @@ export default function Chat() {
               <Users className="w-3 h-3 inline mr-1" /> Online ({onlineUsers.length})
             </h3>
             <div className="space-y-1 max-h-32 overflow-y-auto">
-              {onlineUsers.length === 0 ? (
-                <p className="text-[10px] text-[hsl(45,15%,45%)] font-body">Nobody else here yet — say hi!</p>
+              {!connected ? (
+                <p className="text-[10px] text-amber-400/80 font-body">Connecting to presence…</p>
+              ) : onlineUsers.length === 0 ? (
+                <p className="text-[10px] text-[hsl(45,15%,45%)] font-body">Waiting for roster…</p>
               ) : (
                 onlineUsers.map((user) => (
                   <div key={user} className="flex items-center gap-2 text-sm text-[hsl(45,30%,80%)] font-body px-1">
@@ -322,7 +509,7 @@ export default function Chat() {
                 {messages.map((msg, i) => {
                   if (msg.type === "system") {
                     return (
-                      <div key={`sys-${i}`} className="text-center py-1">
+                      <div key={`sys-${i}-${msg.message?.slice(0, 12)}`} className="text-center py-1">
                         <span className="text-[10px] text-[hsl(45,15%,35%)] font-body italic">{msg.message}</span>
                       </div>
                     );
@@ -351,7 +538,9 @@ export default function Chat() {
                             <Shield className="w-3 h-3 text-[hsl(270,60%,60%)]" title="Grudge ID verified" />
                           )}
                           <span className="text-[10px] text-[hsl(45,15%,35%)] opacity-0 group-hover:opacity-100 transition-opacity">
-                            {formatTime(msg.createdAt)}
+                            {msg.createdAt
+                              ? new Date(msg.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+                              : ""}
                           </span>
                         </div>
                         <p className="text-sm text-[hsl(45,30%,80%)] font-body break-words">{msg.message}</p>
@@ -386,7 +575,7 @@ export default function Chat() {
                 </Button>
               </div>
               <p className="text-[10px] text-[hsl(45,15%,38%)] font-body mt-1.5 hidden sm:block">
-                Enter to send · Grudge ID holders show a verified shield
+                Enter to send · Presence is live WebSocket roster (not DB last_seen)
               </p>
             </div>
           </div>
