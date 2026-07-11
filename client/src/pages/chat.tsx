@@ -312,18 +312,31 @@ export default function Chat() {
     // HTTP fallback when WebSocket is down (still persists + shows locally)
     try {
       const result = await sendTreatyHttp(currentRoom, text, activeIdentity);
-      const m = (result as { message?: TreatyWsMessage & { text?: string; ts?: string } })?.message;
+      const m = result?.message as
+        | {
+            id?: string | number;
+            from?: TreatyIdentity;
+            text?: string;
+            message?: string;
+            ts?: string;
+            createdAt?: string;
+            username?: string;
+            displayName?: string;
+            grudgeId?: string | null;
+          }
+        | undefined;
       setMessages((prev) => [
         ...prev,
         {
           type: "message",
-          id: typeof m?.id === "number" ? m.id : undefined,
-          grudgeId: m?.grudgeId ?? activeIdentity.grudgeId,
-          username: m?.username || activeIdentity.username,
-          displayName: m?.displayName || activeIdentity.displayName,
-          message: m?.message || m?.text || text,
+          id: m?.id != null ? Number(m.id) || undefined : undefined,
+          grudgeId: m?.from?.grudgeId ?? m?.grudgeId ?? activeIdentity.grudgeId,
+          username: m?.from?.username || m?.username || activeIdentity.username,
+          displayName:
+            m?.from?.displayName || m?.displayName || m?.from?.username || activeIdentity.displayName,
+          message: m?.text || m?.message || text,
           room: currentRoom,
-          createdAt: m?.createdAt || m?.ts || new Date().toISOString(),
+          createdAt: m?.ts || m?.createdAt || new Date().toISOString(),
         },
       ]);
       setWsError(null);
