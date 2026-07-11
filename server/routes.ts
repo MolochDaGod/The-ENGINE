@@ -30,6 +30,7 @@ import {
 } from "./chat-presence";
 import { createPathWss, attachWsUpgrade } from "./ws-upgrade";
 import { registerStudioFeatures } from "./routes/studio-features";
+import { maybeHandleAleMention } from "./treaty-ale";
 import { chatMessages, friends, users as usersTable } from "@shared/schema";
 import { storage } from "./storage";
 import { insertScrapingJobSchema, insertOrderSchema, insertGameSchema, insertArticleSchema, gameLibrary, scores, users, walletConnections } from "@shared/schema";
@@ -3862,6 +3863,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
+      // @ale Treaty assistant
+      void maybeHandleAleMention({
+        room: roomId,
+        text,
+        fromName: sender.displayName || sender.username,
+        userId,
+      });
+
       res.json({ ok: true, message });
     } catch {
       res.status(500).json({ error: "Failed to send treaty message" });
@@ -4185,6 +4194,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
           // Include sender — clients do not optimistically render own WS messages
           broadcastChatToRoom(info.room, toWsPayload(saved, info.grudgeId));
+
+          // @ale — always-on Treaty AI companion
+          void maybeHandleAleMention({
+            room: info.room,
+            text,
+            fromName: info.displayName || info.username,
+            userId: info.userId,
+          });
           return;
         }
 

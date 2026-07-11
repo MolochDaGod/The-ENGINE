@@ -51,7 +51,7 @@ import GrudgeControllerDemo from "@/pages/grudge-controller-demo";
 import GrudgeFishingPage from "@/pages/grudge-fishing";
 import WargusDefault from "@/pages/wargus-default";
 import AssetPipeline from "@/pages/asset-pipeline";
-import ComingSoon from "@/pages/coming-soon";
+
 import CharacterViewerPage from "@/pages/character-viewer";
 import CharacterRosterPage from "@/pages/character-roster";
 import GameWeaponsLibraryPage from "@/pages/game-weapons-library";
@@ -137,11 +137,74 @@ function Router() {
       <Route path="/roster" component={CharacterRosterPage} />
       <Route path="/game/weapons" component={GameWeaponsLibraryPage} />
       <Route path="/conan" component={ConanInfoPage} />
-      <Route path="/starway-gruda" component={ComingSoon} />
-      <Route path="/rts-star-armada" component={ComingSoon} />
-      <Route path="/mech-armada" component={ComingSoon} />
-      <Route path="/star-rts" component={ComingSoon} />
-      <Route path="/survival" component={ComingSoon} />
+      {/* Planned titles — do not leave users on empty shells; bounce to live fleet */}
+      <Route path="/starway-gruda">
+        {() => {
+          window.location.replace("https://play.grudge-studio.com");
+          return null;
+        }}
+      </Route>
+      <Route path="/rts-star-armada">
+        {() => {
+          window.location.replace("https://rts-grudge.vercel.app");
+          return null;
+        }}
+      </Route>
+      <Route path="/mech-armada">
+        {() => {
+          window.location.replace("https://mech-playground.vercel.app");
+          return null;
+        }}
+      </Route>
+      <Route path="/star-rts">
+        {() => {
+          window.location.replace("https://rts-grudge.vercel.app");
+          return null;
+        }}
+      </Route>
+      <Route path="/survival">
+        {() => {
+          window.location.replace("https://grudges.grudge-studio.com");
+          return null;
+        }}
+      </Route>
+      {/* Common dead paths → live surfaces */}
+      <Route path="/library">
+        {() => {
+          window.location.replace("/games");
+          return null;
+        }}
+      </Route>
+      <Route path="/warlords">
+        {() => {
+          window.location.replace("https://grudgewarlords.com");
+          return null;
+        }}
+      </Route>
+      <Route path="/arena">
+        {() => {
+          window.location.replace("https://arena.grudge-studio.com");
+          return null;
+        }}
+      </Route>
+      <Route path="/profile">
+        {() => {
+          window.location.replace("/account");
+          return null;
+        }}
+      </Route>
+      <Route path="/settings">
+        {() => {
+          window.location.replace("/account");
+          return null;
+        }}
+      </Route>
+      <Route path="/leaderboard">
+        {() => {
+          window.location.replace("/leaderboards");
+          return null;
+        }}
+      </Route>
       <Route component={NotFound} />
     </Switch>
   );

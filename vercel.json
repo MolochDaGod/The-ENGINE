@@ -10,6 +10,51 @@
   },
   "redirects": [
     {
+      "source": "/library",
+      "destination": "/games",
+      "permanent": false
+    },
+    {
+      "source": "/warlords",
+      "destination": "https://grudgewarlords.com",
+      "permanent": false
+    },
+    {
+      "source": "/warstrat",
+      "destination": "https://warstrat.grudge-studio.com",
+      "permanent": false
+    },
+    {
+      "source": "/engine",
+      "destination": "https://grudge.studio",
+      "permanent": false
+    },
+    {
+      "source": "/arena",
+      "destination": "https://arena.grudge-studio.com",
+      "permanent": false
+    },
+    {
+      "source": "/profile",
+      "destination": "/account",
+      "permanent": false
+    },
+    {
+      "source": "/settings",
+      "destination": "/account",
+      "permanent": false
+    },
+    {
+      "source": "/leaderboard",
+      "destination": "/leaderboards",
+      "permanent": false
+    },
+    {
+      "source": "/survival",
+      "destination": "https://grudges.grudge-studio.com",
+      "permanent": false
+    },
+    {
       "source": "/island",
       "destination": "https://grudgewarlords.com/island",
       "permanent": false

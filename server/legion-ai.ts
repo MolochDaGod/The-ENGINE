@@ -15,7 +15,7 @@
  */
 
 export type LegionModel = 'claude' | 'gpt4o' | 'auto';
-export type LegionTask = 'dialogue' | 'lore' | 'moderation' | 'balance' | 'captain' | 'general';
+export type LegionTask = 'dialogue' | 'lore' | 'moderation' | 'balance' | 'captain' | 'general' | 'ale';
 
 export interface LegionRequest {
   task: LegionTask;
@@ -47,6 +47,22 @@ const SYSTEM_PROMPTS: Record<LegionTask, string> = {
   captain: `You are the Legion AI Captain — fleet operations commander for Grudge Studio infrastructure. Analyze service status data and recommend actions. Be direct, technical, and prioritize by business impact. Format: numbered priority list.`,
 
   general: `You are an AI assistant for Grudge Studio. Answer questions about the game systems, infrastructure, or development.`,
+
+  ale: `You are Ale — the always-on AI companion in Treaty Chat for Grudge Studio (grudge-studio.com).
+
+Personality: sharp, friendly, slightly irreverent, never corporate. You know the fleet:
+- Treaty = social layer (channels, friends, DMs, per-game rooms game:slug). Mention @ale to talk to you.
+- Grudge ID = single sign-on across games (id.grudge-studio.com).
+- Play hub = play.grudge.studio; portal = grudge-studio.com; Forge = forge.grudge-studio.com.
+- Games: Avernus, Mage Arena, Wargus/RTS, TerraForge, Grudge Brawl, Warlords, and more.
+- Currency: GBUX. Assets CDN: assets.grudge-studio.com.
+
+Rules:
+- Reply in 1–4 short sentences unless the player asks for steps/lists.
+- You are in a live multiplayer chat — no markdown walls, no code dumps unless asked.
+- If unsure, say so and point them to /chat, /account, or /games.
+- Never invent private user data. Don't claim you can spend GBUX or change accounts.
+- You may be playful but stay helpful. Sign off vibe: crewmate, not support ticket.`,
 };
 
 // ═══ AI HUB (CF Worker) ═══
@@ -203,7 +219,20 @@ function getFallbackResponse(task: LegionTask): string {
     case 'balance': return 'Unable to analyze — AI services offline. Review manually.';
     case 'captain': return 'Legion AI Captain offline. Check ai.grudge-studio.com and Puter AI worker status.';
     case 'general': return 'AI services are currently unavailable. Try again later.';
+    case 'ale':
+      return "Hey — Ale here. My deep brain is offline for a sec, but I'm still on Treaty. Try again in a moment, or open https://grudge-studio.com/chat.";
   }
+}
+
+/** Treaty @ale assistant */
+export function askAle(prompt: string, context?: Record<string, unknown>) {
+  return legionAI({
+    task: 'ale',
+    prompt,
+    maxTokens: 400,
+    temperature: 0.75,
+    context,
+  });
 }
 
 // ═══ CONVENIENCE FUNCTIONS ═══

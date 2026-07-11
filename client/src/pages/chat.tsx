@@ -859,24 +859,37 @@ export default function Chat() {
 
                   const name = msg.displayName || msg.username || "?";
                   const isOwn = name === displayName;
+                  const isAle =
+                    name.toLowerCase() === "ale" ||
+                    msg.grudgeId === "ale" ||
+                    msg.username?.toLowerCase() === "ale";
 
                   return (
-                    <div key={msg.id || `msg-${i}`} className="flex gap-3 py-1.5 hover:bg-[hsl(225,25%,12%)]/50 px-2 rounded group">
+                    <div key={msg.id || `msg-${i}`} className={`flex gap-3 py-1.5 hover:bg-[hsl(225,25%,12%)]/50 px-2 rounded group ${isAle ? "bg-[hsl(270,40%,12%)]/40" : ""}`}>
                       <div
                         className="w-8 h-8 rounded-full shrink-0 flex items-center justify-center text-xs font-bold mt-0.5"
                         style={{
-                          background: `hsl(${(name.charCodeAt(0) * 37) % 360}, 50%, 25%)`,
-                          color: `hsl(${(name.charCodeAt(0) * 37) % 360}, 60%, 70%)`,
+                          background: isAle
+                            ? "hsl(270,55%,28%)"
+                            : `hsl(${(name.charCodeAt(0) * 37) % 360}, 50%, 25%)`,
+                          color: isAle
+                            ? "hsl(270,70%,78%)"
+                            : `hsl(${(name.charCodeAt(0) * 37) % 360}, 60%, 70%)`,
                         }}
                       >
-                        {name[0]?.toUpperCase()}
+                        {isAle ? "✦" : name[0]?.toUpperCase()}
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-baseline gap-2 flex-wrap">
-                          <span className={`text-sm font-semibold ${isOwn ? "text-[hsl(43,85%,55%)]" : "text-[hsl(45,30%,85%)]"}`}>
+                          <span className={`text-sm font-semibold ${isOwn ? "text-[hsl(43,85%,55%)]" : isAle ? "text-[hsl(270,70%,75%)]" : "text-[hsl(45,30%,85%)]"}`}>
                             {name}
                           </span>
-                          {msg.grudgeId && (
+                          {isAle && (
+                            <Badge variant="outline" className="text-[9px] border-[hsl(270,50%,45%)]/40 text-[hsl(270,60%,70%)]">
+                              AI
+                            </Badge>
+                          )}
+                          {msg.grudgeId && !isAle && (
                             <span title="Grudge ID verified" className="inline-flex">
                               <Shield className="w-3 h-3 text-[hsl(270,60%,60%)]" aria-hidden />
                             </span>
@@ -928,8 +941,8 @@ export default function Chat() {
                     placeholder={
                       connected
                         ? kind === "dm"
-                          ? `Message ${dmPeerLabel || "friend"}…`
-                          : `Message #${titleName}…`
+                          ? `Message ${dmPeerLabel || "friend"}…  (@ale for AI)`
+                          : `Message #${titleName}…  try @ale`
                         : `Message #${titleName} (offline queue)…`
                     }
                     className="bg-[hsl(225,25%,12%)] border-[hsl(43,60%,30%)]/20 text-[hsl(45,30%,90%)] placeholder:text-[hsl(45,15%,30%)] focus:border-[hsl(43,85%,55%)]/40"
@@ -942,7 +955,7 @@ export default function Chat() {
                 </div>
               )}
               <p className="text-[10px] text-[hsl(45,15%,38%)] font-body mt-1.5 hidden sm:block">
-                Treaty = channels · friends · DMs · in-game rooms · live WS presence
+                Treaty · mention <span className="text-[hsl(43,85%,55%)]">@ale</span> for the AI assistant · friends · DMs · in-game
               </p>
             </div>
           </div>

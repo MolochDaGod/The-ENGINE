@@ -23,7 +23,7 @@ const _PORTAL_PRODUCTS_RAW = [
   {
     id: "warlords",
     name: "Grudge Warlords",
-    href: "https://client.grudge-studio.com",
+    href: "https://grudgewarlords.com",
     description: "The main live product: character creation, combat, islands, professions, and Warlords progression.",
     status: "live",
     section: "featured",

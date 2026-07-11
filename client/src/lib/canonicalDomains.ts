@@ -21,10 +21,13 @@ export const CANONICAL = {
   drive: "https://drive.grudge-studio.com",
   survival: "https://grudges.grudge-studio.com",
   threePort: "https://grudge-three-port.vercel.app",
-  warlords: "https://client.grudge-studio.com",
+  warlords: "https://grudgewarlords.com",
+  warlordsClient: "https://client.grudge-studio.com",
   warlordsLegacy: "https://grudgewarlords.com",
+  warstrat: "https://warstrat.grudge-studio.com",
+  engineGallery: "https://grudge.studio",
   metaverse: "https://metaverse.grudge-studio.com",
-  warlordGenesis: "https://genesis.grudge-studio.com/play",
+  warlordGenesis: "https://warlord-genesis.vercel.app",
   islands: "https://islands.grudge-studio.com/arena",
 } as const;
 

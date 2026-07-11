@@ -57,7 +57,12 @@ export function getRoomUsers(room: string): string[] {
       if (label) users.push(label);
     }
   }
-  return [...new Set(users)];
+  // Ale is always active on Treaty — show in every live room roster
+  const unique = [...new Set(users)];
+  if (!unique.some((u) => u.toLowerCase() === "ale")) {
+    unique.unshift("Ale");
+  }
+  return unique;
 }
 
 export function pushPresence(room: string, to?: WebSocket) {

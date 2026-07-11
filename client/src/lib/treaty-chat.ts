@@ -19,13 +19,20 @@ export interface TreatyChannel {
 }
 
 export const TREATY_CHANNELS: TreatyChannel[] = [
-  { id: "general", name: "General", description: "Main lobby — say hi, find your crew", icon: "💬", category: "community", hue: 43 },
+  { id: "general", name: "General", description: "Main lobby — say hi, find your crew · try @ale", icon: "💬", category: "community", hue: 43 },
   { id: "builds", name: "Builds", description: "Show builds, demos, and work-in-progress", icon: "🔨", category: "community", hue: 280 },
-  { id: "help", name: "Help", description: "Get unstuck — ask the community", icon: "🆘", category: "community", hue: 200 },
+  { id: "help", name: "Help", description: "Get unstuck — ask the community or @ale", icon: "🆘", category: "community", hue: 200 },
   { id: "retro-gaming", name: "Retro", description: "NES, SNES, N64 & classic arcade talk", icon: "🕹️", category: "play", hue: 120 },
   { id: "custom-engines", name: "Engines", description: "Wargus, Avernus, Tower Defense & Nexus", icon: "⚙️", category: "play", hue: 270 },
   { id: "trading", name: "Trading", description: "GBUX, assets, and marketplace deals", icon: "💰", category: "economy", hue: 35 },
 ];
+
+/** Always-on Treaty AI — mention with @ale */
+export const ALE_BOT = {
+  name: "Ale",
+  mention: "@ale",
+  grudgeId: "ale",
+} as const;
 
 /** @deprecated use TREATY_CHANNELS */
 export const TREATY_ROOMS = TREATY_CHANNELS;
