@@ -1,6 +1,6 @@
 import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
-import { WebSocketServer, WebSocket } from "ws";
+import { WebSocket } from "ws";
 import { setupArenaRooms } from "./arena-rooms";
 import { setupEngineSocket } from "./engine-socket";
 import {
@@ -18,6 +18,7 @@ import {
   getRoomUsers,
   pushPresence,
 } from "./chat-presence";
+import { createPathWss, attachWsUpgrade } from "./ws-upgrade";
 import { storage } from "./storage";
 import { insertScrapingJobSchema, insertOrderSchema, insertGameSchema, insertArticleSchema, gameLibrary, scores, users, walletConnections } from "@shared/schema";
 import { z } from "zod";
@@ -3816,8 +3817,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   const httpServer = createServer(app);
 
-  // perMessageDeflate off — Railway/edge proxies corrupt compressed frames (RSV1 errors)
-  const wss = new WebSocketServer({ server: httpServer, path: "/ws/chat", perMessageDeflate: false });
+  // Single upgrade router: multiple WebSocketServer({ server, path }) on one HTTP
+  // server corrupts frames (RSV1). Chat + arena use noServer + attachWsUpgrade.
+  const wss = createPathWss("/ws/chat");
 
   wss.on("connection", (ws, req) => {
     const sock = ws as WebSocket & { isAlive?: boolean };
@@ -3971,6 +3973,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   setupArenaRooms(httpServer);
   setupEngineSocket(httpServer);
+  // Attach once after all path WSS are registered (chat + arena)
+  attachWsUpgrade(httpServer);
 
   return httpServer;
 }

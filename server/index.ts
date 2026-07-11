@@ -36,8 +36,20 @@ const allowedOrigins = (process.env.CORS_ORIGINS || [
 // ── Trust proxy (Railway / Vercel) ─────────────────────────────
 if (isProd) app.set("trust proxy", 1);
 
-// ── Compression — gzip all responses (huge win for 3D game assets)
-app.use(compression());
+// ── Compression — gzip HTTP responses only (never WebSocket upgrades)
+app.use(
+  compression({
+    filter: (req, res) => {
+      if (req.headers.upgrade && String(req.headers.upgrade).toLowerCase() === "websocket") {
+        return false;
+      }
+      if (req.url?.startsWith("/ws/") || req.url?.startsWith("/socket.io")) {
+        return false;
+      }
+      return compression.filter(req, res);
+    },
+  }),
+);
 
 // ── Security headers via helmet ────────────────────────────────
 app.use(helmet({

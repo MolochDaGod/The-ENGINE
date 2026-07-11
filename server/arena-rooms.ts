@@ -1,7 +1,8 @@
 import type { Server } from "http";
 import crypto from "crypto";
-import { WebSocketServer, WebSocket } from "ws";
+import { WebSocket } from "ws";
 import { HEROES, type HeroId, type GameMode } from "@shared/mage-arena-types";
+import { createPathWss } from "./ws-upgrade";
 
 type ArenaRoomState = "lobby" | "active" | "ended";
 
@@ -103,8 +104,9 @@ function deleteClient(client: ArenaClient) {
   }
 }
 
-export function setupArenaRooms(server: Server) {
-  const arenaWss = new WebSocketServer({ server, path: "/ws/arena" });
+export function setupArenaRooms(_server: Server) {
+  // noServer + shared upgrade router — do NOT attach second WebSocketServer({ server })
+  const arenaWss = createPathWss("/ws/arena");
 
   arenaWss.on("connection", (ws) => {
     ws.on("message", (raw) => {
