@@ -61,6 +61,7 @@ app.use(helmet({
 }));
 
 // ── CORS ────────────────────────────────────────────────────────
+// Fleet apps + hosted previews (Vercel, Puter, Replit mine-loader / Voxel Realms).
 app.use(cors({
   origin: (origin, cb) => {
     if (!origin) return cb(null, true); // same-origin / server-to-server
@@ -70,13 +71,22 @@ app.use(cors({
       origin.includes("puter.com") ||
       origin.includes("puter.site") ||
       /^https:\/\/.*\.vercel\.app$/.test(origin) ||
+      /^https:\/\/([a-z0-9-]+\.)*replit\.app$/.test(origin) ||
+      /^https:\/\/([a-z0-9-]+\.)*replit\.dev$/.test(origin) ||
       origin.startsWith("http://localhost:")
     ) return cb(null, true);
     cb(null, false);
   },
   credentials: true,
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+  allowedHeaders: [
+    "Content-Type",
+    "Authorization",
+    "X-Requested-With",
+    "X-Session-Token",
+    "If-Match",
+    "X-Progress-Revision",
+  ],
 }));
 
 app.use(express.json({ limit: "10mb" }));

@@ -134,10 +134,12 @@ export function isOriginAllowed(origin: string | undefined | null): boolean {
   if (list.includes(origin)) return true;
   // Any Grudge Studio host (apex + subdomains) may consume launch tokens.
   if (/^https:\/\/([a-z0-9-]+\.)*grudge-studio\.com$/.test(origin)) return true;
-  // Puter-hosted apps and Vercel preview deployments are always allowlisted for
-  // launch-token exchange (same policy as the CORS middleware in index.ts).
+  // Puter-hosted apps, Vercel previews, and Replit apps (mine-loader / Voxel Realms)
+  // are allowlisted for launch-token exchange (same policy as CORS in index.ts).
   if (origin.includes("puter.com") || origin.includes("puter.site")) return true;
   if (/^https:\/\/.*\.vercel\.app$/.test(origin)) return true;
+  if (/^https:\/\/([a-z0-9-]+\.)*replit\.app$/.test(origin)) return true;
+  if (/^https:\/\/([a-z0-9-]+\.)*replit\.dev$/.test(origin)) return true;
   if (origin.startsWith("http://localhost:")) return true;
   return false;
 }
