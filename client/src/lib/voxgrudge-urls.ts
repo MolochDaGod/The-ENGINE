@@ -12,7 +12,7 @@ export const VOXGRUDGE_EMBED_PREFIX = "/embed/vox";
 
 function proxied(file: string): string {
   // Cache-bust when proxy upstream / asset config changes
-  return `${VOXGRUDGE_EMBED_PREFIX}/${file}?v=fleet3`;
+  return `${VOXGRUDGE_EMBED_PREFIX}/${file}?v=fleet4`;
 }
 
 export const VOXGRUDGE_GAMES = {
