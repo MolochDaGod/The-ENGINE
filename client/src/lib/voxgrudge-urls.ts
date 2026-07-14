@@ -1,18 +1,18 @@
 /**
- * Full voxgrudge game builds on grudox.
+ * Full voxgrudge game builds (TerraForge open world).
  *
- * Direct grudox URLs send X-Frame-Options: SAMEORIGIN and cannot iframe
- * on the apex portal. Use same-origin /embed/vox/* (middleware.ts proxies
- * to grudox, strips XFO, forces fleet asset mode).
+ * Direct cross-origin embeds can hit frame-ancestors issues, so the portal
+ * uses same-origin /embed/vox/* — middleware.ts proxies to the production
+ * voxgrudge host, strips XFO, and keeps assets on static same-origin paths.
  */
-export const VOXGRUDGE_ORIGIN = "https://grudox.grudge-studio.com/voxgrudge";
+export const VOXGRUDGE_ORIGIN = "https://voxgrudge.vercel.app";
 
 /** Same-origin proxy prefix — handled by middleware.ts on The Engine. */
 export const VOXGRUDGE_EMBED_PREFIX = "/embed/vox";
 
 function proxied(file: string): string {
-  // Cache-bust when proxy patch changes so browsers don't keep a broken shell
-  return `${VOXGRUDGE_EMBED_PREFIX}/${file}?v=fleet2`;
+  // Cache-bust when proxy upstream / asset config changes
+  return `${VOXGRUDGE_EMBED_PREFIX}/${file}?v=fleet3`;
 }
 
 export const VOXGRUDGE_GAMES = {

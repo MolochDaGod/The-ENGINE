@@ -8,7 +8,8 @@
  *  2. Strips frame-blocking headers and sets frame-ancestors for the portal
  *  3. Patches HTML so GrudgeEnv.detect() === "fleet" (bundled relative assets)
  */
-const UPSTREAM = "https://grudox.grudge-studio.com/voxgrudge";
+/** Production TerraForge / VoxGrudge static game (not the broken R2-proxy path). */
+const UPSTREAM = "https://voxgrudge.vercel.app";
 
 const FLEET_PATCH = `<script data-grudge-fleet-patch="1">
 (function () {
