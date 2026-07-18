@@ -221,15 +221,66 @@ function buildPrefab(race: RaceId, classId: ClassId): CharacterPrefab {
     legion: "char_enemy",
   };
 
-  // Starting armor variant per class
-  const armorVariant: Record<ClassId, { body: string; arms: string; legs: string }> = {
-    warrior: { body: "A", arms: "A", legs: "A" },  // Heavy plate
-    mage:    { body: "C", arms: "C", legs: "B" },  // Light robes
-    ranger:  { body: "B", arms: "B", legs: "B" },  // Medium leather
-    worge:   { body: "D", arms: "A", legs: "C" },  // Primal/light
+  // Starting armor variant per class (material: metal / leather / cloth / mix)
+  const armorVariant: Record<ClassId, { body: string; arms: string; legs: string; head: string | null; shoulders: string | null }> = {
+    warrior: { body: "A", arms: "A", legs: "A", head: "A", shoulders: "A" }, // Metal plate
+    mage:    { body: "C", arms: "C", legs: "B", head: null, shoulders: null }, // Cloth
+    ranger:  { body: "B", arms: "B", legs: "B", head: null, shoulders: null }, // Leather
+    worge:   { body: "D", arms: "A", legs: "C", head: null, shoulders: null }, // Leather+cloth
+  };
+
+  /**
+   * Per-hero T0/T1 practice weapons — faction partners never share the same kit.
+   * Crusade: human/barbarian · Fabled: elf/dwarf · Legion: orc/undead
+   * Warriors: one sword+shield, one sword+dagger per faction.
+   * Rangers: gun/bow/crossbow/spear/dagger/mace (unique per race).
+   * Mages: unique T1 staff family per race.
+   * Worges: 2H hammer/mace/axe/nature staff.
+   */
+  type HandKit = Pick<
+    EquipmentSlots,
+    "rightHand" | "rightHandType" | "leftHand" | "leftHandType" | "shield" | "utility"
+  >;
+  const raceWeaponKit: Record<string, HandKit> = {
+    // Warriors — metal
+    human_warrior:     { rightHand: "A", rightHandType: "sword", leftHand: null, leftHandType: null, shield: "A", utility: [] },
+    barbarian_warrior: { rightHand: "A", rightHandType: "sword", leftHand: "A", leftHandType: "dagger", shield: null, utility: [] },
+    elf_warrior:       { rightHand: "A", rightHandType: "sword", leftHand: null, leftHandType: null, shield: "A", utility: [] },
+    dwarf_warrior:     { rightHand: "A", rightHandType: "sword", leftHand: "A", leftHandType: "dagger", shield: null, utility: [] },
+    orc_warrior:       { rightHand: "A", rightHandType: "sword", leftHand: null, leftHandType: null, shield: "A", utility: [] },
+    undead_warrior:    { rightHand: "A", rightHandType: "sword", leftHand: "A", leftHandType: "dagger", shield: null, utility: [] },
+    // Rangers — leather · T0 unique weapons
+    human_ranger:      { rightHand: null, rightHandType: null, leftHand: "A", leftHandType: "bow", shield: null, utility: ["quiver"] },
+    barbarian_ranger:  { rightHand: "A", rightHandType: "pick", leftHand: null, leftHandType: null, shield: null, utility: [] }, // T0 gun proxy
+    elf_ranger:        { rightHand: null, rightHandType: null, leftHand: "B", leftHandType: "bow", shield: null, utility: ["quiver"] }, // crossbow→bow mesh
+    dwarf_ranger:      { rightHand: "A", rightHandType: "spear", leftHand: null, leftHandType: null, shield: null, utility: [] },
+    orc_ranger:        { rightHand: "A", rightHandType: "dagger", leftHand: null, leftHandType: null, shield: null, utility: [] },
+    undead_ranger:     { rightHand: "A", rightHandType: "mace", leftHand: null, leftHandType: null, shield: null, utility: [] },
+    // Mages — cloth · T1 staffs
+    human_mage:        { rightHand: null, rightHandType: null, leftHand: "A", leftHandType: "staff", shield: null, utility: [] },
+    barbarian_mage:    { rightHand: null, rightHandType: null, leftHand: "B", leftHandType: "staff", shield: null, utility: [] },
+    elf_mage:          { rightHand: null, rightHandType: null, leftHand: "C", leftHandType: "staff", shield: null, utility: [] },
+    dwarf_mage:        { rightHand: null, rightHandType: null, leftHand: "A", leftHandType: "staff", shield: null, utility: [] },
+    orc_mage:          { rightHand: null, rightHandType: null, leftHand: "B", leftHandType: "staff", shield: null, utility: [] },
+    undead_mage:       { rightHand: null, rightHandType: null, leftHand: "C", leftHandType: "staff", shield: null, utility: [] },
+    // Worges — leather/cloth · 2H
+    human_worge:       { rightHand: "A", rightHandType: "axe", leftHand: null, leftHandType: null, shield: null, utility: [] },
+    barbarian_worge:   { rightHand: "A", rightHandType: "hammer", leftHand: null, leftHandType: null, shield: null, utility: [] },
+    elf_worge:         { rightHand: null, rightHandType: null, leftHand: "A", leftHandType: "staff", shield: null, utility: [] }, // nature staff
+    dwarf_worge:       { rightHand: "A", rightHandType: "mace", leftHand: null, leftHandType: null, shield: null, utility: [] },
+    orc_worge:         { rightHand: "B", rightHandType: "axe", leftHand: null, leftHandType: null, shield: null, utility: [] },
+    undead_worge:      { rightHand: "B", rightHandType: "hammer", leftHand: null, leftHandType: null, shield: null, utility: [] },
   };
 
   const armor = armorVariant[classId];
+  const hands = raceWeaponKit[`${race}_${classId}`] ?? {
+    rightHand: classCfg.equipment.rightHand,
+    rightHandType: classCfg.equipment.rightHandType,
+    leftHand: classCfg.equipment.leftHand,
+    leftHandType: classCfg.equipment.leftHandType,
+    shield: classCfg.equipment.shield,
+    utility: classCfg.equipment.utility,
+  };
   const loreMap: Record<string, string> = {
     human_warrior: "A disciplined soldier of the Western Kingdoms, trained in sword and shield from birth.",
     human_mage: "A scholar of Odin's wisdom, channeling arcane forces through ancient staves.",
@@ -270,14 +321,14 @@ function buildPrefab(race: RaceId, classId: ClassId): CharacterPrefab {
       body: armor.body,
       arms: armor.arms,
       legs: armor.legs,
-      head: classCfg.equipment.head,
-      shoulders: classCfg.equipment.shoulders,
-      rightHand: classCfg.equipment.rightHand,
-      rightHandType: classCfg.equipment.rightHandType,
-      leftHand: classCfg.equipment.leftHand,
-      leftHandType: classCfg.equipment.leftHandType,
-      shield: classCfg.equipment.shield,
-      utility: classCfg.equipment.utility,
+      head: armor.head,
+      shoulders: armor.shoulders,
+      rightHand: hands.rightHand,
+      rightHandType: hands.rightHandType,
+      leftHand: hands.leftHand,
+      leftHandType: hands.leftHandType,
+      shield: hands.shield,
+      utility: hands.utility,
     },
     animationPack: classCfg.animPack,
     baseStats: { ...classCfg.baseStats },

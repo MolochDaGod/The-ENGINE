@@ -189,11 +189,21 @@ export async function loadRaceWithEquipment(opts: {
   const mode = opts.mode ?? "unarmed";
   const { scene, animations, sourceUrl } = await loadRaceWardrobeGlb(opts.race);
   normalizeRaceModel(scene, opts.targetHeight ?? 1.75);
+  // Material family tint hint (metal / leather / cloth) — light only, preserve maps
+  const armorTint =
+    opts.prefab.classId === "warrior"
+      ? 0xb0b8c0 // metal
+      : opts.prefab.classId === "mage"
+        ? 0xc4b8e8 // cloth
+        : opts.prefab.classId === "ranger"
+          ? 0x8b7355 // leather
+          : 0x9a7b5a; // leather+cloth worge
   prepareRaceMaterials(scene, {
-    tint: opts.tint,
+    tint: opts.tint ?? armorTint,
     emissive: opts.emissive,
     enemy: opts.enemy,
   });
+  // Equipped mode uses prefab.equipment (per-hero T0/T1 practice gear)
   const meshStats = applyEquipmentVisibility(scene, opts.prefab, mode);
 
   return {
