@@ -13,7 +13,8 @@
  *
  * Compatible with all Grudge apps: vanilla HTML, React, Vue, etc.
  * Just add: <script src="/grudge-sso.js"></script>
- * Or for CDN: <script src="https://grudachain.grudgestudio.com/grudge-sso.js"></script>
+ * Or for CDN: <script src="https://grudge-studio.com/grudge-sso.js"></script>
+ * Fleet connect: <script src="https://grudge-studio.com/grudge-fleet-connect.js"></script>
  */
 
 (function () {
@@ -27,10 +28,11 @@
 
   // Domains that participate in Grudge SSO
   var SSO_DOMAINS = [
-    'nexus.grudge-studio.com',
+    'grudge-studio.com',
+    'www.grudge-studio.com',
+    'client.grudge-studio.com',
+    'launcher.grudge-studio.com',
     'grudachain.grudge-studio.com',
-    'grudachain.grudgestudio.com',
-    'grudachain-rho.vercel.app',
     'grudge-platform.vercel.app',
     'gdevelop-assistant.vercel.app',
     'warlord-crafting-suite.vercel.app',
@@ -40,6 +42,13 @@
     'api.grudge-studio.com',
     'dash.grudge-studio.com',
     'account.grudge-studio.com',
+    'genesis.grudge-studio.com',
+    'grudge-arena.grudge-studio.com',
+    'grudges.grudge-studio.com',
+    // legacy / retired hosts still listed for inbound SSO capture
+    'nexus.grudge-studio.com',
+    'grudachain.grudgestudio.com',
+    'grudachain-rho.vercel.app',
   ];
 
   // Also match any *.vercel.app or *.grudge-studio.com or *.grudgestudio.com

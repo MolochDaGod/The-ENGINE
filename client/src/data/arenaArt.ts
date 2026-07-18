@@ -12,15 +12,21 @@ export type ArenaCategory =
   | "fishing"
   | "crafting";
 
+/**
+ * Category art by content (filenames on disk are historically swapped):
+ * - pvp-bg-fishing.jpg → neon racing cars
+ * - pvp-bg-racing.jpg  → floating fantasy TCG cards
+ * - pvp-bg-tcg.jpg     → misty fishing lake
+ */
 export const ARENA_CATEGORY_BG: Record<ArenaCategory, string> = {
   mmo: "/assets/pvp/pvp-bg-mmo.jpg",
   arena: "/assets/pvp/pvp-bg-arena.jpg",
   rts: "/assets/pvp/pvp-bg-rts.jpg",
   scifi: "/assets/pvp/pvp-bg-scifi.jpg",
   sandbox: "/assets/pvp/pvp-bg-sandbox.jpg",
-  racing: "/assets/pvp/pvp-bg-racing.jpg",
-  tcg: "/assets/pvp/pvp-bg-tcg.jpg",
-  fishing: "/assets/pvp/pvp-bg-fishing.jpg",
+  racing: "/assets/pvp/pvp-bg-fishing.jpg",
+  tcg: "/assets/pvp/pvp-bg-racing.jpg",
+  fishing: "/assets/carousel/grudge-angler-bg.png",
   crafting: "/assets/store/character_sprites.png",
 };
 
@@ -31,35 +37,37 @@ export const ARENA_CARD_OVERRIDES: Record<string, string> = {
   "tower-defense": "/assets/games/game_tower_defense.png",
   "mage-arena": "/assets/games/mage-card.png",
   "avernus-arena": "/assets/games/game_avernus_arena.png",
-  "multiplayer-racing": "/assets/games/game_multiplayer_racing.png",
-  "annihilate-demo": "/assets/games/final-fighter-card.png",
+  "multiplayer-racing": "/assets/games/game_overdrive_3d.png",
+  "annihilate-demo": "/assets/games/game_avernus_3d.png",
   "grudge-fighter": "/assets/games/final-fighter-card.png",
   "voxel-sandbox": "/assets/pvp/pvp-bg-sandbox.jpg",
   "grudge-brawl": "/assets/games/arena-card.png",
   terraforge: "/assets/pvp/pvp-bg-sandbox.jpg",
   "grudge-crafting": "/assets/store/character_sprites.png",
   "betta-warlords": "/assets/games/game_rpg_maker.png",
-  "grudge-angler": "/assets/pvp/pvp-bg-fishing.jpg",
+  "grudge-angler": "/assets/carousel/grudge-angler-bg.png",
+  "grudge-fishing": "/assets/pvp/pvp-bg-tcg.jpg",
   "star-rts": "/assets/games/space-rts-card.webp",
-  "survival-game": "/assets/games/survival-card.png",
+  "survival-game": "/assets/games/game_decay_survival.png",
   "starway-gruda": "/assets/pvp/pvp-bg-scifi.jpg",
   "rts-star-armada": "/assets/games/space-rts-card.webp",
   "mech-armada": "/assets/pvp/pvp-bg-scifi.jpg",
-  "nemesis-tcg": "/assets/pvp/pvp-bg-tcg.jpg",
-  "grim-armada": "/assets/games/arena-card.png",
-  "grudge-drive": "/assets/games/game_overdrive_3d.png",
+  "nemesis-tcg": "/assets/pvp/pvp-bg-racing.jpg",
+  "match-3-grudge": "/assets/games/game_puzzle_platformer.png",
+  "grim-armada": "/assets/games/space-rts-card.webp",
+  "grudge-drive": "/assets/pvp/pvp-bg-fishing.jpg",
   "grudge-metaverse": "/assets/games/tavern-bg.png",
   "rts-grudge": "/assets/games/rts-grudge-card.jpg",
   "grudge-three-port": "/assets/games/dungeon-crawler-card.png",
   "thc-labz-battle": "/assets/games/thc-labz-card.png",
-  "dungeon-crawler": "/assets/games/game_decay_survival.png",
+  "dungeon-crawler": "/assets/games/dungeon-crawler-card.png",
   "grudge-space-rts": "/assets/games/space-rts-card.webp",
   "final-fighter": "/assets/games/final-fighter-card.png",
   "rpg-sprite-attack": "/assets/games/tactical-rpg-card.png",
   "grudge-arena": "/assets/games/arena-card.png",
   "grudge-rpg-puter": "/assets/games/tactical-rpg-card.png",
   "grudge-warlords-rts": "/assets/games/rts-grudge-card.jpg",
-  "warlord-genesis": "/assets/games/warrior-card.png",
+  "warlord-genesis": "/assets/games/race-select-card.png",
   "grudge-mech-forge": "/assets/pvp/pvp-bg-scifi.jpg",
   wcs: "/assets/store/character_sprites.png",
   "flare-boss-arena": "/assets/games/flare-boss-card.png",

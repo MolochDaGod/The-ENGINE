@@ -25,6 +25,7 @@ import type { Game } from "@shared/schema";
 import { GameCover } from "@/components/game-cover";
 import { EraCarousel } from "@/components/era-carousel";
 import { ProductCard } from "@/components/product-card";
+import { WarlordsHeroCards } from "@/components/warlords-hero-cards";
 
 interface TopGame extends Game {
   playerCount: number;
@@ -215,14 +216,7 @@ function EraSection({ era }: { era: typeof ERAS[number] }) {
             <p className="text-[hsl(45,15%,70%)] font-body leading-relaxed">
               {era.description}
             </p>
-            {era.key === "warlords" && (
-              <div className="flex gap-3 mt-6">
-                <img src="/assets/heroes/death_mage.png" alt="Death Mage" className="w-16 h-20 rounded-lg object-cover border border-[hsl(43,60%,30%)]/40" />
-                <img src="/assets/heroes/holy_paladin.png" alt="Holy Paladin" className="w-16 h-20 rounded-lg object-cover border border-[hsl(43,60%,30%)]/40" />
-                <img src="/assets/heroes/orc_shaman.png" alt="Orc Shaman" className="w-16 h-20 rounded-lg object-cover border border-[hsl(43,60%,30%)]/40" />
-                <img src="/assets/heroes/stone_guardian.png" alt="Stone Guardian" className="w-16 h-20 rounded-lg object-cover border border-[hsl(43,60%,30%)]/40" />
-              </div>
-            )}
+            {era.key === "warlords" && <WarlordsHeroCards />}
           </div>
           <div className="lg:w-3/5">
             {eraProducts.length > 0 ? (

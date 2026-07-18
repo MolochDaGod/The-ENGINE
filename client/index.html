@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en" translate="no">
   <head>
     <meta charset="UTF-8" />
@@ -21,7 +21,9 @@
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" sizes="180x180" />
     <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600;700;800;900&family=Cinzel+Decorative:wght@400;700;900&family=MedievalSharp&family=Uncial+Antiqua&family=IM+Fell+English+SC&family=Spectral+SC:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://js.puter.com/v2/"></script>
-    <script src="https://grudachain-rho.vercel.app/grudge-fleet-connect.js" defer></script>
+    <!-- Fleet auth bridge (optional; used when present) + connect UI (canonical self-host) -->
+    <script src="/grudge-fleet.js" defer></script>
+    <script src="/grudge-fleet-connect.js" defer></script>
     <script>
       // Hostname-based redirect: Railway proxy strips the Host header so server
       // can't detect id.grudge-studio.com. Do it client-side instead.

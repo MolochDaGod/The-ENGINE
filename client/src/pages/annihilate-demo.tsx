@@ -1,15 +1,8 @@
 /**
- * Annihilate Demo — 6 Grudge Race Characters
+ * Annihilate Demo — Warlords combat sandbox
  *
- * Loads any of the 6 Grudge faction characters (Human, Elf, Dwarf, Orc,
- * Barbarian, Undead) with weapon-type-specific loadouts and the full
- * XState-style FSM from the Grudge Engine annihilate core.
- *
- * Features:
- *   - Character Select dropdown (6 races with different loadouts)
- *   - Add Enemy dropdown (spawn AI enemies of any race)
- *   - Weapon Animation dropdown (swap FBX weapon skill packs at runtime)
- *   - Full FSM combat: combo attacks, charge, block, dash, jump, whirlwind
+ * 24 heroes (6 races × 4 classes) with weapon-type FBX packs, CharacterFSM
+ * combos, Cannon-ES physics, BaseAi enemies, CombatVfx, and melee hitboxes.
  *
  * Controls (Grudge standard):
  *   WASD              — move
@@ -28,11 +21,17 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { Link, useLocation } from 'wouter';
 import { isPortalEmbedMode } from '@/lib/embed-mode';
-import { getPrefab } from '@shared/character-prefabs';
+import {
+  CHARACTER_PREFABS,
+  getPrefab,
+  type CharacterPrefab,
+  type ClassId,
+} from '@shared/character-prefabs';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ArrowLeft, Swords, Users, ChevronDown } from 'lucide-react';
 import * as THREE from 'three';
+import * as CANNON from 'cannon-es';
 import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
 
 import {
@@ -42,10 +41,14 @@ import {
   createFSM,
   RoleControls,
   BaseAi,
+  Attacker,
+  CombatVfx,
+  GameCamera,
   GROUP_ROLE,
   GROUP_SCENE,
   GROUP_ENEMY,
   GROUP_ENEMY_ATTACKER,
+  GROUP_ROLE_ATTACKER,
   GROUP_TRIGGER,
   CharacterOptions,
   CharacterRace,
@@ -126,12 +129,13 @@ const WEAPON_PACKS: Record<WeaponType, WeaponAnimMap> = {
   },
 };
 
-// ─── Character Presets ───────────────────────────────────────────────────────
+// ─── Character Presets (24 Warlords heroes from CHARACTER_PREFABS) ───────────
 
 interface CharacterPreset {
   id: string;
   name: string;
   race: CharacterRace;
+  classId: ClassId;
   weapon: WeaponType;
   tint: number;
   emissive: number;
@@ -139,46 +143,126 @@ interface CharacterPreset {
   attackSpeed: number;
   speed: number;
   health: number;
+  classColor: string;
+  lore: string;
 }
 
-const CHARACTER_PRESETS: CharacterPreset[] = [
-  {
-    id: 'human-warrior', name: 'Human Warrior', race: 'human',
-    weapon: 'sword-shield', tint: 0xc4a35a, emissive: 0x221a08,
-    description: 'Sword & Shield • Balanced',
-    attackSpeed: 1.4, speed: 0.11, health: 100,
-  },
-  {
-    id: 'elf-ranger', name: 'Elf Ranger', race: 'elf',
-    weapon: 'longbow', tint: 0x7ec881, emissive: 0x082208,
-    description: 'Longbow • Fast & Agile',
-    attackSpeed: 1.8, speed: 0.13, health: 80,
-  },
-  {
-    id: 'dwarf-guardian', name: 'Dwarf Guardian', race: 'dwarf',
-    weapon: 'great-sword', tint: 0xb07843, emissive: 0x1a0e06,
-    description: '2H Great Sword • Heavy Tank',
-    attackSpeed: 1.0, speed: 0.09, health: 130,
-  },
-  {
-    id: 'orc-berserker', name: 'Orc Berserker', race: 'orc',
-    weapon: 'great-sword', tint: 0x5a8a4a, emissive: 0x0a1a06,
-    description: '2H Great Sword • Raw Power',
-    attackSpeed: 1.2, speed: 0.10, health: 120,
-  },
-  {
-    id: 'barbarian-warlord', name: 'Barbarian Warlord', race: 'barbarian',
-    weapon: 'sword-shield', tint: 0xd4845a, emissive: 0x1a0a04,
-    description: 'Sword & Shield • Relentless',
-    attackSpeed: 1.6, speed: 0.12, health: 110,
-  },
-  {
-    id: 'undead-mage', name: 'Undead Mage', race: 'undead',
-    weapon: 'magic-caster', tint: 0x8a7ecf, emissive: 0x0c0a1e,
-    description: 'Magic Staff • Dark Arts',
-    attackSpeed: 1.3, speed: 0.10, health: 85,
-  },
-];
+const CLASS_WEAPON: Record<ClassId, WeaponType> = {
+  warrior: 'sword-shield',
+  mage: 'magic-caster',
+  ranger: 'longbow',
+  worge: 'great-sword',
+};
+
+const RACE_TINT: Record<CharacterRace, { tint: number; emissive: number }> = {
+  human: { tint: 0xc4a35a, emissive: 0x221a08 },
+  elf: { tint: 0x7ec881, emissive: 0x082208 },
+  dwarf: { tint: 0xb07843, emissive: 0x1a0e06 },
+  orc: { tint: 0x5a8a4a, emissive: 0x0a1a06 },
+  barbarian: { tint: 0xd4845a, emissive: 0x1a0a04 },
+  undead: { tint: 0x8a7ecf, emissive: 0x0c0a1e },
+};
+
+const CLASS_STATS: Record<ClassId, { attackSpeed: number; speed: number; health: number }> = {
+  warrior: { attackSpeed: 1.35, speed: 0.11, health: 120 },
+  mage: { attackSpeed: 1.25, speed: 0.10, health: 85 },
+  ranger: { attackSpeed: 1.7, speed: 0.13, health: 90 },
+  worge: { attackSpeed: 1.45, speed: 0.125, health: 110 },
+};
+
+function prefabToPreset(p: CharacterPrefab): CharacterPreset {
+  const race = p.race as CharacterRace;
+  const tint = RACE_TINT[race] ?? RACE_TINT.human;
+  const stats = CLASS_STATS[p.classId] ?? CLASS_STATS.warrior;
+  const weapon = CLASS_WEAPON[p.classId] ?? 'sword-shield';
+  return {
+    id: p.id.replace(/_/g, '-'),
+    name: p.name,
+    race,
+    classId: p.classId,
+    weapon,
+    tint: tint.tint,
+    emissive: tint.emissive,
+    description: `${WEAPON_PACKS[weapon]?.label ?? weapon} • ${p.faction}`,
+    attackSpeed: stats.attackSpeed,
+    speed: stats.speed * (RACE_CONFIGS[race]?.speedMult ?? 1),
+    health: stats.health + (p.baseStats.VIT * 4) + (p.baseStats.STR * 2),
+    classColor: p.classColor,
+    lore: p.lore,
+  };
+}
+
+const CHARACTER_PRESETS: CharacterPreset[] = CHARACTER_PREFABS.map(prefabToPreset);
+
+// ─── Melee hitbox (Attacker + damage + VFX) ──────────────────────────────────
+
+class MeleeHitbox extends Attacker {
+  private _vfx: CombatVfx | null = null;
+  private _damage = 14;
+  private _onHit?: (target: BaseCharacter, amount: number) => void;
+  private _lastHitAt = 0;
+
+  constructor(opts: { isEnemy?: boolean; vfx?: CombatVfx; damage?: number; onHit?: (t: BaseCharacter, n: number) => void } = {}) {
+    super({
+      num: 1,
+      collisionGroup: opts.isEnemy ? GROUP_ENEMY_ATTACKER : GROUP_ROLE_ATTACKER,
+      collisionMask: opts.isEnemy
+        ? (GROUP_ROLE | GROUP_ENEMY)
+        : (GROUP_ENEMY | GROUP_ENEMY_ATTACKER),
+      addToWorld: true,
+    });
+    this._vfx = opts.vfx ?? null;
+    this._damage = opts.damage ?? 14;
+    this._onHit = opts.onHit;
+    // Sphere hit volume in front of the fist/blade
+    this.body.addShape(new CANNON.Sphere(0.55));
+  }
+
+  setVfx(vfx: CombatVfx | null) {
+    this._vfx = vfx;
+  }
+
+  update(_dt: number): void {
+    if (!this.owner?.body) return;
+    const o = this.owner;
+    const reach = 1.15;
+    const y = o.body.position.y + 0.35;
+    this.body.position.set(
+      o.body.position.x + o.facing.x * reach,
+      y,
+      o.body.position.z + o.facing.y * reach,
+    );
+    this.body.velocity.set(0, 0, 0);
+  }
+
+  collide(event: any, isBeginCollide: boolean): void {
+    if (!isBeginCollide || !this.owner) return;
+    if (!this.owner.service.hasTag('canDamage')) return;
+
+    const target: BaseCharacter | null = event.body?.belongTo ?? null;
+    if (!target || !target.isCharacter || target === this.owner) return;
+    // Friendly fire: role only hits enemies, enemies only hit role
+    if (this.owner.isRole && !target.isEnemy) return;
+    if (this.owner.isEnemy && !target.isRole) return;
+
+    const now = performance.now();
+    if (now - this._lastHitAt < 180) return;
+    this._lastHitAt = now;
+
+    const charged = (this.owner as { chargedLevel?: number }).chargedLevel ?? 0;
+    const dmg = this._damage * (1 + charged * 0.35);
+    target.takeDamage(dmg);
+    this._onHit?.(target, dmg);
+
+    const pos = {
+      x: target.body.position.x,
+      y: target.body.position.y,
+      z: target.body.position.z,
+    };
+    this._vfx?.burst(pos, 'hit', 32, 5.5);
+    this._vfx?.ring(pos, 'slash', 0.9);
+  }
+}
 
 // ─── Helper UI ───────────────────────────────────────────────────────────────
 
@@ -262,6 +346,8 @@ class GrudgeCharacter extends BaseCharacter {
   airLiftVelocity = 1.5;
   climbContactSign = 1;
   detectorRadius = 8;
+  hitbox: MeleeHitbox | null = null;
+  vfx: CombatVfx | null = null;
 
   private _tweenWhirlwind: any = null;
   private _timeoutLaunch: ReturnType<typeof setTimeout> | null = null;
@@ -281,10 +367,33 @@ class GrudgeCharacter extends BaseCharacter {
     this.maxHealth = preset.health;
   }
 
+  attachCombat(vfx: CombatVfx, onHit?: (t: BaseCharacter, n: number) => void) {
+    this.vfx = vfx;
+    this.hitbox?.destroy();
+    this.hitbox = new MeleeHitbox({ vfx, damage: 16, onHit });
+    this.hitbox.owner = this;
+  }
+
+  private _fxAttack(kind: 'slash' | 'magic' | 'charge' = 'slash') {
+    if (!this.vfx || !this.body) return;
+    const origin = { x: this.body.position.x, y: this.body.position.y, z: this.body.position.z };
+    this.vfx.slashArc(origin, this.facing.x, this.facing.y, kind);
+  }
+
+  private _fxDash() {
+    if (!this.vfx || !this.body) return;
+    this.vfx.burst(
+      { x: this.body.position.x, y: this.body.position.y - 0.2, z: this.body.position.z },
+      'dash',
+      20,
+      3.5,
+    );
+  }
+
   buildFSM(): CharacterFSM {
     return createFSM(
       {
-        id: this.preset.id,
+        id: this.preset?.id ?? 'grudge-role',
         initial: 'loading',
         states: {
           loading: { on: { loaded: 'idle' } },
@@ -341,28 +450,29 @@ class GrudgeCharacter extends BaseCharacter {
           playRun:              () => this.fadeToAction('running'),
           playFall:             () => this.fadeToAction('fall', 0.3),
           playAirIdle:          () => this.fadeToAction('fall', 0.3),
-          playBlock:            () => this.fadeToAction('block'),
+          playBlock:            () => { this.fadeToAction('block'); this.vfx?.ring({ x: this.body.position.x, y: this.body.position.y - 0.5, z: this.body.position.z }, 'block', 0.7); },
           playBashStart:        () => { if (this.oaction['punchStart']) this.oaction['punchStart'].timeScale = this.attackSpeed; this.fadeToAction('punchStart'); },
           playAttackStart:      () => { if (this.oaction['punchStart']) this.oaction['punchStart'].timeScale = this.attackSpeed; this.fadeToAction('punchStart'); },
-          playAttack:           () => { if (this.oaction['punch']) this.oaction['punch'].timeScale = this.attackSpeed; this.fadeToAction('punch', 0); },
-          playCharged1:         () => { this.chargedLevel = 1; },
-          playCharged2:         () => { this.chargedLevel = 2; },
-          playChargeAttack:     () => { if (this.oaction['punch']) this.oaction['punch'].timeScale = this.attackSpeed * this.chargeAttackCoe; this.fadeToAction('punch', 0); },
+          playAttack:           () => { if (this.oaction['punch']) this.oaction['punch'].timeScale = this.attackSpeed; this.fadeToAction('punch', 0); this._fxAttack(this.preset.weapon === 'magic-caster' ? 'magic' : 'slash'); },
+          playCharged1:         () => { this.chargedLevel = 1; this.vfx?.burst({ x: this.body.position.x, y: this.body.position.y + 0.5, z: this.body.position.z }, 'charge', 12, 2); },
+          playCharged2:         () => { this.chargedLevel = 2; this.vfx?.burst({ x: this.body.position.x, y: this.body.position.y + 0.5, z: this.body.position.z }, 'charge', 18, 2.5); },
+          playChargeAttack:     () => { if (this.oaction['punch']) this.oaction['punch'].timeScale = this.attackSpeed * this.chargeAttackCoe; this.fadeToAction('punch', 0); this._fxAttack('charge'); },
           playChargeFistStart:  () => { if (this.oaction['fistStart']) this.oaction['fistStart'].timeScale = this.attackSpeed * this.chargeAttackCoe; this.fadeToAction('fistStart'); },
-          playChargeFist:       () => { if (this.oaction['fist']) this.oaction['fist'].timeScale = this.attackSpeed * this.chargeAttackCoe; this.fadeToAction('fist', 0); },
+          playChargeFist:       () => { if (this.oaction['fist']) this.oaction['fist'].timeScale = this.attackSpeed * this.chargeAttackCoe; this.fadeToAction('fist', 0); this._fxAttack('charge'); },
           playChargeStrikeStart:() => { if (this.oaction['strikeStart']) this.oaction['strikeStart'].timeScale = this.attackSpeed * this.chargeAttackCoe; this.fadeToAction('strikeStart'); },
-          playChargeStrike:     () => { if (this.oaction['strike']) this.oaction['strike'].timeScale = this.attackSpeed * this.chargeAttackCoe; this.fadeToAction('strike', 0); },
+          playChargeStrike:     () => { if (this.oaction['strike']) this.oaction['strike'].timeScale = this.attackSpeed * this.chargeAttackCoe; this.fadeToAction('strike', 0); this._fxAttack('charge'); },
           playChargeStrikeEnd:  () => { if (this.oaction['strikeEnd']) this.oaction['strikeEnd'].timeScale = this.attackSpeed * this.chargeAttackCoe; this.fadeToAction('strikeEnd', 0); },
           playFistStart:        () => { if (this.oaction['fistStart']) this.oaction['fistStart'].timeScale = this.attackSpeed; this.fadeToAction('fistStart'); },
-          playFist:             () => { if (this.oaction['fist']) this.oaction['fist'].timeScale = this.attackSpeed; this.fadeToAction('fist', 0); },
+          playFist:             () => { if (this.oaction['fist']) this.oaction['fist'].timeScale = this.attackSpeed; this.fadeToAction('fist', 0); this._fxAttack(); },
           playStrikeStart:      () => { if (this.oaction['strikeStart']) this.oaction['strikeStart'].timeScale = this.attackSpeed; this.fadeToAction('strikeStart'); },
-          playStrike:           () => { if (this.oaction['strike']) this.oaction['strike'].timeScale = this.attackSpeed; this.fadeToAction('strike', 0); },
+          playStrike:           () => { if (this.oaction['strike']) this.oaction['strike'].timeScale = this.attackSpeed; this.fadeToAction('strike', 0); this._fxAttack(); },
           playStrikeEnd:        () => { if (this.oaction['strikeEnd']) this.oaction['strikeEnd'].timeScale = this.attackSpeed; this.fadeToAction('strikeEnd', 0); },
-          playHadouken:         () => { if (this.oaction['punch']) this.oaction['punch'].timeScale = this.attackSpeed * this.chargeAttackCoe; this.fadeToAction('punch', 0); },
-          playShoryuken:        () => { if (this.oaction['strike']) this.oaction['strike'].timeScale = this.attackSpeed; this.fadeToAction('strike', 0); setTimeout(() => { this.body.velocity.y = 5; }, 150); },
+          playHadouken:         () => { if (this.oaction['punch']) this.oaction['punch'].timeScale = this.attackSpeed * this.chargeAttackCoe; this.fadeToAction('punch', 0); this._fxAttack('magic'); this.vfx?.burst({ x: this.body.position.x + this.facing.x * 1.5, y: this.body.position.y + 0.8, z: this.body.position.z + this.facing.y * 1.5 }, 'magic', 40, 7); },
+          playShoryuken:        () => { if (this.oaction['strike']) this.oaction['strike'].timeScale = this.attackSpeed; this.fadeToAction('strike', 0); setTimeout(() => { this.body.velocity.y = 5; }, 150); this._fxAttack('charge'); },
           playLaunchStart:      () => {
             if (this.oaction['strike']) this.oaction['strike'].timeScale = this.attackSpeed;
             this.fadeToAction('strike', 0);
+            this._fxAttack();
             this._timeoutLaunch = setTimeout(() => { this.body.position.y += this.liftDistance; this.body.velocity.y = 0; this.service.send('finish'); }, 150);
           },
           playLaunch:           () => { if (this._timeoutLaunch) clearTimeout(this._timeoutLaunch); },
@@ -373,33 +483,37 @@ class GrudgeCharacter extends BaseCharacter {
             this.mesh.rotation.y = -this.facing.angle() + Math.PI / 2;
             this.tmpVec3.set(this.facing.x, 0, this.facing.y).normalize().multiplyScalar(15);
             this.body.velocity.x = this.tmpVec3.x; this.body.velocity.z = this.tmpVec3.z;
+            this._fxDash();
           },
-          playDashAttack:       () => { if (this.oaction['dashAttack']) { this.oaction['dashAttack'].timeScale = this.attackSpeed; this.fadeToAction('dashAttack'); } },
+          playDashAttack:       () => { if (this.oaction['dashAttack']) { this.oaction['dashAttack'].timeScale = this.attackSpeed; this.fadeToAction('dashAttack'); } this._fxAttack(); },
           playAirDash:          () => {
             this.fadeToAction('fall', 0);
             this.tmpVec3.set(this.facing.x, 0, this.facing.y).normalize().multiplyScalar(11);
             this.body.velocity.x = this.tmpVec3.x; this.body.velocity.y = 0; this.body.velocity.z = this.tmpVec3.z;
             this._timeoutAirDash = setTimeout(() => this.service.send('finish'), 500);
+            this._fxDash();
           },
           exitAirDash:          () => { if (this._timeoutAirDash) clearTimeout(this._timeoutAirDash); this.body.velocity.set(0, 0, 0); },
           playJump:             () => { this.fadeToAction('jump'); this.body.velocity.set(0, 0, 0); },
           jump:                 () => { this.body.velocity.y = 5.2; },
-          playAirAttack:        () => { if (this.oaction['punch']) this.oaction['punch'].timeScale = this.attackSpeed; this.fadeToAction('punch', 0); this.body.velocity.y = this.airLiftVelocity; },
-          playAirFist:          () => { if (this.oaction['fist']) this.oaction['fist'].timeScale = this.attackSpeed; this.fadeToAction('fist', 0); this.body.velocity.y = this.airLiftVelocity; },
-          playAirStrike:        () => { if (this.oaction['strike']) this.oaction['strike'].timeScale = this.attackSpeed; this.fadeToAction('strike', 0); this.body.velocity.y = this.airLiftVelocity; },
+          playAirAttack:        () => { if (this.oaction['punch']) this.oaction['punch'].timeScale = this.attackSpeed; this.fadeToAction('punch', 0); this.body.velocity.y = this.airLiftVelocity; this._fxAttack(); },
+          playAirFist:          () => { if (this.oaction['fist']) this.oaction['fist'].timeScale = this.attackSpeed; this.fadeToAction('fist', 0); this.body.velocity.y = this.airLiftVelocity; this._fxAttack(); },
+          playAirStrike:        () => { if (this.oaction['strike']) this.oaction['strike'].timeScale = this.attackSpeed; this.fadeToAction('strike', 0); this.body.velocity.y = this.airLiftVelocity; this._fxAttack(); },
           playAirBashStart:     () => { if (this.oaction['jumpAttackStart']) { this.oaction['jumpAttackStart'].timeScale = this.attackSpeed; this.fadeToAction('jumpAttackStart'); } this.body.velocity.y = 20; },
-          playAirBash:          () => { if (this.oaction['jumpAttack']) { this.oaction['jumpAttack'].timeScale = this.attackSpeed * 5; this.fadeToAction('jumpAttack'); } this.body.velocity.y = -this.body.position.y * 3.5; },
-          playHit:              () => { if (this.oaction['hit']) { this.oaction['hit'].timeScale = 3; this.fadeToAction('hit'); } },
+          playAirBash:          () => { if (this.oaction['jumpAttack']) { this.oaction['jumpAttack'].timeScale = this.attackSpeed * 5; this.fadeToAction('jumpAttack'); } this.body.velocity.y = -this.body.position.y * 3.5; this._fxAttack('charge'); },
+          playHit:              () => {
+            if (this.oaction['hit']) { this.oaction['hit'].timeScale = 3; this.fadeToAction('hit'); }
+            this.vfx?.burst({ x: this.body.position.x, y: this.body.position.y + 0.8, z: this.body.position.z }, 'hit', 16, 3);
+          },
           playWhirlwind:        () => {
             this.fadeToAction('whirlwind', 0);
+            this.vfx?.ring({ x: this.body.position.x, y: this.body.position.y - 0.4, z: this.body.position.z }, 'slash', 1.6);
             const start = Date.now(); const dur = this.whirlwindOneTurnDuration * 1000; const base = this.mesh.rotation.y;
             const step = () => { if (!this.service.matches('whirlwind')) return; const elapsed = (Date.now() - start) % dur; this.mesh.rotation.y = base + (elapsed / dur) * Math.PI * 2; this._tweenWhirlwind = requestAnimationFrame(step); };
             this._tweenWhirlwind = requestAnimationFrame(step);
           },
           exitWhirlwind:        () => { if (this._tweenWhirlwind) cancelAnimationFrame(this._tweenWhirlwind); },
           playClimb:            () => {
-            // Use a real climbing/locomotion clip so the character isn't frozen
-            // on the wall. Falls back gracefully when a model lacks a climb clip.
             const climbClip = ['climb', 'climbing', 'climbUp', 'ladder', 'walk', 'running', 'idle']
               .find((n) => this.oaction[n]);
             if (climbClip) {
@@ -410,7 +524,7 @@ class GrudgeCharacter extends BaseCharacter {
             this.body.velocity.set(0, 0, 0);
           },
           exitClimb:            () => { this.body.mass = this.mass; },
-          playAjejebloken:      () => { this.fadeToAction('whirlwind', 0); },
+          playAjejebloken:      () => { this.fadeToAction('whirlwind', 0); this.vfx?.burst({ x: this.body.position.x, y: this.body.position.y, z: this.body.position.z }, 'magic', 36, 6); },
           exitAjejebloken:      () => { this.setFacing(this.facing.x, this.facing.y); },
           setMassZero:          () => { this.body.mass = 0; },
           restoreMass:          () => { this.body.mass = this.mass; },
@@ -418,6 +532,12 @@ class GrudgeCharacter extends BaseCharacter {
         guards: { notAir: () => !this.isAir },
       }
     );
+  }
+
+  destroy(): void {
+    this.hitbox?.destroy();
+    this.hitbox = null;
+    super.destroy();
   }
 
   async load(callback?: () => void): Promise<void> {
@@ -490,6 +610,8 @@ class GrudgeEnemy extends BaseCharacter {
   attackSpeed = 1.4; chargeAttackCoe = 2.0; chargedLevel = 0;
   whirlwindOneTurnDuration = 0.3; liftDistance = 3.7; airLiftVelocity = 1.5;
   climbContactSign = 1; detectorRadius = 10;
+  hitbox: MeleeHitbox | null = null;
+  vfx: CombatVfx | null = null;
 
   constructor(preset: CharacterPreset, opts: CharacterOptions = {}) {
     super({
@@ -505,10 +627,17 @@ class GrudgeEnemy extends BaseCharacter {
     this.maxHealth = preset.health;
   }
 
+  attachCombat(vfx: CombatVfx, onHit?: (t: BaseCharacter, n: number) => void) {
+    this.vfx = vfx;
+    this.hitbox?.destroy();
+    this.hitbox = new MeleeHitbox({ isEnemy: true, vfx, damage: 10, onHit });
+    this.hitbox.owner = this;
+  }
+
   buildFSM(): CharacterFSM {
     return createFSM(
       {
-        id: `enemy-${this.preset.id}`, initial: 'loading',
+        id: `enemy-${this.preset?.id ?? 'enemy'}`, initial: 'loading',
         states: {
           loading: { on: { loaded: 'idle' } },
           idle:    { entry: 'playIdle', on: { run: 'run', attack: 'attack', hit: 'hit', air: 'airIdle' }, tags: ['canFacing'] },
@@ -522,8 +651,17 @@ class GrudgeEnemy extends BaseCharacter {
         actions: {
           playIdle:   () => this.fadeToAction('idle'),
           playRun:    () => this.fadeToAction('running'),
-          playAttack: () => { if (this.oaction['punch']) { this.oaction['punch'].timeScale = this.attackSpeed; this.fadeToAction('punch', 0); } },
-          playHit:    () => { if (this.oaction['hit']) { this.oaction['hit'].timeScale = 3; this.fadeToAction('hit'); } },
+          playAttack: () => {
+            if (this.oaction['punch']) { this.oaction['punch'].timeScale = this.attackSpeed; this.fadeToAction('punch', 0); }
+            this.vfx?.slashArc(
+              { x: this.body.position.x, y: this.body.position.y, z: this.body.position.z },
+              this.facing.x, this.facing.y, 'slash',
+            );
+          },
+          playHit:    () => {
+            if (this.oaction['hit']) { this.oaction['hit'].timeScale = 3; this.fadeToAction('hit'); }
+            this.vfx?.burst({ x: this.body.position.x, y: this.body.position.y + 0.6, z: this.body.position.z }, 'hit', 14, 3);
+          },
           playFall:   () => this.fadeToAction('fall', 0.3),
         },
         guards: {},
@@ -561,6 +699,15 @@ class GrudgeEnemy extends BaseCharacter {
     this.setFacing(0, 1);
     callback?.();
   }
+
+  destroy(): void {
+    this.hitbox?.destroy();
+    this.hitbox = null;
+    if (this.health <= 0 && this.vfx && this.body) {
+      this.vfx.burst({ x: this.body.position.x, y: this.body.position.y, z: this.body.position.z }, 'death', 40, 6);
+    }
+    super.destroy();
+  }
 }
 
 // ─── React Page ──────────────────────────────────────────────────────────────
@@ -570,11 +717,16 @@ interface EnemyInstance { character: GrudgeEnemy; ai: BaseAi; preset: CharacterP
 function resolveInitialPreset(heroParam: string | null): CharacterPreset {
   if (heroParam) {
     const dashed = heroParam.replace(/_/g, '-');
-    const exact = CHARACTER_PRESETS.find((p) => p.id === dashed);
+    const underscored = heroParam.replace(/-/g, '_');
+    const exact = CHARACTER_PRESETS.find((p) => p.id === dashed || p.id === underscored);
     if (exact) return exact;
 
-    const prefab = getPrefab(heroParam);
+    const prefab = getPrefab(underscored) ?? getPrefab(dashed);
     if (prefab) {
+      const mapped = CHARACTER_PRESETS.find((p) => p.id === prefab.id.replace(/_/g, '-'));
+      if (mapped) return mapped;
+      const raceClass = CHARACTER_PRESETS.find((p) => p.race === prefab.race && p.classId === prefab.classId);
+      if (raceClass) return raceClass;
       const raceMatch = CHARACTER_PRESETS.find((p) => p.race === prefab.race);
       if (raceMatch) return raceMatch;
     }
@@ -590,6 +742,8 @@ export default function AnnihilateDemo() {
   const roleRef = useRef<GrudgeCharacter | null>(null);
   const controlsRef = useRef<RoleControls | null>(null);
   const enemiesRef = useRef<EnemyInstance[]>([]);
+  const vfxRef = useRef<CombatVfx | null>(null);
+  const camRef = useRef<GameCamera | null>(null);
 
   const [fsmState, setFsmState] = useState('loading');
   const [loaded, setLoaded] = useState(false);
@@ -600,6 +754,7 @@ export default function AnnihilateDemo() {
   const [info, setInfo] = useState('Initializing…');
   const [playerHealth, setPlayerHealth] = useState(100);
   const [playerMaxHealth, setPlayerMaxHealth] = useState(100);
+  const [comboHits, setComboHits] = useState(0);
 
   useEffect(() => {
     document.title = 'Annihilate Demo — Grudge Studio';
@@ -608,7 +763,8 @@ export default function AnnihilateDemo() {
 
   const spawnCharacter = useCallback(async (preset: CharacterPreset) => {
     const engine = engineRef.current;
-    if (!engine) return;
+    const vfx = vfxRef.current;
+    if (!engine || !vfx) return;
     if (controlsRef.current) { controlsRef.current.destroy(); controlsRef.current = null; }
     if (roleRef.current) { roleRef.current.destroy(); roleRef.current = null; }
     setLoaded(false); setLoadingWeapon(true);
@@ -617,10 +773,15 @@ export default function AnnihilateDemo() {
     try {
       await character.load();
       character.enableFootIK();
+      character.attachCombat(vfx, (_t, _n) => {
+        setComboHits((c) => c + 1);
+        camRef.current?.shake(0.22);
+      });
       const controls = new RoleControls(character);
       controlsRef.current = controls;
       roleRef.current = character;
       engine.setRole(character);
+      camRef.current?.setTarget(character.mesh);
       character.service.onTransition((state: string) => setFsmState(state));
       setPlayerHealth(character.health);
       setPlayerMaxHealth(character.maxHealth);
@@ -644,8 +805,8 @@ export default function AnnihilateDemo() {
   }, []);
 
   const spawnEnemy = useCallback(async (presetId: string) => {
-    const engine = engineRef.current; const role = roleRef.current;
-    if (!engine || !role) return;
+    const engine = engineRef.current; const role = roleRef.current; const vfx = vfxRef.current;
+    if (!engine || !role || !vfx) return;
     const preset = CHARACTER_PRESETS.find((p) => p.id === presetId);
     if (!preset) return;
     const angle = Math.random() * Math.PI * 2; const dist = 6 + Math.random() * 4;
@@ -653,9 +814,16 @@ export default function AnnihilateDemo() {
     const enemy = new GrudgeEnemy(preset, { position: pos });
     await enemy.load(() => {
       enemy.enableFootIK();
+      enemy.attachCombat(vfx, (target) => {
+        if (target.isRole) {
+          setPlayerHealth(target.health);
+          camRef.current?.shake(0.35);
+        }
+      });
       const ai = new BaseAi(enemy, 1.5);
       enemiesRef.current.push({ character: enemy, ai, preset });
       setEnemyCount(enemiesRef.current.length);
+      vfx.ring({ x: pos.x, y: 0.1, z: pos.z }, 'magic', 1.2);
     });
   }, []);
 
@@ -680,10 +848,26 @@ export default function AnnihilateDemo() {
     const engine = GrudgeEngine.getInstance();
     engine.init(canvas); engine.addGround(0x1e1030, 80); engineRef.current = engine;
 
+    // Combat VFX + camera (best engine systems)
+    const vfx = new CombatVfx(engine.scene);
+    vfxRef.current = vfx;
+    engine.addToUpdate(vfx);
+
+    const cam = GameCamera.getInstance(engine.camera);
+    cam.setMode('ISOMETRIC');
+    cam.configure({ distance: 14, height: 12, lerpAlpha: 0.1, fov: 48 });
+    camRef.current = cam;
+    engine.addToUpdate(cam);
+
+    // Atmosphere — torch-like fill lights around arena
+    const torchA = new THREE.PointLight(0xff6622, 1.2, 28);
+    torchA.position.set(8, 4, 6);
+    engine.scene.add(torchA);
+    const torchB = new THREE.PointLight(0x6644ff, 0.9, 24);
+    torchB.position.set(-9, 3.5, -5);
+    engine.scene.add(torchB);
+
     // ── Test obstacles for the movement fixes ──────────────────────────────
-    //  • ramp  → foot IK plants on the slope + slope-projected movement / push-off
-    //  • block → jump into its face to wall-grab, hold W to climb, mantle the ledge (top)
-    //  • step  → foot IK on a raised edge
     engine.addBox({ size: [10, 0.5, 6], position: [11, 1.1, 0], rotation: [0, 0, -0.3], color: 0x24407a });
     engine.addBox({ size: [6, 4, 6], position: [-11, 2, 0], color: 0x47307a });
     engine.addBox({ size: [4, 0.7, 4], position: [-3.5, 0.35, 5], color: 0x33235e });
@@ -697,6 +881,21 @@ export default function AnnihilateDemo() {
     const heroParam = new URLSearchParams(location.split('?')[1] ?? '').get('hero');
     spawnCharacter(resolveInitialPreset(heroParam));
 
+    // Keep HP bar in sync while player takes damage from AI
+    const hpPoll = window.setInterval(() => {
+      const role = roleRef.current;
+      if (role) setPlayerHealth(role.health);
+      // Cull dead enemies
+      const before = enemiesRef.current.length;
+      enemiesRef.current = enemiesRef.current.filter((e) => {
+        if (e.character.health > 0) return true;
+        e.ai.destroy();
+        e.character.destroy();
+        return false;
+      });
+      if (enemiesRef.current.length !== before) setEnemyCount(enemiesRef.current.length);
+    }, 200);
+
     const ro = new ResizeObserver(() => {
       const c = canvasRef.current;
       if (!c) return;
@@ -709,15 +908,31 @@ export default function AnnihilateDemo() {
     ro.observe(canvas);
 
     return () => {
+      window.clearInterval(hpPoll);
       ro.disconnect();
-      clearEnemies(); controlsRef.current?.destroy(); roleRef.current?.destroy();
-      engine.destroy(); engineRef.current = null;
+      clearEnemies();
+      controlsRef.current?.destroy();
+      roleRef.current?.destroy();
+      vfx.destroy();
+      vfxRef.current = null;
+      cam.destroy();
+      camRef.current = null;
+      engine.destroy();
+      engineRef.current = null;
     };
   }, [location, spawnCharacter, clearEnemies]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const characterItems = CHARACTER_PRESETS.map((p) => ({ id: p.id, name: p.name, sub: p.description }));
+  const characterItems = CHARACTER_PRESETS.map((p) => ({
+    id: p.id,
+    name: p.name,
+    sub: p.description,
+  }));
   const enemyItems = [
-    ...CHARACTER_PRESETS.map((p) => ({ id: p.id, name: `Spawn ${p.name}`, sub: `${RACE_CONFIGS[p.race].name} • ${WEAPON_PACKS[p.weapon]?.label}` })),
+    ...CHARACTER_PRESETS.map((p) => ({
+      id: p.id,
+      name: `Spawn ${p.name}`,
+      sub: `${RACE_CONFIGS[p.race].name} • ${WEAPON_PACKS[p.weapon]?.label}`,
+    })),
     { id: '__clear__', name: '✕ Clear All Enemies', sub: 'Remove all spawned enemies' },
   ];
   const weaponItems = (Object.entries(WEAPON_PACKS) as [WeaponType, WeaponAnimMap][]).map(([id, pack]) => ({
@@ -729,7 +944,7 @@ export default function AnnihilateDemo() {
       <canvas ref={canvasRef} className="absolute inset-0 w-full h-full" />
 
       {/* ── Top bar ────────────────────────────────────────────────────── */}
-      <div className="absolute top-0 left-0 right-0 z-20 flex items-center gap-2 p-3">
+      <div className="absolute top-0 left-0 right-0 z-20 flex items-center gap-2 p-3 flex-wrap">
         {!embedMode && (
           <>
             <Link href="/super-engine">
@@ -750,8 +965,9 @@ export default function AnnihilateDemo() {
         <div className="flex flex-col items-end gap-1">
           <div className="bg-black/70 px-3 py-1 rounded text-xs font-mono text-green-400">
             State: <span className="text-white">{fsmState}</span>
+            {comboHits > 0 && <span className="ml-2 text-amber-300">Hits {comboHits}</span>}
           </div>
-          <div className="bg-black/70 px-3 py-1 rounded text-[10px] text-gray-400">{info}</div>
+          <div className="bg-black/70 px-3 py-1 rounded text-[10px] text-gray-400 max-w-xs truncate">{info}</div>
         </div>
       </div>
 
@@ -789,19 +1005,19 @@ export default function AnnihilateDemo() {
         <ControlRow keys="Block + ↓←Space" label="Ajejebloken" />
       </div>
 
-      {/* ── Character roster ───────────────────────────────────────────── */}
+      {/* ── Character roster (24 heroes, scrollable) ───────────────────── */}
       {loaded && (
-        <div className="absolute bottom-4 right-4 z-20 flex flex-col gap-1 items-end">
+        <div className="absolute bottom-4 right-4 z-20 w-[240px] max-h-[42vh] overflow-y-auto flex flex-col gap-1 items-stretch pr-1">
           {CHARACTER_PRESETS.map((p) => (
             <button key={p.id} onClick={() => spawnCharacter(p)}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs transition-all ${
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs transition-all text-left ${
                 activePreset.id === p.id
                   ? 'bg-purple-800/60 border border-purple-400/50 text-white'
                   : 'bg-black/50 border border-gray-700/30 text-gray-400 hover:bg-purple-900/30 hover:text-white'
               }`}>
-              <div className="w-3 h-3 rounded-full border border-white/20" style={{ backgroundColor: `#${p.tint.toString(16).padStart(6, '0')}` }} />
-              <span className="font-medium">{p.name}</span>
-              <span className="text-[10px] text-gray-500">{WEAPON_PACKS[p.weapon]?.label}</span>
+              <div className="w-3 h-3 rounded-full border border-white/20 shrink-0" style={{ backgroundColor: p.classColor || `#${p.tint.toString(16).padStart(6, '0')}` }} />
+              <span className="font-medium truncate flex-1">{p.name}</span>
+              <span className="text-[9px] text-gray-500 capitalize shrink-0">{p.classId}</span>
             </button>
           ))}
         </div>
@@ -809,8 +1025,8 @@ export default function AnnihilateDemo() {
 
       {/* ── Feature badges ─────────────────────────────────────────────── */}
       {loaded && (
-        <div className="absolute bottom-[280px] right-4 z-10 flex flex-col gap-1 items-end">
-          {['6 Grudge Race GLBs', 'FBX Weapon Anim Packs', 'CharacterFSM + Combos', 'Cannon-ES Physics', 'BaseAi Enemies', 'Race Stats System'].map((f) => (
+        <div className="absolute top-20 right-4 z-10 flex flex-col gap-1 items-end">
+          {['24 Warlords Heroes', 'CombatVfx + Hitboxes', 'FBX Weapon Packs', 'CharacterFSM Combos', 'GameCamera + Shake', 'BaseAi Enemies'].map((f) => (
             <Badge key={f} className="bg-purple-900/60 text-purple-300 text-[10px] border-purple-500/20">{f}</Badge>
           ))}
         </div>

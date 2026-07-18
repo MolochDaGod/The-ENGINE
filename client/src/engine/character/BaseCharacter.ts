@@ -157,8 +157,21 @@ export abstract class BaseRaceCharacter implements Updatable {
   oaction: Record<string, THREE.AnimationAction> = {};
   action_act!: THREE.AnimationAction;
 
-  // ── FSM
-  service!: CharacterFSM;
+  // ── FSM (lazy — built on first access so subclass fields exist)
+  private _service: CharacterFSM | null = null;
+
+  /**
+   * CharacterFSM is created lazily the first time it is accessed.
+   * Subclass constructors set fields (e.g. preset) *after* super(), so
+   * calling buildFSM() inside the base constructor would see undefined
+   * state and crash on things like `this.preset.id`.
+   */
+  get service(): CharacterFSM {
+    if (!this._service) {
+      this._service = this.buildFSM();
+    }
+    return this._service;
+  }
 
   // ── Class-based state (Sketchbook pattern) ──────────────────────────────
   currentState: ICharacterState | null = null;
@@ -187,7 +200,7 @@ export abstract class BaseRaceCharacter implements Updatable {
     this.raceConfig = RACE_CONFIGS[this.race];
     this._applyRacials();
 
-    this.service = this.buildFSM();
+    // Do NOT call buildFSM() here — subclass fields are not ready until after super().
     this._initPhysics(options);
     this._engine.addToUpdate(this);
   }
@@ -286,6 +299,7 @@ export abstract class BaseRaceCharacter implements Updatable {
       this.climbDir.set(dx / dl, 0, dz / dl);
       (this as any).climbContactSign = Math.sign(ni.x) || 1;
 
+      // Lazy service is built on first access (after subclass ctor fields exist)
       this.service.send('climb', { contact });
     });
   }
@@ -559,7 +573,7 @@ export abstract class BaseRaceCharacter implements Updatable {
   // ── Cleanup ───────────────────────────────────────────────────────────────
 
   destroy(): void {
-    this.service.stop();
+    this._service?.stop();
     this._engine.removeFromUpdate(this);
     this._engine.world.removeBody(this.body);
     if (this.mesh) this._engine.scene.remove(this.mesh);

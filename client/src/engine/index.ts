@@ -63,6 +63,13 @@ export { HarvestingBase, Mining, Herbalism, Woodcutting, Fishing, Skinning } fro
 // Interaction
 export { Mounting, Dismounting, Emoting } from './character/states/_stateLibrary';
 
+// ── Systems ───────────────────────────────────────────────────────────────────
+export { CombatVfx }                     from './systems/CombatVfx';
+export type { VfxKind }                  from './systems/CombatVfx';
+export { GameCamera }                    from './systems/GameCamera';
+export type { CameraMode }               from './systems/GameCamera';
+export { CombatSystem }                  from './systems/CombatSystem';
+
 // ── AI ─────────────────────────────────────────────────────────────────────────────
 export { BaseAi }                        from './ai/BaseAi';
 

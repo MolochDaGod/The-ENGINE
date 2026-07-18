@@ -74,7 +74,7 @@ const _PORTAL_PRODUCTS_RAW = [
     status: "beta",
     section: "play",
     tags: ["rts", "pvp", "coop"],
-    image: "/assets/store/wargus_rts_engine.png",
+    image: "/assets/games/game_wargus_rts.png",
   },
   {
     id: "tower-defense",
@@ -84,7 +84,7 @@ const _PORTAL_PRODUCTS_RAW = [
     status: "beta",
     section: "play",
     tags: ["solo", "coop"],
-    image: "/assets/games/arena-card.png",
+    image: "/assets/games/game_tower_defense.png",
   },
   {
     id: "mage-arena",
@@ -105,7 +105,7 @@ const _PORTAL_PRODUCTS_RAW = [
     status: "beta",
     section: "play",
     tags: ["pvp", "pvpve", "arena"],
-    image: "/assets/games/dungeon-crawler-card.png",
+    image: "/assets/games/game_avernus_arena.png",
   },
   {
     id: "multiplayer-racing",
@@ -115,7 +115,7 @@ const _PORTAL_PRODUCTS_RAW = [
     status: "beta",
     section: "play",
     tags: ["pvp", "arena"],
-    image: "/assets/games/race-select-card.png",
+    image: "/assets/games/game_overdrive_3d.png",
   },
   {
     id: "annihilate-demo",
@@ -125,7 +125,7 @@ const _PORTAL_PRODUCTS_RAW = [
     status: "beta",
     section: "play",
     tags: ["coop", "pvpve"],
-    image: "/assets/games/final-fighter-card.png",
+    image: "/assets/games/game_avernus_3d.png",
   },
   {
     id: "grudge-fighter",
@@ -261,7 +261,8 @@ const _PORTAL_PRODUCTS_RAW = [
     external: true,
     note: "Puter",
     tags: ["solo", "coop"],
-    image: "/assets/pvp/pvp-bg-fishing.jpg",
+    // Branded Angeler title art (pvp-bg-fishing.jpg is mislabeled neon racing cars)
+    image: "/assets/carousel/grudge-angler-bg.png",
   },
   {
     id: "grudge-studio-app",
@@ -294,7 +295,7 @@ const _PORTAL_PRODUCTS_RAW = [
     external: true,
     authRequired: true,
     tags: ["solo", "coop", "pvpve"],
-    image: "/assets/games/survival-card.png",
+    image: "/assets/games/game_decay_survival.png",
   },
   // ── Armada era ──
   {
@@ -305,7 +306,7 @@ const _PORTAL_PRODUCTS_RAW = [
     status: "planned",
     section: "play",
     tags: ["solo", "coop", "arena"],
-    image: "/assets/store/scifi_environment.png",
+    image: "/assets/pvp/pvp-bg-scifi.jpg",
   },
   {
     id: "rts-star-armada",
@@ -315,7 +316,7 @@ const _PORTAL_PRODUCTS_RAW = [
     status: "planned",
     section: "play",
     tags: ["rts", "pvp", "coop"],
-    image: "/assets/store/scifi_environment.png",
+    image: "/assets/games/space-rts-card.webp",
   },
   {
     id: "mech-armada",
@@ -325,7 +326,7 @@ const _PORTAL_PRODUCTS_RAW = [
     status: "planned",
     section: "play",
     tags: ["solo", "coop", "pvp", "arena"],
-    image: "/assets/store/scifi_environment.png",
+    image: "/assets/pvp/pvp-bg-scifi.jpg",
   },
   {
     id: "nemesis-tcg",
@@ -338,7 +339,8 @@ const _PORTAL_PRODUCTS_RAW = [
     authRequired: true,
     note: "Canonical: nemesis.grudge-studio.com — grudgeplatform.io pending registrar DNS → Railway",
     tags: ["pvp", "solo"],
-    image: "/assets/pvp/pvp-bg-tcg.jpg",
+    // pvp-bg-racing.jpg is mislabeled — content is floating fantasy TCG cards
+    image: "/assets/pvp/pvp-bg-racing.jpg",
   },
   {
     id: "grudge-forge",
@@ -372,7 +374,7 @@ const _PORTAL_PRODUCTS_RAW = [
     external: true,
     note: "Unity WebGL",
     tags: ["solo"],
-    image: "/assets/games/race-select-card.png",
+    image: "/assets/games/game_puzzle_platformer.png",
   },
   // ── Live external games (missing from portal until now) ──
   {
@@ -384,7 +386,7 @@ const _PORTAL_PRODUCTS_RAW = [
     section: "play",
     external: true,
     tags: ["pvp", "arena"],
-    image: "/assets/games/arena-card.png",
+    image: "/assets/games/space-rts-card.webp",
   },
   {
     id: "grudge-drive",
@@ -395,7 +397,8 @@ const _PORTAL_PRODUCTS_RAW = [
     section: "play",
     external: true,
     tags: ["pvp", "arena"],
-    image: "/assets/games/warrior-card.png",
+    // pvp-bg-fishing.jpg is mislabeled — content is neon racing cars
+    image: "/assets/pvp/pvp-bg-fishing.jpg",
   },
   {
     id: "grudge-metaverse",
@@ -430,7 +433,8 @@ const _PORTAL_PRODUCTS_RAW = [
     section: "play",
     external: true,
     tags: ["solo"],
-    image: "/assets/games/pirates-card.png",
+    // pvp-bg-tcg.jpg is mislabeled — content is misty fishing lake
+    image: "/assets/pvp/pvp-bg-tcg.jpg",
   },
   {
     id: "grudge-three-port",
@@ -574,7 +578,7 @@ const _PORTAL_PRODUCTS_RAW = [
     section: "play",
     external: true,
     tags: ["rts", "pvp", "arena", "coop"],
-    image: "/assets/games/warrior-card.png",
+    image: "/assets/games/race-select-card.png",
   },
   {
     id: "grudge-pipeline",

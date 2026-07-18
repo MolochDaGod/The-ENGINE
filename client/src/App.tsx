@@ -253,9 +253,10 @@ function AppShell() {
         <>
           <GrudgePanelTab />
           <AdminEntryButton />
+          {/* Pill only on portal chrome — not over full-screen forge/game canvases */}
+          <FleetConnectInit />
         </>
       )}
-      <FleetConnectInit />
     </TooltipProvider>
   );
 }
