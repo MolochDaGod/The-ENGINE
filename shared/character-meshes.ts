@@ -161,3 +161,62 @@ export function resolveUnarmedVisibleMeshes(
   }
   return visible;
 }
+
+export type EquipmentVisibilityMode = "unarmed" | "equipped";
+
+/**
+ * Apply Toon-RTS multi-mesh wardrobe visibility on a loaded race GLB.
+ *
+ * RULE (never regress):
+ * - Race GLBs ship the FULL wardrobe (body/arms/legs/head + every weapon/shield).
+ * - Default player spawn = **unarmed** (armor only).
+ * - Equipped loadouts come from CharacterPrefab.equipment (class gear or scene bag).
+ * - Never show every mesh at once (looks like a spiked blob).
+ * - Never ignore equipment slots and "tint the whole model" as a substitute.
+ */
+export function applyEquipmentVisibility(
+  root: { traverse: (fn: (obj: { name: string; visible: boolean; isMesh?: boolean; isSkinnedMesh?: boolean }) => void) => void },
+  prefab: CharacterPrefab,
+  mode: EquipmentVisibilityMode = "unarmed",
+): { meshCount: number; visibleCount: number; mode: EquipmentVisibilityMode } {
+  const names: string[] = [];
+  root.traverse((obj) => {
+    if ((obj as { isMesh?: boolean }).isMesh || (obj as { isSkinnedMesh?: boolean }).isSkinnedMesh) {
+      if (obj.name) names.push(obj.name);
+    }
+  });
+
+  const visible =
+    mode === "unarmed"
+      ? resolveUnarmedVisibleMeshes(names, prefab)
+      : resolvePrefabVisibleMeshes(names, prefab);
+
+  let visibleCount = 0;
+  root.traverse((obj) => {
+    const isMesh =
+      (obj as { isMesh?: boolean }).isMesh ||
+      (obj as { isSkinnedMesh?: boolean }).isSkinnedMesh;
+    if (!isMesh) return;
+    // Keep unnamed renderables visible (rare); named wardrobe meshes use the set.
+    if (!obj.name) {
+      obj.visible = true;
+      visibleCount++;
+      return;
+    }
+    const keep =
+      visible.has(obj.name) ||
+      /^(Bip|mixamorig|Armature|Root|Skeleton)/i.test(obj.name);
+    obj.visible = keep;
+    if (keep) visibleCount++;
+  });
+
+  return { meshCount: names.length, visibleCount, mode };
+}
+
+/** CDN Toon-RTS race pack (D1) — canonical textured multi-mesh characters. */
+export const TOON_RTS_CHARACTERS_CDN =
+  "https://assets.grudge-studio.com/asset-packs/toon-rts-characters/glb/characters";
+
+export function toonRtsRaceGlbUrl(race: RaceId): string {
+  return `${TOON_RTS_CHARACTERS_CDN}/${race}.glb`;
+}

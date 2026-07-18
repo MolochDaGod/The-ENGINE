@@ -27,6 +27,7 @@ import {
   type CharacterPrefab,
   type ClassId,
 } from '@shared/character-prefabs';
+import type { EquipmentVisibilityMode } from '@shared/character-meshes';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ArrowLeft, Swords, Users, ChevronDown } from 'lucide-react';
@@ -44,6 +45,9 @@ import {
   Attacker,
   CombatVfx,
   GameCamera,
+  loadRaceWithEquipment,
+  setRaceEquipmentMode,
+  prefabFromRaceClass,
   GROUP_ROLE,
   GROUP_SCENE,
   GROUP_ENEMY,
@@ -336,6 +340,10 @@ function HealthBar({ current, max, name, race }: { current: number; max: number;
 
 class GrudgeCharacter extends BaseCharacter {
   preset: CharacterPreset;
+  /** Canonical Grudge6 prefab (equipment slots / class gear) */
+  charPrefab: CharacterPrefab;
+  /** Multi-mesh wardrobe mode — players default unarmed (Toon-RTS D1 rule) */
+  equipmentMode: EquipmentVisibilityMode = 'unarmed';
   isRole = true;
   isEnemy = false;
   attackSpeed = 1.4;
@@ -348,6 +356,7 @@ class GrudgeCharacter extends BaseCharacter {
   detectorRadius = 8;
   hitbox: MeleeHitbox | null = null;
   vfx: CombatVfx | null = null;
+  meshSourceUrl = '';
 
   private _tweenWhirlwind: any = null;
   private _timeoutLaunch: ReturnType<typeof setTimeout> | null = null;
@@ -361,10 +370,18 @@ class GrudgeCharacter extends BaseCharacter {
       race: preset.race,
     });
     this.preset = preset;
+    this.charPrefab = prefabFromRaceClass(preset.race, preset.classId);
     this.attackSpeed = preset.attackSpeed;
     this.speed = preset.speed;
     this.health = preset.health;
     this.maxHealth = preset.health;
+  }
+
+  /** Switch wardrobe meshes: unarmed (default) vs class equipped gear. */
+  setEquipmentMode(mode: EquipmentVisibilityMode) {
+    if (!this.mesh) return;
+    this.equipmentMode = mode;
+    setRaceEquipmentMode(this.mesh, this.charPrefab, mode);
   }
 
   attachCombat(vfx: CombatVfx, onHit?: (t: BaseCharacter, n: number) => void) {
@@ -540,38 +557,50 @@ class GrudgeCharacter extends BaseCharacter {
     super.destroy();
   }
 
+  /**
+   * Load Toon-RTS D1 multi-mesh race wardrobe.
+   * Default visibility = **unarmed** (armor only) — never show all weapon meshes.
+   */
   async load(callback?: () => void): Promise<void> {
     const engine = this._engine;
-    let gltf: any;
     try {
-      gltf = await this._loadGltf(`/models/grudge/${this.preset.race}.glb`);
+      const loaded = await loadRaceWithEquipment({
+        race: this.preset.race,
+        prefab: this.charPrefab,
+        mode: 'unarmed',
+        tint: this.preset.tint,
+        emissive: this.preset.emissive,
+        enemy: false,
+        targetHeight: 1.75 * (RACE_CONFIGS[this.preset.race]?.bodyScale ?? 1),
+      });
+      this.mesh = loaded.scene;
+      this.meshSourceUrl = loaded.sourceUrl;
+      this.equipmentMode = loaded.mode;
+      this.gltf = { scene: loaded.scene, animations: loaded.animations };
+      engine.scene.add(this.mesh);
+      this.mixer = new THREE.AnimationMixer(this.mesh);
+      loaded.animations.forEach((clip) => {
+        this.oaction[clip.name] = this.mixer.clipAction(clip);
+      });
     } catch {
-      gltf = await this._loadGltf('/models/maria/all.gltf');
+      // Last-resort Maria placeholder (no multi-mesh wardrobe)
+      const gltf = await this._loadGltf('/models/maria/all.gltf');
+      this.gltf = gltf;
+      this.mesh = gltf.scene;
+      engine.scene.add(this.mesh);
+      this.mixer = new THREE.AnimationMixer(this.mesh);
+      gltf.animations?.forEach((clip: THREE.AnimationClip) => {
+        this.oaction[clip.name] = this.mixer.clipAction(clip);
+      });
+      this.meshSourceUrl = '/models/maria/all.gltf';
     }
-    this.gltf = gltf;
-    this.mesh = gltf.scene;
 
-    // Apply race color tint
-    this.mesh.traverse((child: any) => {
-      if (child.isMesh) {
-        child.castShadow = true; child.receiveShadow = true;
-        if (child.material) {
-          child.material = child.material.clone();
-          if (child.material.color) child.material.color.lerp(new THREE.Color(this.preset.tint), 0.35);
-          if (child.material.emissive) child.material.emissive.set(this.preset.emissive);
-        }
-      }
-    });
-    engine.scene.add(this.mesh);
-    this.mixer = new THREE.AnimationMixer(this.mesh);
-    if (gltf.animations?.length > 0) {
-      gltf.animations.forEach((clip: THREE.AnimationClip) => { this.oaction[clip.name] = this.mixer.clipAction(clip); });
-    }
-    // Fallback to Maria animations if GLB has none
     if (!this.oaction['idle'] || !this.oaction['running']) {
       try {
         const fallback = await this._loadGltf('/models/maria/all.gltf');
-        fallback.animations.forEach((clip: THREE.AnimationClip) => { if (!this.oaction[clip.name]) this.oaction[clip.name] = this.mixer.clipAction(clip); });
+        fallback.animations.forEach((clip: THREE.AnimationClip) => {
+          if (!this.oaction[clip.name]) this.oaction[clip.name] = this.mixer.clipAction(clip);
+        });
       } catch { /* skip */ }
     }
     this._onLoaded('idle');
@@ -579,7 +608,7 @@ class GrudgeCharacter extends BaseCharacter {
     callback?.();
   }
 
-  /** Load FBX weapon animation pack — overrides matching action clips */
+  /** Load FBX weapon animation pack — also equips class gear meshes (weapons visible). */
   async loadWeaponPack(weaponType: WeaponType): Promise<string[]> {
     const pack = WEAPON_PACKS[weaponType];
     if (!pack) return [];
@@ -597,6 +626,8 @@ class GrudgeCharacter extends BaseCharacter {
         }
       } catch { /* skip failed FBX loads */ }
     }
+    // Weapon skill pack selected → show class equipment meshes (sword/shield/bow/staff)
+    this.setEquipmentMode('equipped');
     if (loaded.includes('idle') && this.oaction['idle']) this.fadeToAction('idle');
     return loaded;
   }
@@ -606,6 +637,8 @@ class GrudgeCharacter extends BaseCharacter {
 
 class GrudgeEnemy extends BaseCharacter {
   preset: CharacterPreset;
+  charPrefab: CharacterPrefab;
+  equipmentMode: EquipmentVisibilityMode = 'equipped';
   isRole = false; isEnemy = true;
   attackSpeed = 1.4; chargeAttackCoe = 2.0; chargedLevel = 0;
   whirlwindOneTurnDuration = 0.3; liftDistance = 3.7; airLiftVelocity = 1.5;
@@ -621,6 +654,7 @@ class GrudgeEnemy extends BaseCharacter {
       race: preset.race,
     });
     this.preset = preset;
+    this.charPrefab = prefabFromRaceClass(preset.race, preset.classId);
     this.attackSpeed = preset.attackSpeed;
     this.speed = preset.speed * 0.7;
     this.health = preset.health;
@@ -669,30 +703,44 @@ class GrudgeEnemy extends BaseCharacter {
     );
   }
 
+  /** AI spawns **equipped** with class gear (lane-hero style). */
   async load(callback?: () => void): Promise<void> {
     const engine = this._engine;
-    let gltf: any;
-    try { gltf = await this._loadGltf(`/models/grudge/${this.preset.race}.glb`); }
-    catch { gltf = await this._loadGltf('/models/maria/all.gltf'); }
-    this.gltf = gltf; this.mesh = gltf.scene;
-    this.mesh.traverse((child: any) => {
-      if (child.isMesh) {
-        child.castShadow = true; child.receiveShadow = true;
-        if (child.material) {
-          child.material = child.material.clone();
-          if (child.material.color) { child.material.color.lerp(new THREE.Color(this.preset.tint), 0.3); child.material.color.lerp(new THREE.Color(0xff2200), 0.15); }
-          if (child.material.emissive) child.material.emissive.set(0x1a0400);
-        }
-      }
-    });
-    this.mesh.scale.setScalar(0.95);
-    engine.scene.add(this.mesh);
-    this.mixer = new THREE.AnimationMixer(this.mesh);
-    if (gltf.animations?.length > 0) gltf.animations.forEach((clip: THREE.AnimationClip) => { this.oaction[clip.name] = this.mixer.clipAction(clip); });
+    try {
+      const loaded = await loadRaceWithEquipment({
+        race: this.preset.race,
+        prefab: this.charPrefab,
+        mode: 'equipped',
+        tint: this.preset.tint,
+        emissive: this.preset.emissive,
+        enemy: true,
+        targetHeight: 1.65 * (RACE_CONFIGS[this.preset.race]?.bodyScale ?? 1),
+      });
+      this.mesh = loaded.scene;
+      this.equipmentMode = loaded.mode;
+      this.gltf = { scene: loaded.scene, animations: loaded.animations };
+      engine.scene.add(this.mesh);
+      this.mixer = new THREE.AnimationMixer(this.mesh);
+      loaded.animations.forEach((clip) => {
+        this.oaction[clip.name] = this.mixer.clipAction(clip);
+      });
+    } catch {
+      const gltf = await this._loadGltf('/models/maria/all.gltf');
+      this.gltf = gltf;
+      this.mesh = gltf.scene;
+      this.mesh.scale.setScalar(0.95);
+      engine.scene.add(this.mesh);
+      this.mixer = new THREE.AnimationMixer(this.mesh);
+      gltf.animations?.forEach((clip: THREE.AnimationClip) => {
+        this.oaction[clip.name] = this.mixer.clipAction(clip);
+      });
+    }
     if (!this.oaction['idle'] || !this.oaction['running']) {
       try {
         const fb = await this._loadGltf('/models/maria/all.gltf');
-        fb.animations.forEach((clip: THREE.AnimationClip) => { if (!this.oaction[clip.name]) this.oaction[clip.name] = this.mixer.clipAction(clip); });
+        fb.animations.forEach((clip: THREE.AnimationClip) => {
+          if (!this.oaction[clip.name]) this.oaction[clip.name] = this.mixer.clipAction(clip);
+        });
       } catch { /* skip */ }
     }
     this._onLoaded('idle');
@@ -755,6 +803,7 @@ export default function AnnihilateDemo() {
   const [playerHealth, setPlayerHealth] = useState(100);
   const [playerMaxHealth, setPlayerMaxHealth] = useState(100);
   const [comboHits, setComboHits] = useState(0);
+  const [equipmentMode, setEquipmentModeUi] = useState<EquipmentVisibilityMode>('unarmed');
 
   useEffect(() => {
     document.title = 'Annihilate Demo — Grudge Studio';
@@ -786,16 +835,18 @@ export default function AnnihilateDemo() {
       setPlayerHealth(character.health);
       setPlayerMaxHealth(character.maxHealth);
 
+      setEquipmentModeUi(character.equipmentMode);
       setInfo(`Loading ${WEAPON_PACKS[preset.weapon]?.label ?? preset.weapon} animations…`);
       const loadedClips = await character.loadWeaponPack(preset.weapon);
+      setEquipmentModeUi(character.equipmentMode);
       setActivePreset(preset);
       setWeaponPackLabel(WEAPON_PACKS[preset.weapon]?.label || '');
       setLoadingWeapon(false);
       setLoaded(true);
       setInfo(
         loadedClips.length > 0
-          ? `${preset.name} • ${WEAPON_PACKS[preset.weapon]?.label} (${loadedClips.length} clips)`
-          : `${preset.name} • using embedded animations`,
+          ? `${preset.name} • ${character.meshSourceUrl.includes('toon-rts') ? 'Toon-RTS D1' : 'local'} • ${character.equipmentMode} • ${WEAPON_PACKS[preset.weapon]?.label} (${loadedClips.length} clips)`
+          : `${preset.name} • ${character.equipmentMode} wardrobe • embedded anims`,
       );
     } catch (err) {
       console.error('[AnnihilateDemo] character load failed', err);
@@ -961,6 +1012,23 @@ export default function AnnihilateDemo() {
           onSelect={(id) => { if (id === '__clear__') { clearEnemies(); return; } spawnEnemy(id); }} />
         <Dropdown label={loadingWeapon ? 'Loading…' : (weaponPackLabel || 'Weapon Anims')} icon={<Swords className="w-3.5 h-3.5" />}
           items={weaponItems} onSelect={(id) => switchWeaponPack(id as WeaponType)} />
+        {loaded && (
+          <button
+            type="button"
+            onClick={() => {
+              const role = roleRef.current;
+              if (!role) return;
+              const next: EquipmentVisibilityMode = role.equipmentMode === 'unarmed' ? 'equipped' : 'unarmed';
+              role.setEquipmentMode(next);
+              setEquipmentModeUi(next);
+              setInfo(`${role.preset.name} • mesh wardrobe: ${next}`);
+            }}
+            className="px-3 py-2 rounded-lg bg-black/70 border border-amber-500/40 text-amber-200 text-xs font-medium hover:bg-amber-900/30"
+            title="Toggle Toon-RTS multi-mesh equipment visibility"
+          >
+            Gear: {equipmentMode}
+          </button>
+        )}
         <div className="flex-1" />
         <div className="flex flex-col items-end gap-1">
           <div className="bg-black/70 px-3 py-1 rounded text-xs font-mono text-green-400">
@@ -1026,7 +1094,7 @@ export default function AnnihilateDemo() {
       {/* ── Feature badges ─────────────────────────────────────────────── */}
       {loaded && (
         <div className="absolute top-20 right-4 z-10 flex flex-col gap-1 items-end">
-          {['24 Warlords Heroes', 'CombatVfx + Hitboxes', 'FBX Weapon Packs', 'CharacterFSM Combos', 'GameCamera + Shake', 'BaseAi Enemies'].map((f) => (
+          {['Toon-RTS D1 multi-mesh', 'Unarmed default', 'Class equip meshes', 'CombatVfx + Hitboxes', 'CharacterFSM Combos', '24 Warlords Heroes'].map((f) => (
             <Badge key={f} className="bg-purple-900/60 text-purple-300 text-[10px] border-purple-500/20">{f}</Badge>
           ))}
         </div>

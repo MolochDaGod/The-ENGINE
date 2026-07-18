@@ -40,6 +40,19 @@ export { Attacker }                      from './character/Attacker';
 export { RoleControls }                  from './character/RoleControls';
 export { FootIK }                        from './character/FootIK';
 
+// Grudge6 Toon-RTS multi-mesh equipment (unarmed default)
+export {
+  loadRaceWithEquipment,
+  loadRaceWardrobeGlb,
+  setRaceEquipmentMode,
+  prefabFromRaceClass,
+  resolveCharacterPrefab,
+  prepareRaceMaterials,
+  normalizeRaceModel,
+  raceGlbCandidates,
+} from './character/RaceEquipment';
+export type { RaceEquipmentLoadResult } from './character/RaceEquipment';
+
 // ── Character States (Sketchbook-style class-based FSM) ─────────────────────
 export type { ICharacterState }          from './character/states/ICharacterState';
 export { CharacterStateBase }            from './character/states/CharacterStateBase';

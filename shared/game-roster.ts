@@ -10,6 +10,7 @@ import {
   getEquipmentMeshNames,
   type CharacterPrefab,
 } from "./character-prefabs";
+import { applyEquipmentVisibility } from "./character-meshes";
 
 /** All 24 heroes — use as-is for lane minions / AI marchers */
 export const LANE_HEROES: CharacterPrefab[] = CHARACTER_PREFABS;
@@ -90,17 +91,9 @@ export function applyUnarmedMeshVisibility(root: import("three").Object3D): void
   });
 }
 
-/** Lane units show full class equipment from prefab definition */
+/** Lane units show full class equipment from prefab definition (Toon-RTS multi-mesh). */
 export function applyLaneMeshVisibility(root: import("three").Object3D, prefab: CharacterPrefab): void {
-  const visible = new Set(getEquipmentMeshNames(prefab));
-  root.traverse((child) => {
-    if (!(child as import("three").Mesh).isMesh) return;
-    if (visible.size === 0) {
-      child.visible = true;
-      return;
-    }
-    child.visible = visible.has(child.name) || child.name.includes("Bip") || child.name.includes("mixamo");
-  });
+  applyEquipmentVisibility(root as never, prefab, "equipped");
 }
 
 export function savePlayerLoadout(loadout: PlayerLoadout): void {
