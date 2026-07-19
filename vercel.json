@@ -86,17 +86,17 @@
     },
     {
       "source": "/arpg-game",
-      "destination": "https://grudox.grudge-studio.com/arpg-game/",
+      "destination": "https://arpg.grudge-studio.com/",
       "permanent": false
     },
     {
       "source": "/arpg-game/",
-      "destination": "https://grudox.grudge-studio.com/arpg-game/",
+      "destination": "https://arpg.grudge-studio.com/",
       "permanent": false
     },
     {
       "source": "/arpg-game/:path*",
-      "destination": "https://grudox.grudge-studio.com/arpg-game/:path*",
+      "destination": "https://arpg.grudge-studio.com/:path*",
       "permanent": false
     },
     {
