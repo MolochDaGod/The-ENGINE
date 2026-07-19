@@ -83,6 +83,31 @@
       "source": "/grudges/:path*",
       "destination": "https://grudges.grudge-studio.com/:path*",
       "permanent": false
+    },
+    {
+      "source": "/arpg-game",
+      "destination": "https://grudox.grudge-studio.com/arpg-game/",
+      "permanent": false
+    },
+    {
+      "source": "/arpg-game/",
+      "destination": "https://grudox.grudge-studio.com/arpg-game/",
+      "permanent": false
+    },
+    {
+      "source": "/arpg-game/:path*",
+      "destination": "https://grudox.grudge-studio.com/arpg-game/:path*",
+      "permanent": false
+    },
+    {
+      "source": "/warlords-shipwreck",
+      "destination": "https://grudox.grudge-studio.com/warlords-shipwreck.html",
+      "permanent": false
+    },
+    {
+      "source": "/warlords-shipwreck.html",
+      "destination": "https://grudox.grudge-studio.com/warlords-shipwreck.html",
+      "permanent": false
     }
   ],
   "rewrites": [
