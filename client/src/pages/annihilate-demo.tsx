@@ -1,21 +1,13 @@
 /**
- * Annihilate Demo — Warlords combat sandbox
+ * Annihilate Demo — Warlords combat sandbox (grudge6 / Toon-RTS D1 heroes)
  *
- * 24 heroes (6 races × 4 classes) with weapon-type FBX packs, CharacterFSM
- * combos, Cannon-ES physics, BaseAi enemies, CombatVfx, and melee hitboxes.
+ * 24 heroes (6 races × 4 classes) · weapon FBX packs · CharacterFSM · Cannon-ES
+ * · BaseAi · CombatVfx · multi-mesh equipment wardrobe.
  *
- * Controls (Grudge standard):
- *   WASD              — move
- *   LMB               — light attack (3-hit combo)
- *   RMB               — heavy attack / bash / whirlwind
- *   Space             — jump / double jump
- *   Shift             — dash
- *   1                 — block (hold for combos)
- *   2                 — launch (uppercut)
- *   3                 — bash (keyboard alt)
- *   Block + ↓→LMB     — hadouken
- *   Block + →↓→LMB    — shoryuken
- *   Block + ↓←Space   — ajejebloken
+ * Hotkeys SSOT: ROLE_HOTKEYS in `@/engine` RoleControls (Ctrl=block, 1=dash attack).
+ * Stack / deps: docs/ANNIHILATE_GRUDGE6_STACK.md
+ *
+ * Console noise: "translate-page" / runtime.lastError = browser extensions, not engine.
  */
 
 import { useEffect, useRef, useState, useCallback } from 'react';
@@ -41,6 +33,7 @@ import {
   CharacterFSM,
   createFSM,
   RoleControls,
+  ROLE_HOTKEYS,
   BaseAi,
   Attacker,
   CombatVfx,
@@ -1056,21 +1049,16 @@ export default function AnnihilateDemo() {
         </div>
       )}
 
-      {/* ── Controls legend ────────────────────────────────────────────── */}
-      <div className="absolute bottom-4 left-4 z-20 bg-black/70 rounded-lg px-4 py-3 text-xs text-gray-400 space-y-0.5">
-        <div className="text-purple-300 font-bold mb-1">GRUDGE ENGINE — Annihilate Core</div>
-        <ControlRow keys="WASD" label="Move" />
-        <ControlRow keys="LMB" label="Attack (light combo)" />
-        <ControlRow keys="RMB" label="Heavy / Bash / Whirlwind" />
-        <ControlRow keys="Space" label="Jump / Double Jump" />
+      {/* ── Controls legend (SSOT = ROLE_HOTKEYS) ─────────────────────── */}
+      <div className="absolute bottom-4 left-4 z-20 bg-black/70 rounded-lg px-4 py-3 text-xs text-gray-400 space-y-0.5 max-h-[46vh] overflow-y-auto">
+        <div className="text-purple-300 font-bold mb-1">GRUDGE6 — Controls</div>
+        {ROLE_HOTKEYS.map((row) => (
+          <ControlRow key={row.keys + row.label} keys={row.keys} label={row.label} />
+        ))}
         <ControlRow keys="Jump→Wall + W" label="Climb wall / mantle ledge" />
-        <ControlRow keys="Shift" label="Dash" />
-        <ControlRow keys="1" label="Block (hold for combos)" />
-        <ControlRow keys="2" label="Launch (uppercut)" />
-        <ControlRow keys="3" label="Bash (keyboard alt)" />
-        <ControlRow keys="Block + ↓→LMB" label="Hadouken" />
-        <ControlRow keys="Block + →↓→LMB" label="Shoryuken" />
-        <ControlRow keys="Block + ↓←Space" label="Ajejebloken" />
+        <div className="pt-1 text-[9px] text-gray-600 max-w-[220px]">
+          Select a hero (right list) · Gear toggles multi-mesh · Weapon packs reload clips
+        </div>
       </div>
 
       {/* ── Character roster (24 heroes, scrollable) ───────────────────── */}

@@ -198,6 +198,8 @@ When dedicated animations are uploaded to R2 (e.g. `animations/dagger/` with sta
 
 ## Annihilate 3D Combat Engine
 
+**Annihilate / grudge6 stack (deps, hotkeys, GLTF, physics):** [docs/ANNIHILATE_GRUDGE6_STACK.md](docs/ANNIHILATE_GRUDGE6_STACK.md)
+
 The engine at `/annihilate-demo` features:
 
 - **6 Grudge race characters** — Human, Elf, Dwarf, Orc, Barbarian, Undead (GLB models)

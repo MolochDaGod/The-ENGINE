@@ -37,7 +37,7 @@ export type { CharacterOptions, CharacterRace, RaceConfig } from './character/Ba
 export { RACE_CONFIGS, DEFAULT_RACE }    from './character/BaseCharacter';
 
 export { Attacker }                      from './character/Attacker';
-export { RoleControls }                  from './character/RoleControls';
+export { RoleControls, ROLE_HOTKEYS }    from './character/RoleControls';
 export { FootIK }                        from './character/FootIK';
 
 // Grudge6 Toon-RTS multi-mesh equipment (unarmed default)
