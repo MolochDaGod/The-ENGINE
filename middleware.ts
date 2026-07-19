@@ -94,7 +94,7 @@ export default async function middleware(request: Request): Promise<Response> {
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "img-src 'self' data: blob: https: http:",
       "font-src 'self' data: https://fonts.gstatic.com",
-      "connect-src 'self' https: wss: blob:",
+      "connect-src 'self' https: wss: data: blob:",
       "media-src 'self' https: blob:",
       "worker-src 'self' blob:",
       "frame-ancestors 'self' https://grudge-studio.com https://*.grudge-studio.com https://grudgewarlords.com https://*.vercel.app",

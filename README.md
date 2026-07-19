@@ -117,7 +117,7 @@ CSP is set in `vercel.json` headers (both The-ENGINE and Grudge-Builder), **not*
 | `style-src` | `'self' 'unsafe-inline' https://fonts.googleapis.com` | Google Fonts CSS |
 | `font-src` | `'self' https://fonts.gstatic.com data:` | Google Fonts files |
 | `img-src` | `'self' data: blob: https: http:` | **Permissive** — game thumbnails, CDNs, avatars from any source |
-| `connect-src` | `'self' https: wss:` | **Permissive** — Railway, Solana RPC, Crossmint, Puter, Discord |
+| `connect-src` | `'self' https: wss: data: blob:` | **Permissive** — Railway, Solana RPC, Puter, Discord; **`data:` required** for GLTFLoader embedded textures (annihilate-demo / Three.js) |
 | `frame-src` | `'self' https://*.puter.com https://*.grudge-studio.com https://*.vercel.app` | Puter embeds, studio iframes |
 | `media-src` | `'self' https://assets.grudge-studio.com blob:` | Audio/video from R2 CDN |
 | `worker-src` | `'self' blob:` | Service workers, game workers |
