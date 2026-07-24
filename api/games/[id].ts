@@ -11,6 +11,9 @@ export default function handler(req: any, res: any) {
   if (id === "top") {
     return res.status(404).json({ error: "Use /api/games/top" });
   }
+  if (id === "competitive") {
+    return res.status(404).json({ error: "Use /api/games/competitive" });
+  }
   const numId = parseInt(id as string, 10);
   if (isNaN(numId)) return res.status(400).json({ error: "Invalid game ID" });
   const game = GAMES.find((g: any) => g.id === numId);
