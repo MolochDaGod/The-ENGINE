@@ -1416,7 +1416,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "gameId and score are required" });
       }
 
-      const game = await storage.getGame(parseInt(gameId));
+      const catalogId = parseInt(String(gameId), 10);
+      // Heal catalog-id alignment so portal /play/:id and scores FK share one game row
+      const game =
+        (await storage.ensureCatalogGame(catalogId)) || (await storage.getGame(catalogId));
       if (!game) return res.status(404).json({ error: "Game not found" });
 
       // Determine personal best / global record flags
@@ -1442,6 +1445,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Update flags on the new score
       await db.update(scores).set({ isPersonalBest, isGlobalRecord }).where(eq(scores.id, newScore.id));
+
+      // Share account timeline with games DB — recent_plays on users
+      storage
+        .recordFleetPlay(player.id, {
+          gameKey: `retro:${game.id}`,
+          category: "retro",
+          title: game.title,
+          url: `/play/${game.id}`,
+        })
+        .catch((err) => console.error("[scores] recent_plays failed:", err));
 
       // Track activity + fire Discord webhooks
       trackNowPlaying(player.displayName || player.username, game.title);
@@ -1533,6 +1546,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const player = getPlayer(req)!;
       const { opponentId, gameId, gbuxWager } = req.body;
+      // Ensure challenged game exists under catalog id before FK insert
+      if (gameId != null) {
+        await storage.ensureCatalogGame(parseInt(String(gameId), 10));
+      }
       if (!opponentId || !gameId) {
         return res.status(400).json({ error: "opponentId and gameId are required" });
       }
@@ -2152,6 +2169,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("/api/me/scores error:", error);
       return res.status(500).json({ error: "Failed to fetch scores" });
+    }
+  });
+
+  /**
+   * Account ↔ competitive games join: roster + personal bests on shared game_library ids.
+   */
+  app.get("/api/me/competitive", requirePlayer, async (req, res) => {
+    try {
+      const player = getPlayer(req)!;
+      const { RETRO_COMPETITIVE_TOP10 } = await import("../shared/retroCompetitive");
+      await storage.ensureCompetitiveGames().catch(() => undefined);
+
+      const rows = [];
+      for (const meta of RETRO_COMPETITIVE_TOP10) {
+        const best = await storage.getPlayerBestScore(player.id, meta.gameId);
+        const game = await storage.getGame(meta.gameId);
+        rows.push({
+          gameId: meta.gameId,
+          title: game?.title || meta.title,
+          platform: game?.platform || meta.platform,
+          thumbnailUrl: game?.thumbnailUrl || meta.thumbnailUrl,
+          modes: meta.modes,
+          blurb: meta.blurb,
+          scoreHint: meta.scoreHint,
+          bestScore: best?.score ?? null,
+          isPersonalBest: best?.isPersonalBest ?? false,
+          isGlobalRecord: best?.isGlobalRecord ?? false,
+          playUrl: `/play/${meta.gameId}`,
+          leaderboardUrl: `/leaderboards?game=${meta.gameId}`,
+        });
+      }
+      return res.json({
+        grudgeId: player.grudgeId,
+        username: player.username,
+        games: rows,
+        submitted: rows.filter((r) => r.bestScore != null).length,
+        total: rows.length,
+      });
+    } catch (error) {
+      console.error("/api/me/competitive error:", error);
+      return res.status(500).json({ error: "Failed to fetch competitive account board" });
     }
   });
 
@@ -3250,6 +3308,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   /**
    * Rec0deD competitive Top 10 — PvP hub + leaderboards SSOT.
    * Must be registered before /api/games/:id.
+   * Upserts game_library rows so scores/challenges share account FK ids.
    */
   app.get("/api/games/competitive", async (req, res) => {
     try {
@@ -3260,10 +3319,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           ? RETRO_COMPETITIVE_TOP10.filter((g) => g.modes.includes(mode as "pvp" | "pve" | "coop"))
           : [...RETRO_COMPETITIVE_TOP10];
 
+      // Heal DB alignment for competitive ids (idempotent)
+      await storage.ensureCompetitiveGames().catch((e) =>
+        console.warn("[competitive] ensureCompetitiveGames:", e),
+      );
+
       const out = [];
       for (const meta of roster) {
         let game = await storage.getGame(meta.gameId);
-        // Soft-fill when DB row missing (catalog JSON may still serve play)
         if (!game) {
           game = {
             id: meta.gameId,
@@ -3275,7 +3338,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             category: "retro",
             isPlayable: true,
             description: meta.blurb,
-            thumbnailUrl: null,
+            thumbnailUrl: meta.thumbnailUrl,
             sourceUrl: null,
             platformId: null,
             createdAt: null,
@@ -3283,6 +3346,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
         out.push({
           ...game,
+          thumbnailUrl: game.thumbnailUrl || meta.thumbnailUrl,
           competitive: {
             modes: meta.modes,
             blurb: meta.blurb,

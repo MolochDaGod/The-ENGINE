@@ -242,6 +242,15 @@ app.use((req, res, next) => {
     log(`db-ensure skipped: ${e?.message || e}`);
   }
 
+  // Catalog-id aligned competitive games so accounts scores/challenges share game_library.id
+  try {
+    const { storage } = await import("./storage");
+    const games = await storage.ensureCompetitiveGames();
+    log(`competitive games ensured: ${games.length}`);
+  } catch (e: any) {
+    log(`competitive ensure skipped: ${e?.message || e}`);
+  }
+
   const server = await registerRoutes(app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {

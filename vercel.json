@@ -215,12 +215,36 @@
       "destination": "https://the-engine.up.railway.app/api/auth/:path*"
     },
     {
+      "source": "/api/me",
+      "destination": "https://the-engine.up.railway.app/api/me"
+    },
+    {
       "source": "/api/me/:path*",
       "destination": "https://the-engine.up.railway.app/api/me/:path*"
     },
     {
+      "source": "/api/scores",
+      "destination": "https://the-engine.up.railway.app/api/scores"
+    },
+    {
+      "source": "/api/scores/:path*",
+      "destination": "https://the-engine.up.railway.app/api/scores/:path*"
+    },
+    {
+      "source": "/api/leaderboards",
+      "destination": "https://the-engine.up.railway.app/api/leaderboards"
+    },
+    {
+      "source": "/api/leaderboards/:path*",
+      "destination": "https://the-engine.up.railway.app/api/leaderboards/:path*"
+    },
+    {
       "source": "/api/web3/:path*",
       "destination": "https://the-engine.up.railway.app/api/web3/:path*"
+    },
+    {
+      "source": "/api/challenges",
+      "destination": "https://the-engine.up.railway.app/api/challenges"
     },
     {
       "source": "/api/challenges/:path*",
@@ -281,7 +305,7 @@
     },
     {
       "source": "/api/assets/:path*",
-      "destination": "https://assets.grudge.studio/:path*"
+      "destination": "https://assets.grudge-studio.com/:path*"
     },
     {
       "source": "/api/:path((?!games$|games/|platforms$|rom-proxy$|health$|admin/|portal-admin/).*)",

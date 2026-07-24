@@ -11,6 +11,14 @@ const STATEMENTS = [
   `ALTER TABLE users ADD COLUMN IF NOT EXISTS play_settings jsonb DEFAULT '{}'::jsonb`,
   `ALTER TABLE users ADD COLUMN IF NOT EXISTS recent_plays jsonb DEFAULT '[]'::jsonb`,
 
+  // Scores ↔ accounts ↔ games share (indexes for leaderboards / account hub)
+  `CREATE INDEX IF NOT EXISTS scores_user_id_idx ON scores (user_id)`,
+  `CREATE INDEX IF NOT EXISTS scores_game_id_idx ON scores (game_id)`,
+  `CREATE INDEX IF NOT EXISTS scores_user_game_pb_idx ON scores (user_id, game_id, is_personal_best)`,
+  `CREATE INDEX IF NOT EXISTS challenges_game_id_idx ON challenges (game_id)`,
+  `CREATE INDEX IF NOT EXISTS challenges_challenger_idx ON challenges (challenger_id)`,
+  `CREATE INDEX IF NOT EXISTS challenges_opponent_idx ON challenges (opponent_id)`,
+
   // Indexes for universe tables
   `CREATE INDEX IF NOT EXISTS player_characters_user_id_idx ON player_characters (user_id)`,
   `CREATE UNIQUE INDEX IF NOT EXISTS player_characters_user_prefab_uidx ON player_characters (user_id, prefab_id)`,

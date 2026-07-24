@@ -17,6 +17,11 @@ import {
 import { db } from "./db";
 import { eq, ilike, desc, asc, sql, and, or } from "drizzle-orm";
 import { CATALOG } from "./catalog-data";
+import {
+  RETRO_COMPETITIVE_TOP10,
+  getCompetitiveMeta,
+  libretroBoxartUrl,
+} from "@shared/retroCompetitive";
 
 export interface GameListOptions {
   limit?: number;
@@ -65,6 +70,13 @@ export interface IStorage {
 
   listGames(platform?: string, options?: GameListOptions): Promise<GameListResult>;
   getGame(id: number): Promise<Game | undefined>;
+  /**
+   * Ensure game_library row uses **catalog id** (portal /play/:id / scores FK).
+   * Seed historically ignored catalog ids — this heals competitive + score path.
+   */
+  ensureCatalogGame(catalogId: number): Promise<Game | undefined>;
+  /** Upsert all competitive Top 10 into game_library with art + correct ids. */
+  ensureCompetitiveGames(): Promise<Game[]>;
   createGame(game: InsertGame): Promise<Game>;
   searchGames(query: string, platform?: string, options?: GameListOptions): Promise<GameListResult>;
 
@@ -258,21 +270,31 @@ export class DatabaseStorage implements IStorage {
     const BATCH = 50;
     for (let i = 0; i < CATALOG.length; i += BATCH) {
       const batch = CATALOG.slice(i, i + BATCH);
-      const values = batch.map(([, title, slug, platform, embedUrl, isFeatured]) => ({
-        title,
-        slug,
-        platform,
-        platformId: null,
-        description: `Play ${title} online`,
-        thumbnailUrl: null,
-        sourceUrl: null,
-        embedUrl,
-        category: "retro",
-        isPlayable: true,
-        isFeatured,
-      }));
+      // Preserve catalog id so portal /play/:id matches scores.game_id FK.
+      const values = batch.map(([catalogId, title, slug, platform, embedUrl, isFeatured]) => {
+        const comp = getCompetitiveMeta(catalogId);
+        return {
+          id: catalogId,
+          title,
+          slug,
+          platform,
+          platformId: null,
+          description: comp?.blurb || `Play ${title} online`,
+          thumbnailUrl: comp?.thumbnailUrl || null,
+          sourceUrl: null,
+          embedUrl,
+          category: "retro",
+          isPlayable: true,
+          isFeatured: isFeatured || Boolean(comp),
+        };
+      });
       await db.insert(gameLibrary).values(values);
     }
+
+    // Keep serial sequence ahead of max explicit id
+    await db.execute(
+      sql`SELECT setval(pg_get_serial_sequence('game_library', 'id'), COALESCE((SELECT MAX(id) FROM game_library), 1))`,
+    );
 
     // Update platform game counts
     const platformSlugs = ["nes", "snes", "genesis", "n64", "neogeo", "playstation", "gameboy", "gba", "nds"];
@@ -401,6 +423,85 @@ export class DatabaseStorage implements IStorage {
   async getGame(id: number): Promise<Game | undefined> {
     const [g] = await db.select().from(gameLibrary).where(eq(gameLibrary.id, id));
     return g || undefined;
+  }
+
+  async ensureCatalogGame(catalogId: number): Promise<Game | undefined> {
+    if (!Number.isFinite(catalogId) || catalogId <= 0) return undefined;
+
+    const existing = await this.getGame(catalogId);
+    const catalog = CATALOG.find((row) => row[0] === catalogId);
+    const comp = getCompetitiveMeta(catalogId);
+
+    if (!catalog && !comp && !existing) return undefined;
+
+    const title = catalog?.[1] || comp?.title || existing?.title || `Game ${catalogId}`;
+    const slug =
+      catalog?.[2] ||
+      title
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-|-$/g, "");
+    const platform = catalog?.[3] || comp?.platform || existing?.platform || "nes";
+    const embedUrl = catalog?.[4] || existing?.embedUrl || null;
+    const isFeatured = catalog?.[5] || Boolean(comp) || existing?.isFeatured || false;
+    const thumbnailUrl =
+      comp?.thumbnailUrl ||
+      existing?.thumbnailUrl ||
+      (title ? libretroBoxartUrl(platform, `${title} (USA).png`) : null);
+
+    const row = {
+      id: catalogId,
+      title,
+      slug,
+      platform,
+      platformId: existing?.platformId ?? null,
+      description: comp?.blurb || existing?.description || `Play ${title} online`,
+      thumbnailUrl,
+      sourceUrl: existing?.sourceUrl ?? null,
+      embedUrl,
+      category: existing?.category || "retro",
+      isPlayable: true,
+      isFeatured: Boolean(isFeatured),
+    };
+
+    if (existing) {
+      const [updated] = await db
+        .update(gameLibrary)
+        .set({
+          title: row.title,
+          slug: row.slug,
+          platform: row.platform,
+          description: row.description,
+          thumbnailUrl: row.thumbnailUrl,
+          embedUrl: row.embedUrl,
+          isPlayable: true,
+          isFeatured: row.isFeatured,
+        })
+        .where(eq(gameLibrary.id, catalogId))
+        .returning();
+      return updated;
+    }
+
+    try {
+      const [inserted] = await db.insert(gameLibrary).values(row).returning();
+      await db.execute(
+        sql`SELECT setval(pg_get_serial_sequence('game_library', 'id'), COALESCE((SELECT MAX(id) FROM game_library), 1))`,
+      );
+      return inserted;
+    } catch (err) {
+      // Race: another request inserted — re-read
+      console.warn("[ensureCatalogGame] insert race", catalogId, err);
+      return this.getGame(catalogId);
+    }
+  }
+
+  async ensureCompetitiveGames(): Promise<Game[]> {
+    const out: Game[] = [];
+    for (const meta of RETRO_COMPETITIVE_TOP10) {
+      const g = await this.ensureCatalogGame(meta.gameId);
+      if (g) out.push(g);
+    }
+    return out;
   }
 
   async createGame(game: InsertGame): Promise<Game> {

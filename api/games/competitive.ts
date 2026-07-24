@@ -11,6 +11,18 @@ const RAILWAY_API = process.env.RAILWAY_API_URL || "https://the-engine.up.railwa
 type Mode = "pvp" | "pve" | "coop";
 
 /** Keep in sync with shared/retroCompetitive.ts */
+const BOX = (platform: string, file: string) => {
+  const roots: Record<string, string> = {
+    nes: "Nintendo_-_Nintendo_Entertainment_System",
+    snes: "Nintendo_-_Super_Nintendo_Entertainment_System",
+    genesis: "Sega_-_Mega_Drive_-_Genesis",
+    n64: "Nintendo_-_Nintendo_64",
+    neogeo: "SNK_-_Neo_Geo",
+  };
+  const root = roots[platform] || roots.nes;
+  return `https://cdn.jsdelivr.net/gh/libretro-thumbnails/${root}@master/Named_Boxarts/${encodeURIComponent(file)}`;
+};
+
 const ROSTER: Array<{
   gameId: number;
   title: string;
@@ -18,6 +30,7 @@ const ROSTER: Array<{
   modes: Mode[];
   blurb: string;
   scoreHint: string;
+  thumbnailUrl: string;
 }> = [
   {
     gameId: 548,
@@ -26,6 +39,7 @@ const ROSTER: Array<{
     modes: ["pvp"],
     blurb: "N64 platform fighter — stock wins, party PvP.",
     scoreHint: "Submit wins as score (e.g. stocks remaining × 100 + KOs).",
+    thumbnailUrl: BOX("n64", "Super Smash Bros. (USA).png"),
   },
   {
     gameId: 381,
@@ -34,6 +48,7 @@ const ROSTER: Array<{
     modes: ["pvp"],
     blurb: "Genesis classic — best-of arcade matches.",
     scoreHint: "Submit match wins or perfects as score.",
+    thumbnailUrl: BOX("genesis", "Street Fighter II' - Special Champion Edition (USA).png"),
   },
   {
     gameId: 261,
@@ -42,6 +57,7 @@ const ROSTER: Array<{
     modes: ["pvp"],
     blurb: "SNES fighter — fatalities optional, ladder required.",
     scoreHint: "Submit tournament wins or consecutive victories.",
+    thumbnailUrl: BOX("snes", "Mortal Kombat II (USA).png"),
   },
   {
     gameId: 272,
@@ -50,6 +66,7 @@ const ROSTER: Array<{
     modes: ["pvp", "pve"],
     blurb: "SNES racing — ghost times vs friends.",
     scoreHint: "Lower is better mentally; submit inverse time (higher = faster).",
+    thumbnailUrl: BOX("snes", "Super Mario Kart (USA).png"),
   },
   {
     gameId: 648,
@@ -58,6 +75,7 @@ const ROSTER: Array<{
     modes: ["pvp"],
     blurb: "Neo Geo team fighter — competitive staple.",
     scoreHint: "Submit wins or perfect rounds as score.",
+    thumbnailUrl: BOX("neogeo", "The King of Fighters '98 - The Slugfest (World).png"),
   },
   {
     gameId: 612,
@@ -66,6 +84,7 @@ const ROSTER: Array<{
     modes: ["pve", "coop"],
     blurb: "Run-and-gun score attack / co-op waves.",
     scoreHint: "Submit end-of-run high score from the results screen.",
+    thumbnailUrl: BOX("neogeo", "Metal Slug - Super Vehicle-001.png"),
   },
   {
     gameId: 49,
@@ -74,6 +93,7 @@ const ROSTER: Array<{
     modes: ["pve", "coop"],
     blurb: "NES co-op bullet hell — Konami code optional.",
     scoreHint: "Submit stage reached × 1000 + remaining lives.",
+    thumbnailUrl: BOX("nes", "Contra (USA).png"),
   },
   {
     gameId: 146,
@@ -82,6 +102,7 @@ const ROSTER: Array<{
     modes: ["pvp", "pve"],
     blurb: "Pure score attack — global and 1v1 high score duels.",
     scoreHint: "Submit the in-game score directly.",
+    thumbnailUrl: BOX("nes", "Tetris (USA).png"),
   },
   {
     gameId: 35,
@@ -90,6 +111,7 @@ const ROSTER: Array<{
     modes: ["pvp", "pve"],
     blurb: "Battle mode / stage clear score.",
     scoreHint: "Submit wins (battle) or stage score (solo).",
+    thumbnailUrl: BOX("nes", "Bomberman (USA).png"),
   },
   {
     gameId: 95,
@@ -98,6 +120,7 @@ const ROSTER: Array<{
     modes: ["pve"],
     blurb: "Boss rush PvE — circuit climb.",
     scoreHint: "Submit opponents defeated × 1000 + remaining hearts.",
+    thumbnailUrl: BOX("nes", "Mike Tyson's Punch-Out!! (Europe).png"),
   },
 ];
 
@@ -146,9 +169,10 @@ export default async function handler(
         category: "retro",
         isPlayable: true,
         description: meta.blurb,
-        thumbnailUrl: null,
         embedUrl: null,
       }),
+      // Prefer curated box art (region-suffixed libretro) over bare catalog 403s
+      thumbnailUrl: meta.thumbnailUrl || (live?.thumbnailUrl as string) || null,
       competitive: {
         modes: meta.modes,
         blurb: meta.blurb,

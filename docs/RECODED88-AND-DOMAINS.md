@@ -66,3 +66,4 @@ SSOT: `shared/retroCompetitive.ts`
 2. grudge6 / Danger Room → **gameopen** / Open URLs.
 3. Never invent a third “Rec0deD repo.” Brand lives in The-ENGINE.
 4. Competitive roster changes → edit `shared/retroCompetitive.ts` then redeploy portal + ensure Railway has the route if API-only.
+5. **Accounts + scores** → see `ACCOUNT_GAMES_DB.md` (catalog id = `game_library.id`).

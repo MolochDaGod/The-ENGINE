@@ -56,6 +56,24 @@ export default function AccountOverview({ player }: { player: PlayerProfile }) {
     queryFn: () => fetchJSON<RecentScore[]>("/api/me/scores?limit=8"),
   });
 
+  const competitiveQuery = useQuery<{
+    games: Array<{
+      gameId: number;
+      title: string;
+      platform: string;
+      thumbnailUrl: string | null;
+      modes: string[];
+      bestScore: number | null;
+      playUrl: string;
+      leaderboardUrl: string;
+    }>;
+    submitted: number;
+    total: number;
+  }>({
+    queryKey: ["/api/me/competitive"],
+    queryFn: () => fetchJSON("/api/me/competitive"),
+  });
+
   const universeQuery = useQuery({
     queryKey: ["/api/me/universe"],
     queryFn: () =>
@@ -70,9 +88,67 @@ export default function AccountOverview({ player }: { player: PlayerProfile }) {
   const stats = statsQuery.data;
   const gbux = stats?.gbuxBalance ?? player.gbuxBalance ?? "0";
   const universe = universeQuery.data;
+  const competitive = competitiveQuery.data;
 
   return (
     <div className="space-y-6">
+      {/* Rec0deD competitive — same users.id + game_library.id as scores */}
+      <section className="fantasy-panel p-5 space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div>
+            <div className="text-[10px] uppercase tracking-wider text-[hsl(43,85%,55%)] font-body">
+              Rec0deD · Competitive Top 10
+            </div>
+            <h3 className="font-heading text-lg text-[hsl(45,30%,92%)]" style={{ WebkitTextFillColor: "unset" }}>
+              Your scores on shared games DB
+            </h3>
+            <p className="text-[11px] text-[hsl(45,15%,55%)] font-body mt-0.5">
+              Account <code className="text-[hsl(43,85%,55%)]">{player.grudgeId}</code> ·{" "}
+              {competitiveQuery.isLoading
+                ? "loading…"
+                : `${competitive?.submitted ?? 0}/${competitive?.total ?? 10} boards submitted`}
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <Link href="/pvp">
+              <Button size="sm" className="gilded-button h-8">
+                <Swords className="w-3 h-3 mr-1" /> PvP hub
+              </Button>
+            </Link>
+            <Link href="/leaderboards?tab=competitive">
+              <Button size="sm" variant="outline" className="h-8 border-[hsl(43,60%,30%)]">
+                <Trophy className="w-3 h-3 mr-1" /> Boards
+              </Button>
+            </Link>
+          </div>
+        </div>
+        {competitiveQuery.isLoading ? (
+          <Loader2 className="w-5 h-5 animate-spin text-[hsl(43,85%,55%)]" />
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+            {(competitive?.games || []).slice(0, 10).map((g) => (
+              <Link key={g.gameId} href={g.playUrl} className="block">
+                <div className="rounded border border-[hsl(43,60%,30%)]/25 overflow-hidden hover:rune-glow transition-all bg-[hsl(225,25%,10%)]">
+                  <div className="aspect-[3/4] relative bg-[hsl(225,25%,12%)]">
+                    <GameCover
+                      src={g.thumbnailUrl}
+                      alt={g.title}
+                      className="absolute inset-0 w-full h-full object-cover"
+                    />
+                  </div>
+                  <div className="p-1.5">
+                    <div className="text-[10px] font-heading truncate">{g.title}</div>
+                    <div className="text-[10px] text-[hsl(43,85%,55%)] font-body">
+                      {g.bestScore != null ? g.bestScore.toLocaleString() : "— play"}
+                    </div>
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </div>
+        )}
+      </section>
+
       {/* Universe loops strip */}
       <section className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <Link href="/account">

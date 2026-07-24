@@ -237,6 +237,24 @@ export default function GamePlayer() {
     setIframeFailed(false);
   }, [gameId]);
 
+  // Account ↔ games: record retro play on shared users.recent_plays (when signed in)
+  useEffect(() => {
+    if (!game || !gameId) return;
+    void fetch("/api/me/play", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        gameKey: `retro:${gameId}`,
+        category: "retro",
+        title: game.title,
+        url: `/play/${gameId}`,
+      }),
+    }).catch(() => {
+      /* guest or offline — ignore */
+    });
+  }, [gameId, game?.title]);
+
   // Probe emulator.html availability once
   useEffect(() => {
     let cancelled = false;
