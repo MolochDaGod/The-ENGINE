@@ -122,8 +122,11 @@ const TABS = [
   { id: "games", label: "Games", icon: Gamepad },
   { id: "social", label: "Social", icon: Users },
   { id: "activity", label: "Activity", icon: Zap },
+  { id: "studio", label: "Studio", icon: Globe },
   { id: "settings", label: "Settings", icon: Settings },
 ] as const;
+
+const DASH = "https://dash.grudge-studio.com";
 
 // ── Sheet ────────────────────────────────────────────────────────
 
@@ -218,6 +221,8 @@ function GrudgePanelSheet() {
               <SocialTab />
             ) : activeTab === "activity" ? (
               <ActivityTab />
+            ) : activeTab === "studio" ? (
+              <StudioTab />
             ) : activeTab === "settings" ? (
               <SettingsTab />
             ) : null}
@@ -849,6 +854,66 @@ function ActivityTab() {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ── Studio Tab (merged with dash.grudge-studio.com) ──────────────
+
+function StudioTab() {
+  const { player } = useAuth();
+  const { close } = useGrudgePanel();
+  const isAdmin =
+    player?.role === "admin" ||
+    player?.role === "master" ||
+    player?.role === "master_admin" ||
+    player?.role === "owner";
+
+  const links: { href: string; label: string; hint: string }[] = [
+    { href: `${DASH}/`, label: "Dashboard home", hint: "Overview & health" },
+    { href: `${DASH}/accounts`, label: "Accounts admin", hint: "Users · characters · lookup" },
+    { href: `${DASH}/assets`, label: "Assets & SSOT", hint: "R2 · ObjectStore · D1" },
+    { href: `${DASH}/railway`, label: "Railway fleet", hint: "Services · deploys" },
+    { href: `${DASH}/services`, label: "Services health", hint: "Live probes" },
+    { href: `${DASH}/economy`, label: "Economy", hint: "GBUX · wallets" },
+    { href: `${DASH}/?panel=studio`, label: "Open right panel on dash", hint: "Same Grudge Panel UX" },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <p className="text-[11px] text-[hsl(45,15%,55%)] font-body leading-relaxed">
+        Studio admin lives on{" "}
+        <a href={DASH} className="text-[hsl(43,85%,55%)] hover:underline" target="_blank" rel="noreferrer">
+          dash.grudge-studio.com
+        </a>
+        . Same Grudge ID session; dash uses the right-side panel for account + studio nav.
+      </p>
+      {!isAdmin && (
+        <p className="text-[11px] text-[hsl(43,70%,50%)] font-body">
+          Admin role required for full dash. You can still open public dash pages if allowed.
+        </p>
+      )}
+      <ul className="space-y-1.5">
+        {links.map((l) => (
+          <li key={l.href}>
+            <a
+              href={l.href}
+              target="_blank"
+              rel="noreferrer"
+              onClick={close}
+              className="flex items-center gap-2 p-2.5 rounded border border-[hsl(43,60%,30%)]/20 hover:border-[hsl(43,60%,30%)]/50 transition-colors"
+              style={{ background: "hsl(225,30%,8%)" }}
+            >
+              <Globe className="w-3.5 h-3.5 text-[hsl(43,85%,55%)] shrink-0" />
+              <div className="min-w-0 flex-1">
+                <div className="text-xs text-[hsl(45,30%,90%)]">{l.label}</div>
+                <div className="text-[10px] text-[hsl(45,15%,50%)] font-body">{l.hint}</div>
+              </div>
+              <ChevronRight className="w-3 h-3 text-[hsl(45,15%,40%)]" />
+            </a>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
