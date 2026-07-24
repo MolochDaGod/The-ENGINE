@@ -268,13 +268,15 @@ export const FLEET_REGISTRY: FleetRegistryEntry[] = [
   // ── Portal-hosted forge demos ──
   {
     id: "annihilate-demo",
-    name: "Grudge Engine Core",
-    description: "Three.js + Cannon-ES + CharacterFSM. Combo FSM, capsule physics, animation blending.",
-    canonicalUrl: "/annihilate-demo",
-    embedUrl: "/annihilate-demo?embed=1",
+    name: "Annihilate Demo (Open / grudge6)",
+    description:
+      "Grudge Open Danger Room — grudge6 kits, mesh_ids, Bip001 packs, fleet combat. Portal path redirects here.",
+    canonicalUrl: "https://open.grudge-studio.com/annihilate-demo",
+    embedUrl: "https://open.grudge-studio.com/annihilate-demo?embed=1",
     status: "beta",
     tags: ["coop", "pvpve"],
     forge: true,
+    repo: "gameopen",
   },
   {
     id: "grudge-controller",

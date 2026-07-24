@@ -108,6 +108,31 @@
       "source": "/warlords-shipwreck.html",
       "destination": "https://grudox.grudge-studio.com/warlords-shipwreck.html",
       "permanent": false
+    },
+    {
+      "source": "/annihilate-demo",
+      "destination": "https://open.grudge-studio.com/annihilate-demo",
+      "permanent": false
+    },
+    {
+      "source": "/annihilate-demo/",
+      "destination": "https://open.grudge-studio.com/annihilate-demo",
+      "permanent": false
+    },
+    {
+      "source": "/annihilate-demo/:path*",
+      "destination": "https://open.grudge-studio.com/annihilate-demo/:path*",
+      "permanent": false
+    },
+    {
+      "source": "/annihilate",
+      "destination": "https://open.grudge-studio.com/annihilate-demo",
+      "permanent": false
+    },
+    {
+      "source": "/annihilate/",
+      "destination": "https://open.grudge-studio.com/annihilate-demo",
+      "permanent": false
     }
   ],
   "rewrites": [

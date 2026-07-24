@@ -120,8 +120,10 @@ const _PORTAL_PRODUCTS_RAW = [
   {
     id: "annihilate-demo",
     name: "Annihilate Demo",
-    href: "/annihilate-demo",
-    description: "Co-op wave survival demo inside the Grudge universe.",
+    // Canonical play surface: Grudge Open Danger Room + grudge6 (not portal-local engine demo).
+    href: "https://open.grudge-studio.com/annihilate-demo",
+    description:
+      "Grudge Open Danger Room — grudge6 race kits, Bip001, weapon packs, fleet combat (dodge/block/skills).",
     status: "beta",
     section: "play",
     tags: ["coop", "pvpve"],

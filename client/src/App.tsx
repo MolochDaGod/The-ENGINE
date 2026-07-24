@@ -46,7 +46,6 @@ import AdminLogin from "@/pages/admin-login";
 import SystemDevPage from "@/pages/system-dev";
 import NotFound from "@/pages/not-found";
 import MageArena from "@/pages/mage-arena";
-import AnnihilateDemo from "@/pages/annihilate-demo";
 import GrudgeControllerDemo from "@/pages/grudge-controller-demo";
 import GrudgeFishingPage from "@/pages/grudge-fishing";
 import WargusDefault from "@/pages/wargus-default";
@@ -123,7 +122,27 @@ function Router() {
       <Route path="/default" component={WargusDefault} />
       <Route path="/chat" component={Chat} />
       <Route path="/mage-arena" component={MageArena} />
-      <Route path="/annihilate-demo" component={AnnihilateDemo} />
+      {/* Edge redirect also in vercel.json — SPA bounce for client-side nav */}
+      <Route path="/annihilate-demo">
+        {() => {
+          const q =
+            typeof window !== "undefined" ? window.location.search || "" : "";
+          window.location.replace(
+            `https://open.grudge-studio.com/annihilate-demo${q}`,
+          );
+          return null;
+        }}
+      </Route>
+      <Route path="/annihilate">
+        {() => {
+          const q =
+            typeof window !== "undefined" ? window.location.search || "" : "";
+          window.location.replace(
+            `https://open.grudge-studio.com/annihilate-demo${q}`,
+          );
+          return null;
+        }}
+      </Route>
       <Route path="/grudge-controller" component={GrudgeControllerDemo} />
       <Route path="/grudge-fishing" component={GrudgeFishingPage} />
       <Route path="/asset-pipeline" component={withAdminGuard(AssetPipeline)} />
