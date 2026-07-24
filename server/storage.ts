@@ -17,11 +17,25 @@ import {
 import { db } from "./db";
 import { eq, ilike, desc, asc, sql, and, or } from "drizzle-orm";
 import { CATALOG } from "./catalog-data";
+import GAMES_JSON from "../api/_games.json" with { type: "json" };
 import {
   RETRO_COMPETITIVE_TOP10,
   getCompetitiveMeta,
   libretroBoxartUrl,
 } from "@shared/retroCompetitive";
+
+/** Portal play SSOT — same ids as /play/:id and api/games on Vercel */
+type PortalGameRow = {
+  id: number;
+  title: string;
+  slug?: string;
+  platform: string;
+  embedUrl?: string | null;
+  thumbnailUrl?: string | null;
+  isFeatured?: boolean;
+  description?: string | null;
+};
+const PORTAL_GAMES = GAMES_JSON as PortalGameRow[];
 
 export interface GameListOptions {
   limit?: number;
@@ -429,23 +443,30 @@ export class DatabaseStorage implements IStorage {
     if (!Number.isFinite(catalogId) || catalogId <= 0) return undefined;
 
     const existing = await this.getGame(catalogId);
+    // Prefer portal _games.json (play URL ids), then catalog-data, then competitive meta
+    const portal = PORTAL_GAMES.find((g) => g.id === catalogId);
     const catalog = CATALOG.find((row) => row[0] === catalogId);
     const comp = getCompetitiveMeta(catalogId);
 
-    if (!catalog && !comp && !existing) return undefined;
+    if (!portal && !catalog && !comp && !existing) return undefined;
 
-    const title = catalog?.[1] || comp?.title || existing?.title || `Game ${catalogId}`;
+    const title =
+      portal?.title || catalog?.[1] || comp?.title || existing?.title || `Game ${catalogId}`;
     const slug =
+      portal?.slug ||
       catalog?.[2] ||
       title
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, "-")
         .replace(/^-|-$/g, "");
-    const platform = catalog?.[3] || comp?.platform || existing?.platform || "nes";
-    const embedUrl = catalog?.[4] || existing?.embedUrl || null;
-    const isFeatured = catalog?.[5] || Boolean(comp) || existing?.isFeatured || false;
+    const platform =
+      portal?.platform || catalog?.[3] || comp?.platform || existing?.platform || "nes";
+    const embedUrl = portal?.embedUrl || catalog?.[4] || existing?.embedUrl || null;
+    const isFeatured =
+      portal?.isFeatured || catalog?.[5] || Boolean(comp) || existing?.isFeatured || false;
     const thumbnailUrl =
       comp?.thumbnailUrl ||
+      portal?.thumbnailUrl ||
       existing?.thumbnailUrl ||
       (title ? libretroBoxartUrl(platform, `${title} (USA).png`) : null);
 
@@ -455,7 +476,7 @@ export class DatabaseStorage implements IStorage {
       slug,
       platform,
       platformId: existing?.platformId ?? null,
-      description: comp?.blurb || existing?.description || `Play ${title} online`,
+      description: comp?.blurb || portal?.description || existing?.description || `Play ${title} online`,
       thumbnailUrl,
       sourceUrl: existing?.sourceUrl ?? null,
       embedUrl,

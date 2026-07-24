@@ -3326,27 +3326,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const out = [];
       for (const meta of roster) {
-        let game = await storage.getGame(meta.gameId);
-        if (!game) {
-          game = {
-            id: meta.gameId,
-            title: meta.title,
-            slug: meta.title.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
-            platform: meta.platform,
-            embedUrl: null,
-            isFeatured: true,
-            category: "retro",
-            isPlayable: true,
-            description: meta.blurb,
-            thumbnailUrl: meta.thumbnailUrl,
-            sourceUrl: null,
-            platformId: null,
-            createdAt: null,
-          } as any;
-        }
+        // Always heal portal-id row so scores FK matches /play/:id
+        const game = await storage.ensureCatalogGame(meta.gameId);
         out.push({
-          ...game,
-          thumbnailUrl: game.thumbnailUrl || meta.thumbnailUrl,
+          id: meta.gameId,
+          title: meta.title,
+          slug: game?.slug || meta.title.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+          platform: meta.platform,
+          embedUrl: game?.embedUrl ?? null,
+          isFeatured: true,
+          category: "retro",
+          isPlayable: true,
+          description: meta.blurb,
+          // Meta art wins (region-suffixed); never show misaligned seed titles/art
+          thumbnailUrl: meta.thumbnailUrl || game?.thumbnailUrl || null,
+          sourceUrl: game?.sourceUrl ?? null,
+          platformId: game?.platformId ?? null,
+          createdAt: game?.createdAt ?? null,
           competitive: {
             modes: meta.modes,
             blurb: meta.blurb,

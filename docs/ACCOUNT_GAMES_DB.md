@@ -25,18 +25,26 @@ users (id, grudge_id, gbux_balance, recent_plays, …)
 **Warlords / Foundry characters** live on **grudge-api-production** (`player` characters UUID).  
 They share **Grudge ID** string identity with portal `users.grudge_id` when SSO is used, but **not** the same Postgres for scores.
 
-## Critical fix: catalog id = game_library.id
+## Critical fix: portal id = game_library.id
 
-Bug: seed used serial ids and **dropped** catalog ids, so `/play/146` (Tetris from JSON) did not match Railway `game_library` → score submit 404.
+Two historical lists drifted:
 
-**Rule:** `game_library.id` **is** catalog id from `api/_games.json` / `server/catalog-data.ts`.
+| Source | Used by | Risk |
+|--------|---------|------|
+| `api/_games.json` | Vercel `/api/games`, `/play/:id` | **Play SSOT** |
+| `server/catalog-data.ts` | Old Railway seed | IDs can differ for same title |
+
+Bug: seed dropped ids **and** catalog-data ≠ games.json, so scores could not share accounts with the game the player opened.
+
+**Rule:** `game_library.id` **must equal** `api/_games.json` id (portal play id).
 
 Heal path:
 
-- `storage.ensureCatalogGame(id)` — upsert row with that id + art  
+- `storage.ensureCatalogGame(id)` — upsert from **games.json first**, then catalog-data, then competitive meta + art  
 - `storage.ensureCompetitiveGames()` — Top 10 on boot + competitive GET  
 - Score + challenge create call ensure before FK insert  
-- New seeds insert with `id: catalogId` and reset sequence
+- Competitive API **always** returns meta title/art for Top 10 (never wrong seed titles)  
+- New seeds should insert with `id: catalogId` from **games.json**
 
 ## Art best practices
 
