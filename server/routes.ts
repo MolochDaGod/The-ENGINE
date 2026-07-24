@@ -3247,6 +3247,57 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  /**
+   * Rec0deD competitive Top 10 — PvP hub + leaderboards SSOT.
+   * Must be registered before /api/games/:id.
+   */
+  app.get("/api/games/competitive", async (req, res) => {
+    try {
+      const { RETRO_COMPETITIVE_TOP10 } = await import("../shared/retroCompetitive");
+      const mode = typeof req.query.mode === "string" ? req.query.mode.toLowerCase() : "all";
+      const roster =
+        mode === "pvp" || mode === "pve" || mode === "coop"
+          ? RETRO_COMPETITIVE_TOP10.filter((g) => g.modes.includes(mode as "pvp" | "pve" | "coop"))
+          : [...RETRO_COMPETITIVE_TOP10];
+
+      const out = [];
+      for (const meta of roster) {
+        let game = await storage.getGame(meta.gameId);
+        // Soft-fill when DB row missing (catalog JSON may still serve play)
+        if (!game) {
+          game = {
+            id: meta.gameId,
+            title: meta.title,
+            slug: meta.title.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+            platform: meta.platform,
+            embedUrl: null,
+            isFeatured: true,
+            category: "retro",
+            isPlayable: true,
+            description: meta.blurb,
+            thumbnailUrl: null,
+            sourceUrl: null,
+            platformId: null,
+            createdAt: null,
+          } as any;
+        }
+        out.push({
+          ...game,
+          competitive: {
+            modes: meta.modes,
+            blurb: meta.blurb,
+            scoreHint: meta.scoreHint,
+            rank: RETRO_COMPETITIVE_TOP10.findIndex((g) => g.gameId === meta.gameId) + 1,
+          },
+        });
+      }
+      res.json(out);
+    } catch (error) {
+      console.error("/api/games/competitive error:", error);
+      res.status(500).json({ error: "Failed to list competitive games" });
+    }
+  });
+
   app.get("/api/games/:id", async (req, res) => {
     try {
       const game = await storage.getGame(parseInt(req.params.id));

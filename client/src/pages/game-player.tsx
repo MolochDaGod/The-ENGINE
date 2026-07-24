@@ -14,6 +14,8 @@ import { navigateGame, resolveGameLaunch } from "@/lib/game-launch";
 import { CANONICAL } from "@/lib/canonicalDomains";
 import { useAuth } from "@/components/auth-provider";
 import { useAuthModal } from "@/components/auth-modal";
+import { RetroScoreSubmit } from "@/components/retro-score-submit";
+import { getCompetitiveMeta } from "@/data/retroCompetitive";
 
 const PLATFORM_CORE_MAP: Record<string, string> = {
   nes: "nes",
@@ -422,63 +424,57 @@ export default function GamePlayer() {
           </div>
         )}
 
-        <div className="mt-6 grid grid-cols-1 md:grid-cols-4 gap-4">
-          {(game as { thumbnailUrl?: string }).thumbnailUrl && (
-            <div className="fantasy-panel p-3 flex items-center justify-center">
-              <GameCover
-                src={(game as { thumbnailUrl?: string }).thumbnailUrl}
-                alt={game.title}
-                className="max-h-48 object-contain rounded"
-              />
-            </div>
-          )}
-          <div className="fantasy-panel p-4">
-            <h3
-              className="text-sm font-heading text-[hsl(43,85%,55%)] uppercase mb-2 tracking-wider"
-              style={{ WebkitTextFillColor: "unset" }}
-            >
-              Controls
-            </h3>
-            <div className="space-y-1 text-sm text-[hsl(45,30%,90%)] font-body">
-              <div>Arrow Keys - D-Pad</div>
-              <div>Z / X - A / B Buttons</div>
-              <div>Enter - Start</div>
-              <div>Shift - Select</div>
-              <div>A / S - L / R Buttons</div>
-            </div>
-          </div>
-          <div className="fantasy-panel p-4">
-            <h3
-              className="text-sm font-heading text-[hsl(43,85%,55%)] uppercase mb-2 tracking-wider"
-              style={{ WebkitTextFillColor: "unset" }}
-            >
-              Game Info
-            </h3>
-            <div className="space-y-1 text-sm text-[hsl(45,30%,90%)] font-body">
-              <div>
-                Platform: <span className="text-[hsl(43,85%,55%)]">{game.platform.toUpperCase()}</span>
+        <div className="mt-6 grid grid-cols-1 lg:grid-cols-[1.4fr_1fr] gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {(game as { thumbnailUrl?: string }).thumbnailUrl && (
+              <div className="fantasy-panel p-3 flex items-center justify-center">
+                <GameCover
+                  src={(game as { thumbnailUrl?: string }).thumbnailUrl}
+                  alt={game.title}
+                  className="max-h-48 object-contain rounded"
+                />
               </div>
-              {game.category && (
+            )}
+            <div className="fantasy-panel p-4">
+              <h3
+                className="text-sm font-heading text-[hsl(43,85%,55%)] uppercase mb-2 tracking-wider"
+                style={{ WebkitTextFillColor: "unset" }}
+              >
+                Controls
+              </h3>
+              <div className="space-y-1 text-sm text-[hsl(45,30%,90%)] font-body">
+                <div>Arrow Keys - D-Pad</div>
+                <div>Z / X - A / B Buttons</div>
+                <div>Enter - Start</div>
+                <div>Shift - Select</div>
+                <div>A / S - L / R Buttons</div>
+              </div>
+            </div>
+            <div className="fantasy-panel p-4">
+              <h3
+                className="text-sm font-heading text-[hsl(43,85%,55%)] uppercase mb-2 tracking-wider"
+                style={{ WebkitTextFillColor: "unset" }}
+              >
+                Game Info
+              </h3>
+              <div className="space-y-1 text-sm text-[hsl(45,30%,90%)] font-body">
                 <div>
-                  Category: <span className="text-[hsl(43,85%,55%)]">{game.category}</span>
+                  Platform:{" "}
+                  <span className="text-[hsl(43,85%,55%)]">{game.platform.toUpperCase()}</span>
                 </div>
-              )}
-              {game.isFeatured && <div className="text-[hsl(35,100%,55%)]">Featured Classic</div>}
+                {game.category && (
+                  <div>
+                    Category: <span className="text-[hsl(43,85%,55%)]">{game.category}</span>
+                  </div>
+                )}
+                {game.isFeatured && <div className="text-[hsl(35,100%,55%)]">Featured Classic</div>}
+                {getCompetitiveMeta(game.id) && (
+                  <div className="text-[hsl(43,85%,55%)]">Rec0deD Competitive Top 10</div>
+                )}
+              </div>
             </div>
           </div>
-          <div className="fantasy-panel p-4">
-            <h3
-              className="text-sm font-heading text-[hsl(43,85%,55%)] uppercase mb-2 tracking-wider"
-              style={{ WebkitTextFillColor: "unset" }}
-            >
-              Tips
-            </h3>
-            <div className="space-y-1 text-sm text-[hsl(45,30%,90%)] font-body">
-              <div>Use Fullscreen for best experience</div>
-              <div>Save states may not persist</div>
-              <div>Keyboard recommended</div>
-            </div>
-          </div>
+          {gameId != null && <RetroScoreSubmit gameId={gameId} gameTitle={game.title} />}
         </div>
       </div>
     </div>

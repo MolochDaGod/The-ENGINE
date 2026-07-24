@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
@@ -19,6 +19,11 @@ import {
   type ArenaFilter,
 } from "@/data/arenaArt";
 import type { Game } from "@shared/schema";
+import { RetroCompetitiveGrid } from "@/components/retro-competitive-panel";
+import {
+  RETRO_COMPETITIVE_TOP10,
+  type CompetitiveMode,
+} from "@/data/retroCompetitive";
 
 interface ChallengeRow {
   id: number;
@@ -169,12 +174,24 @@ export default function PvpPage() {
   const qc = useQueryClient();
   const [error, setError] = useState("");
   const [filter, setFilter] = useState<ArenaFilter>("all");
+  const [retroMode, setRetroMode] = useState<CompetitiveMode | "all">("all");
   const { open: openAuthModal } = useAuthModal();
 
   const [opponentUsername, setOpponentUsername] = useState("");
   const [opponentId, setOpponentId] = useState<number | null>(null);
   const [gameId, setGameId] = useState<number | null>(null);
   const [wager, setWager] = useState("0");
+
+  // Deep-link: /pvp?game=146 preselects competitive challenge game
+  useEffect(() => {
+    try {
+      const q = new URLSearchParams(window.location.search);
+      const g = q.get("game");
+      if (g && Number.isFinite(Number(g))) setGameId(Number(g));
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
   const activeQuery = useQuery<ChallengeRow[]>({
     queryKey: ["/api/challenges/active"],
@@ -196,7 +213,26 @@ export default function PvpPage() {
 
   const sortedGames = useMemo(() => {
     const list = gamesQuery.data || [];
-    return [...list].sort((a, b) => Number(!!b.isFeatured) - Number(!!a.isFeatured) || a.title.localeCompare(b.title));
+    const competitiveIds = new Set(RETRO_COMPETITIVE_TOP10.map((g) => g.gameId));
+    return [...list].sort((a, b) => {
+      const ac = competitiveIds.has(a.id) ? 1 : 0;
+      const bc = competitiveIds.has(b.id) ? 1 : 0;
+      if (bc !== ac) return bc - ac;
+      return Number(!!b.isFeatured) - Number(!!a.isFeatured) || a.title.localeCompare(b.title);
+    });
+  }, [gamesQuery.data]);
+
+  const competitiveOptions = useMemo(() => {
+    const byId = new Map((gamesQuery.data || []).map((g) => [g.id, g]));
+    return RETRO_COMPETITIVE_TOP10.map((meta) => {
+      const live = byId.get(meta.gameId);
+      return {
+        id: meta.gameId,
+        title: live?.title || meta.title,
+        platform: live?.platform || meta.platform,
+        modes: meta.modes,
+      };
+    });
   }, [gamesQuery.data]);
 
   const filteredArenas = useMemo(() => filterArenaProducts(pvpProducts, filter), [filter]);
@@ -302,6 +338,71 @@ export default function PvpPage() {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-10">
+        {/* Rec0deD competitive Top 10 — retro PvP / PvE ready */}
+        <section className="space-y-4">
+          <div className="flex flex-col md:flex-row md:items-end justify-between gap-3">
+            <div>
+              <Badge className="mb-2 bg-[hsl(43,85%,55%)]/10 text-[hsl(43,85%,55%)] border border-[hsl(43,60%,30%)]/40">
+                Rec0deD:88 · Competitive
+              </Badge>
+              <h2
+                className="font-heading text-2xl text-[hsl(45,30%,92%)]"
+                style={{ WebkitTextFillColor: "unset" }}
+              >
+                Top 10 retro for PvP &amp; PvE
+              </h2>
+              <p className="text-sm text-[hsl(45,15%,65%)] font-body mt-1 max-w-2xl">
+                Curated from the 1,360+ library. Play in-browser, submit scores for global boards, or
+                challenge a friend with GBUX when signed in. This is portal retro — not Open / grudge6.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {(
+                [
+                  ["all", "All"],
+                  ["pvp", "PvP"],
+                  ["pve", "PvE"],
+                  ["coop", "Co-op"],
+                ] as const
+              ).map(([id, label]) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => setRetroMode(id)}
+                  className={`px-3 py-1.5 rounded-full text-xs font-heading border transition ${
+                    retroMode === id
+                      ? "bg-[hsl(43,85%,55%)]/20 border-[hsl(43,85%,55%)] text-[hsl(43,85%,55%)]"
+                      : "border-[hsl(43,60%,30%)]/40 text-[hsl(45,15%,70%)] hover:border-[hsl(43,85%,55%)]/50"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+              <Link href="/leaderboards?tab=competitive">
+                <Button size="sm" variant="outline" className="border-[hsl(43,60%,30%)] h-8">
+                  <Trophy className="w-3 h-3 mr-1" /> Leaderboards
+                </Button>
+              </Link>
+            </div>
+          </div>
+          <RetroCompetitiveGrid
+            mode={retroMode}
+            onPickForChallenge={
+              player
+                ? (id) => {
+                    setGameId(id);
+                    setError("");
+                    try {
+                      document.getElementById("pvp-challenge-form")?.scrollIntoView({ behavior: "smooth" });
+                    } catch {
+                      /* ignore */
+                    }
+                  }
+                : undefined
+            }
+          />
+        </section>
+
         {/* Challenges — guests see CTA, signed-in users get full UI */}
         {player ? (
           <section className="grid grid-cols-1 lg:grid-cols-[1.3fr_1fr] gap-6">
@@ -366,7 +467,7 @@ export default function PvpPage() {
               </div>
             </div>
 
-            <div className="fantasy-panel p-5">
+            <div id="pvp-challenge-form" className="fantasy-panel p-5">
               <h2 className="font-heading text-lg mb-4" style={{ WebkitTextFillColor: "unset" }}>
                 Send a Challenge
               </h2>
@@ -385,18 +486,27 @@ export default function PvpPage() {
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-[hsl(45,15%,60%)] font-body">Game</label>
+                  <label className="text-xs text-[hsl(45,15%,60%)] font-body">Game (Competitive Top 10 first)</label>
                   <select
                     value={gameId ?? ""}
                     onChange={(e) => setGameId(e.target.value ? Number(e.target.value) : null)}
                     className="w-full border border-[hsl(43,60%,30%)] bg-[hsl(225,25%,12%)] rounded px-3 py-2 text-sm"
                   >
                     <option value="">Select a game…</option>
-                    {sortedGames.slice(0, 200).map((g) => (
-                      <option key={g.id} value={g.id}>
-                        {g.title} · {g.platform?.toUpperCase()}
-                      </option>
-                    ))}
+                    <optgroup label="Rec0deD Competitive Top 10">
+                      {competitiveOptions.map((g) => (
+                        <option key={g.id} value={g.id}>
+                          {g.title} · {g.platform.toUpperCase()} · {g.modes.join("/")}
+                        </option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="Full library">
+                      {sortedGames.slice(0, 200).map((g) => (
+                        <option key={g.id} value={g.id}>
+                          {g.title} · {g.platform?.toUpperCase()}
+                        </option>
+                      ))}
+                    </optgroup>
                   </select>
                 </div>
                 <div>
