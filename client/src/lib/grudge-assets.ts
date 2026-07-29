@@ -14,6 +14,7 @@
 
 import * as THREE from 'three';
 import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { TextureLoader } from 'three';
 
 // ═══════════════════════════════════════════════════════════════════
 // CDN + Object Storage Config
@@ -82,6 +83,25 @@ export const ASSET_MANIFEST: Record<string, AssetEntry> = {
   'env_landmine':          { path: 'toon-shooter/environment/Landmine.glb', sizeKB: 12, tags: ['environment', 'trap'] },
   'env_health':            { path: 'toon-shooter/environment/Health.glb', sizeKB: 25, tags: ['pickup', 'health'] },
   'env_key':               { path: 'toon-shooter/environment/Key.glb', sizeKB: 12, tags: ['pickup', 'key'] },
+
+  // ── Grudge6 / Toon RTS Race Characters ──────────────────────────────
+  // GLB deploy targets from canonical CDN paths (FBX is SSOT on disk)
+  'rts_char_wk':    { path: 'models/grudge6/races/WK_Characters.glb',  tags: ['character', 'rts', 'human', 'crusade'] },
+  'rts_char_brb':   { path: 'models/grudge6/races/BRB_Characters.glb', tags: ['character', 'rts', 'barbarian', 'crusade'] },
+  'rts_char_elf':   { path: 'models/grudge6/races/ELF_Characters.glb', tags: ['character', 'rts', 'elf', 'fabled'] },
+  'rts_char_dwf':   { path: 'models/grudge6/races/DWF_Characters.glb', tags: ['character', 'rts', 'dwarf', 'fabled'] },
+  'rts_char_orc':   { path: 'models/grudge6/races/ORC_Characters.glb', tags: ['character', 'rts', 'orc', 'legion'] },
+  'rts_char_ud':    { path: 'models/grudge6/races/UD_Characters.glb',  tags: ['character', 'rts', 'undead', 'legion'] },
+
+  // ── Cavalry Mounts (Toon RTS Cavalry_customizable packs) ─────────────
+  'rts_mount_wk':   { path: 'models/grudge6/mounts/western-kingdoms/cavalry.glb', tags: ['mount', 'cavalry', 'crusade'] },
+  'rts_mount_elf':  { path: 'models/grudge6/mounts/high-elves/cavalry.glb',       tags: ['mount', 'cavalry', 'fabled'] },
+  'rts_mount_orc':  { path: 'models/grudge6/mounts/orcs/cavalry.glb',             tags: ['mount', 'cavalry', 'legion'] },
+
+  // ── Siege Engines ────────────────────────────────────────────────────
+  'rts_siege_wk':   { path: 'models/grudge6/siege/wk_catapult.glb',     tags: ['siege', 'crusade'] },
+  'rts_siege_elf':  { path: 'models/grudge6/siege/elf_boltthrower.glb', tags: ['siege', 'fabled'] },
+  'rts_siege_orc':  { path: 'models/grudge6/siege/orc_catapult.glb',    tags: ['siege', 'legion'] },
 };
 
 // ═══════════════════════════════════════════════════════════════════
@@ -90,37 +110,40 @@ export const ASSET_MANIFEST: Record<string, AssetEntry> = {
 
 /** Map RTS unit/building IDs to the best available 3D model */
 export const RTS_MODEL_MAP: Record<string, string> = {
-  // Crusade units
-  'sky_serf':         'char_soldier',
-  'valor_guard':      'char_soldier',
-  'fate_lancer':      'char_soldier',
-  'rune_marksman':    'char_soldier',
-  'thunder_charger':  'char_soldier',
-  'cosmic_ram':       'env_tank',
-  'wisdom_seer':      'char_hazmat',
-  'raven_scout':      'char_soldier',
-  'eye_watcher':      'char_hazmat',
-  // Fabled units
-  'grove_tender':     'char_soldier',
-  'root_warden':      'char_soldier',
-  'stone_sentinel':   'char_soldier',
-  'leaf_archer':      'char_soldier',
-  'grove_rider':      'char_soldier',
-  'treant_ram':       'env_tank',
-  'nature_channeler': 'char_hazmat',
-  'bark_scout':       'char_soldier',
-  'sylph_watcher':    'char_hazmat',
-  // Legion units
-  'thrall_worker':    'char_enemy',
-  'chaos_grunt':      'char_enemy',
-  'doom_berserker':   'char_enemy',
-  'shadow_hunter':    'char_enemy',
-  'warg_rider':       'char_enemy',
-  'doom_catapult':    'env_tank',
-  'hex_shaman':       'char_enemy',
-  'plague_bat':       'char_enemy',
-  'void_wraith':      'char_enemy',
-  // Buildings
+  // ── Crusade (human = WK_, barbarian = BRB_) ──────────────────────────
+  'sky_serf':         'rts_char_wk',    // human worker
+  'valor_guard':      'rts_char_wk',    // human melee warrior
+  'fate_lancer':      'rts_char_brb',   // barbarian lancer
+  'rune_marksman':    'rts_char_wk',    // human ranged
+  'thunder_charger':  'rts_mount_wk',   // WK cavalry mount
+  'cosmic_ram':       'rts_siege_wk',   // WK catapult
+  'wisdom_seer':      'rts_char_wk',    // human mage / support
+  'raven_scout':      'rts_char_brb',   // barbarian scout
+  'eye_watcher':      'rts_char_wk',    // human aerial support
+
+  // ── Fabled (dwarf = DWF_, elf = ELF_) ────────────────────────────────
+  'grove_tender':     'rts_char_elf',   // elf worker
+  'root_warden':      'rts_char_dwf',   // dwarf melee
+  'stone_sentinel':   'rts_char_dwf',   // dwarf heavy melee
+  'leaf_archer':      'rts_char_elf',   // elf ranged
+  'grove_rider':      'rts_mount_elf',  // ELF cavalry mount
+  'treant_ram':       'rts_siege_elf',  // ELF bolt thrower
+  'nature_channeler': 'rts_char_elf',   // elf mage
+  'bark_scout':       'rts_char_elf',   // elf scout
+  'sylph_watcher':    'rts_char_elf',   // elf aerial unit
+
+  // ── Legion (orc = ORC_, undead = UD_) ────────────────────────────────
+  'thrall_worker':    'rts_char_orc',   // orc worker
+  'chaos_grunt':      'rts_char_orc',   // orc melee
+  'doom_berserker':   'rts_char_ud',    // undead berserker
+  'shadow_hunter':    'rts_char_orc',   // orc ranged
+  'warg_rider':       'rts_mount_orc',  // ORC cavalry mount
+  'doom_catapult':    'rts_siege_orc',  // ORC catapult
+  'hex_shaman':       'rts_char_ud',    // undead shaman
+  'plague_bat':       'rts_char_orc',   // orc recon bat
+  'void_wraith':      'rts_char_ud',    // undead aerial wraith
+
+  // ── Buildings (toon-shooter structures as fallback until RTS_TOON bldg GLBs are on CDN)
   'odins_hall':       'env_structure_1',
   'valor_barracks':   'env_structure_2',
   'rune_archery':     'env_structure_3',
@@ -129,9 +152,23 @@ export const RTS_MODEL_MAP: Record<string, string> = {
   'eternal_barracks': 'env_structure_2',
   'void_citadel':     'env_structure_1',
   'entropy_pit':      'env_structure_2',
-  // Resources
+
+  // ── Resources ────────────────────────────────────────────────────────
   'gold':             'env_crate',
   'lumber':           'env_tree_1',
+};
+
+/**
+ * Race atlas CDN paths for Toon RTS Grudge6 characters.
+ * Applied after GLB load: sRGB color space, flipY=false (FBX-lineage).
+ */
+export const RTS_RACE_ATLAS: Record<string, string> = {
+  'rts_char_wk':  'textures/grudge6/western-kingdoms/textures/WK_Standard_Units.webp',
+  'rts_char_brb': 'textures/grudge6/barbarians/textures/BRB_StandardUnits_texture.webp',
+  'rts_char_elf': 'textures/grudge6/elves/textures/ELF_HighElves_Texture.webp',
+  'rts_char_dwf': 'textures/grudge6/dwarves/textures/DWF_Standard_Units.webp',
+  'rts_char_orc': 'textures/grudge6/orcs/textures/ORC_StandardUnits.webp',
+  'rts_char_ud':  'textures/grudge6/undead/textures/UD_Standard_Units.webp',
 };
 
 // ═══════════════════════════════════════════════════════════════════
@@ -290,20 +327,43 @@ export class GrudgeAssets {
 
 /**
  * Animation states for RTS/game units.
- * Maps to the toon-shooter character animation clips:
- *   Idle, Run, Punch (attack), HitReact (hurt), Death, Idle_Shoot (attack2)
+ * Supports both toon-shooter (Idle/Run/Punch/…) and Bip001/Toon RTS clip names
+ * via multi-candidate matching.
  */
 export type UnitAnimState = 'idle' | 'run' | 'attack' | 'hurt' | 'death' | 'attack2';
 
-/** Maps our state names to the actual clip names in the GLB files */
-const ANIM_CLIP_MAP: Record<UnitAnimState, string> = {
-  idle:    'Idle',
-  run:     'Run',
-  attack:  'Punch',
-  hurt:    'HitReact',
-  death:   'Death',
-  attack2: 'Idle_Shoot',
+/**
+ * Ordered candidate clip names per state — tried from left to right.
+ * Covers toon-shooter clips, Bip001 sword_shield / longbow / magic packs,
+ * and common Mixamo/Unity export naming variants.
+ */
+const ANIM_CLIP_CANDIDATES: Record<UnitAnimState, string[]> = {
+  idle:    ['Idle', 'idle', 'Idle_01', 'idle_01', 'Stand', 'T-Pose'],
+  run:     ['Run',  'run',  'Run_01',  'Walk',    'walk',  'Walk_01'],
+  attack:  ['Punch', 'Attack', 'attack', 'Attack_01', 'Melee_Attack', 'Slash', 'attack_01'],
+  hurt:    ['HitReact', 'Hit_React', 'Hit', 'hurt', 'HitReact_01', 'Damage'],
+  death:   ['Death', 'death', 'Die', 'Death_01', 'die'],
+  attack2: ['Idle_Shoot', 'Shoot', 'RangedAttack', 'Attack_Bow', 'Attack_Ranged', 'Ranged'],
 };
+
+/**
+ * Find the best matching animation clip for a state.
+ * Tries exact → case-insensitive include → state-name substring.
+ */
+function findClipByState(
+  clips: THREE.AnimationClip[],
+  state: UnitAnimState,
+): THREE.AnimationClip | null {
+  const candidates = ANIM_CLIP_CANDIDATES[state];
+  for (const name of candidates) {
+    const exact = clips.find(c => c.name === name);
+    if (exact) return exact;
+    const partial = clips.find(c => c.name.toLowerCase().includes(name.toLowerCase()));
+    if (partial) return partial;
+  }
+  // Last resort: any clip whose name contains the state word
+  return clips.find(c => c.name.toLowerCase().includes(state)) ?? null;
+}
 
 /** Which states loop vs play once */
 const ANIM_LOOP_MAP: Record<UnitAnimState, boolean> = {
@@ -335,15 +395,15 @@ export class AnimatedUnit {
     this.factionColor = factionColor;
     this.mixer = new THREE.AnimationMixer(this.root);
 
-    // Build action map from available clips
-    for (const [state, clipName] of Object.entries(ANIM_CLIP_MAP)) {
-      const clip = clips.find(c => c.name === clipName);
+    // Build action map — multi-candidate matching covers toon-shooter AND Bip001/Toon RTS packs
+    for (const state of Object.keys(ANIM_CLIP_CANDIDATES) as UnitAnimState[]) {
+      const clip = findClipByState(clips, state);
       if (clip) {
         const action = this.mixer.clipAction(clip);
-        const loops = ANIM_LOOP_MAP[state as UnitAnimState];
+        const loops = ANIM_LOOP_MAP[state];
         action.setLoop(loops ? THREE.LoopRepeat : THREE.LoopOnce, loops ? Infinity : 1);
         if (!loops) action.clampWhenFinished = true;
-        this._actions[state as UnitAnimState] = action;
+        this._actions[state] = action;
       }
     }
 
@@ -464,9 +524,53 @@ export class AnimatedUnit {
   }
 }
 
+// ═══════════════════════════════════════════════════════════════════
+// Race Atlas — applies Toon RTS unit texture atlas to loaded characters
+// ═══════════════════════════════════════════════════════════════════
+
+/**
+ * Apply a Toon RTS race atlas texture to every mesh in a loaded character root.
+ * Uses correct FBX-lineage settings: sRGBColorSpace, flipY=false, ClampToEdge.
+ * Silently no-ops on texture load failure (model still renders with materials).
+ */
+export async function applyRaceAtlas(root: THREE.Group, atlasUrl: string): Promise<void> {
+  return new Promise<void>((resolve) => {
+    new TextureLoader().load(
+      atlasUrl,
+      (texture) => {
+        texture.colorSpace = THREE.SRGBColorSpace;
+        texture.flipY = false;                          // FBX-lineage textures must NOT flip V
+        texture.wrapS = THREE.ClampToEdgeWrapping;
+        texture.wrapT = THREE.ClampToEdgeWrapping;
+        root.traverse((child) => {
+          if ((child as THREE.Mesh).isMesh) {
+            const mesh = child as THREE.Mesh;
+            const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+            mats.forEach((m) => {
+              const stdMat = m as THREE.MeshStandardMaterial;
+              if (stdMat.isMeshStandardMaterial) {
+                stdMat.map = texture;
+                stdMat.color.set(0xffffff); // Let atlas drive colour
+                stdMat.metalness = 0;
+                stdMat.roughness = 0.75;
+                stdMat.side = THREE.DoubleSide;
+                stdMat.needsUpdate = true;
+              }
+            });
+          }
+        });
+        resolve();
+      },
+      undefined,
+      () => resolve(), // Ignore load errors — model still shows with embedded materials
+    );
+  });
+}
+
 /**
  * Create an AnimatedUnit from a manifest key.
- * Loads the GLB, clones the scene, and wraps it with the animation state machine.
+ * Loads the GLB, clones the scene, wraps with animation state machine,
+ * and applies the race atlas if this is a Toon RTS grudge6 character.
  */
 export async function createAnimatedUnit(
   manifestKey: string,
@@ -477,12 +581,18 @@ export async function createAnimatedUnit(
   const gltf = await assets.loadModel(manifestKey);
   if (!gltf) return null;
 
-  // Clone scene and animations
   const clone = gltf.scene.clone();
-  // Deep clone skeleton for independent animation
   const clips = gltf.animations;
+  const unit = new AnimatedUnit(clone, clips, factionColor, scale);
 
-  return new AnimatedUnit(clone, clips, factionColor, scale);
+  // Apply race atlas for grudge6 Toon RTS characters
+  const atlasRelPath = RTS_RACE_ATLAS[manifestKey];
+  if (atlasRelPath) {
+    // Fire-and-forget — mesh still renders with embedded GLB materials if atlas 404s
+    applyRaceAtlas(unit.root, `${CDN_BASE}/${atlasRelPath}`);
+  }
+
+  return unit;
 }
 
 /**
@@ -530,11 +640,18 @@ export async function preloadWeapons(): Promise<void> {
 export async function preloadRTS(onProgress?: (loaded: number, total: number) => void): Promise<void> {
   const assets = getAssets();
   const keys = [
+    // Grudge6 / Toon RTS race characters (primary — GLB paths on CDN)
+    ...Object.keys(ASSET_MANIFEST).filter(k => k.startsWith('rts_char_')),
+    // Cavalry mounts
+    ...Object.keys(ASSET_MANIFEST).filter(k => k.startsWith('rts_mount_')),
+    // Siege engines
+    ...Object.keys(ASSET_MANIFEST).filter(k => k.startsWith('rts_siege_')),
+    // Toon-shooter fallback characters (loaded concurrently — used if RTS GLBs 404)
     ...Object.keys(ASSET_MANIFEST).filter(k => k.startsWith('char_')),
+    // Environment
     ...Object.keys(ASSET_MANIFEST).filter(k => k.startsWith('env_tree')),
     ...Object.keys(ASSET_MANIFEST).filter(k => k.startsWith('env_structure')),
-    'env_crate', 'env_barrel', 'env_sandbag', 'env_tank',
-    'weapon_knife_1', 'weapon_short_cannon',
+    'env_crate', 'env_barrel', 'env_tank',
   ];
   await assets.preload(keys, onProgress);
 }

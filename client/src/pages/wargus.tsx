@@ -11,7 +11,7 @@ import * as CANNON from 'cannon-es';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
-import { type AnimatedUnit, createRTSAnimatedUnit, preloadRTS, RTS_MODEL_MAP } from '@/lib/grudge-assets';
+import { type AnimatedUnit, createRTSAnimatedUnit, preloadRTS, RTS_MODEL_MAP, GrudgeAssets } from '@/lib/grudge-assets';
 import { FACTIONS, getBuildingsForFaction, getUnitsForFaction, getUnit, getBuilding, ALL_BUILDINGS, ALL_UNITS, type FactionId, type BuildingDef, type UnitDef, type UnitRole, type BuildingRole } from '@shared/grudge-rts-data';
 
 type Faction = FactionId;
@@ -20,6 +20,64 @@ type BuildingType = string;
 type ResourceType = 'gold' | 'lumber';
 type GameMode = 'menu' | 'pve' | 'pvp';
 type OrderType = 'move' | 'attack' | 'attackmove' | 'patrol' | 'stop' | 'hold' | 'gather' | 'build' | 'repair';
+
+// ════════════════════════════════════════════════════════════════
+// Canonical Grudge CDN paths (from grudge-warlords-assets + grudge-d1-r2 skills)
+// ════════════════════════════════════════════════════════════════
+const CDN      = 'https://assets.grudge-studio.com';
+const UI_CDN   = 'https://ui.grudge-studio.com';
+const PORT_CDN = 'https://client.grudge-studio.com/images/portraits';
+
+// Map sizes: Standard (1×), Large (4×), Epic (8×)
+type MapSizeKey = 'standard' | 'large' | 'epic';
+const MAP_SIZE_CFG: Record<MapSizeKey, { tiles: number; fog: number; label: string; desc: string }> = {
+  standard: { tiles: 128,  fog: 128, label: 'Standard (1×)',  desc: '128×128 • ~15 min match' },
+  large:    { tiles: 512,  fog: 256, label: 'Large (4×)',     desc: '512×512 • ~40 min match' },
+  epic:     { tiles: 1024, fog: 512, label: 'Epic (8×)',      desc: '1024×1024 • 90+ min epic' },
+};
+
+// Equipment slots (matches ObjectStore equipment.json slots)
+type EquipSlot = 'weapon' | 'offhand' | 'armor' | 'helmet' | 'boots' | 'ring';
+
+interface EquipItem {
+  id:           string;
+  name:         string;
+  slot:         EquipSlot;
+  tier:         1 | 2 | 3 | 4 | 5;
+  tierColor:    string;          // from ObjectStore equipment.json tiers[n].color
+  emoji:        string;
+  iconUrl:      string;          // canonical CDN path from ObjectStore / R2
+  damageBonus?: number;
+  armorBonus?:  number;
+  speedBonus?:  number;          // world units/sec
+  rangeBonus?:  number;
+  atkSpeedMul?: number;          // multiplier e.g. 1.15 = 15% faster attacks
+  manaBonus?:   number;
+  hpBonus?:     number;
+  description:  string;
+}
+
+interface UnitEquip {
+  weapon?:  EquipItem;
+  offhand?: EquipItem;
+  armor?:   EquipItem;
+  helmet?:  EquipItem;
+  boots?:   EquipItem;
+  ring?:    EquipItem;
+}
+
+interface UnitAbility {
+  id:          string;
+  name:        string;
+  emoji:       string;
+  iconUrl:     string;           // CDN icon
+  hotkey:      string;           // Q/W/E/R/T
+  cooldown:    number;           // seconds
+  manaCost:    number;
+  description: string;
+  lastUsed:    number;           // game-time seconds when last cast
+  passive:     boolean;
+}
 
 /** PVE enemy mapping */
 const ENEMY_FACTION: Record<FactionId, FactionId> = { crusade: 'legion', fabled: 'legion', legion: 'crusade' };
@@ -34,6 +92,8 @@ interface GameUnit {
   targetPosition: Position3D | null;
   health: number;
   maxHealth: number;
+  mana: number;
+  maxMana: number;
   damage: number;
   armor: number;
   range: number;
@@ -54,6 +114,11 @@ interface GameUnit {
   animUnit?: AnimatedUnit;
   isVisible: boolean;
   lastSeenPosition: Position3D | null;
+  // Equipment & abilities (WC3-style per-unit)
+  equipment: UnitEquip;
+  abilities: UnitAbility[];
+  lastAttackTime: number;     // game-time seconds of last attack
+  attackCooldown: number;     // seconds between attacks (base before equip)
 }
 
 interface GameBuilding {
@@ -166,8 +231,9 @@ const COMMAND_ICONS: Record<string, { icon: string; name: string; hotkey: string
   repair: { icon: '🔧', name: 'Repair', hotkey: 'R' }
 };
 
-const MAP_SIZE = 128;
-const FOG_GRID_SIZE = 128;
+// Dynamic map dimensions — updated when game starts via startGame(mapSizeKey)
+let MAP_SIZE       = 128;
+let FOG_GRID_SIZE  = 128;
 const VISION_RANGE = 8;
 
 interface FloatingText {
@@ -237,6 +303,115 @@ const TERRAIN_COLORS = {
   snow: 0xe8e8e8,
 };
 
+// ════════════════════════════════════════════════════════════════
+// Equipment Library — icons from ObjectStore / R2 CDN
+// Tier colors match ObjectStore equipment.json: T1=#9ca3af T2=#22c55e T3=#3b82f6
+// ════════════════════════════════════════════════════════════════
+const EQUIP_LIBRARY: EquipItem[] = [
+  // —— Tier 1 (grey) weapons
+  { id:'iron_sword',   name:'Iron Sword',    slot:'weapon',  tier:1, tierColor:'#9ca3af', emoji:'⚔️', iconUrl:`${CDN}/icons/weapons/sword.png`,         damageBonus:5,  description:'Dependable iron blade.' },
+  { id:'wooden_bow',   name:'Wooden Bow',    slot:'weapon',  tier:1, tierColor:'#9ca3af', emoji:'🏹', iconUrl:`${CDN}/icons/weapons/bow.png`,           damageBonus:4, rangeBonus:0.5, description:'Simple but effective.' },
+  { id:'oak_staff',    name:'Oak Staff',     slot:'weapon',  tier:1, tierColor:'#9ca3af', emoji:'🪄', iconUrl:`${CDN}/icons/weapons/staff.png`,         damageBonus:3, rangeBonus:1, manaBonus:20, description:'Channels mana.' },
+  { id:'wood_shield',  name:'Wooden Shield', slot:'offhand', tier:1, tierColor:'#9ca3af', emoji:'🛡️', iconUrl:`${CDN}/icons/weapons/shield.png`,       armorBonus:4,  description:'Basic wooden defence.' },
+  { id:'leather_arm',  name:'Leather Armor', slot:'armor',   tier:1, tierColor:'#9ca3af', emoji:'🥋', iconUrl:`${CDN}/icons/equipment/armor/leather.png`,   armorBonus:3,  description:'Light and flexible.' },
+  { id:'iron_helm',    name:'Iron Helm',     slot:'helmet',  tier:1, tierColor:'#9ca3af', emoji:'⛑️', iconUrl:`${CDN}/icons/equipment/helmets/iron.png`, armorBonus:2, hpBonus:10, description:'Basic head protection.' },
+  { id:'sprint_boots', name:'Sprint Boots',  slot:'boots',   tier:1, tierColor:'#9ca3af', emoji:'👟', iconUrl:`${CDN}/icons/equipment/boots/sprint.png`, speedBonus:0.4, description:'Light footwear.' },
+  { id:'battle_ring',  name:'Battle Ring',   slot:'ring',    tier:1, tierColor:'#9ca3af', emoji:'💍', iconUrl:`${CDN}/icons/equipment/rings/battle.png`,  damageBonus:2, armorBonus:1, description:'Minor combat boost.' },
+  // —— Tier 2 (green) weapons
+  { id:'steel_sword',  name:'Steel Sword',   slot:'weapon',  tier:2, tierColor:'#22c55e', emoji:'⚔️', iconUrl:`${CDN}/icons/weapons/swords/bloodfeud_blade.png`, damageBonus:10, atkSpeedMul:1.05, description:'Quality forged steel.' },
+  { id:'elven_bow',    name:'Elven Bow',     slot:'weapon',  tier:2, tierColor:'#22c55e', emoji:'🏹', iconUrl:`${CDN}/icons/weapons/bow.png`,           damageBonus:8, rangeBonus:1, atkSpeedMul:1.1, description:'Moonwood crafted.' },
+  { id:'war_staff',    name:'War Staff',     slot:'weapon',  tier:2, tierColor:'#22c55e', emoji:'🪄', iconUrl:`${CDN}/icons/weapons/staff.png`,         damageBonus:7, rangeBonus:1.5, manaBonus:40, description:'Amplifies magic.' },
+  { id:'iron_shield',  name:'Iron Shield',   slot:'offhand', tier:2, tierColor:'#22c55e', emoji:'🛡️', iconUrl:`${CDN}/icons/weapons/shield.png`,       armorBonus:8, hpBonus:15, description:'Solid iron defence.' },
+  { id:'chainmail',    name:'Chainmail',     slot:'armor',   tier:2, tierColor:'#22c55e', emoji:'⛓️', iconUrl:`${CDN}/icons/equipment/armor/chain.png`,     armorBonus:6, hpBonus:20, description:'Interlocked rings.' },
+  { id:'steel_helm',   name:'Steel Helm',    slot:'helmet',  tier:2, tierColor:'#22c55e', emoji:'⛑️', iconUrl:`${CDN}/icons/equipment/helmets/steel.png`, armorBonus:4, hpBonus:25, description:'Full steel protection.' },
+  { id:'war_boots',    name:'War Boots',     slot:'boots',   tier:2, tierColor:'#22c55e', emoji:'👞', iconUrl:`${CDN}/icons/equipment/boots/war.png`,   speedBonus:0.3, armorBonus:2, description:'Reinforced boots.' },
+  { id:'war_ring',     name:'War Ring',      slot:'ring',    tier:2, tierColor:'#22c55e', emoji:'💍', iconUrl:`${CDN}/icons/equipment/rings/war.png`,    damageBonus:4, atkSpeedMul:1.08, description:'Battle magic ring.' },
+  // —— Tier 3 (blue/rare) weapons
+  { id:'runic_blade',  name:'Runic Blade',   slot:'weapon',  tier:3, tierColor:'#3b82f6', emoji:'🗡️', iconUrl:`${CDN}/icons/weapons/swords/wraithfang.png`, damageBonus:18, atkSpeedMul:1.15, description:'Ancient runes pulse.' },
+  { id:'warbow',       name:'War Bow',       slot:'weapon',  tier:3, tierColor:'#3b82f6', emoji:'🏹', iconUrl:`${CDN}/icons/weapons/bow.png`,           damageBonus:15, rangeBonus:2, atkSpeedMul:1.15, description:'Deadly longbow.' },
+  { id:'arcane_staff', name:'Arcane Staff',  slot:'weapon',  tier:3, tierColor:'#3b82f6', emoji:'🪄', iconUrl:`${CDN}/icons/weapons/staff.png`,         damageBonus:14, rangeBonus:2, manaBonus:80, atkSpeedMul:1.1, description:'Crackles with power.' },
+  { id:'tower_shield', name:'Tower Shield',  slot:'offhand', tier:3, tierColor:'#3b82f6', emoji:'🛡️', iconUrl:`${CDN}/icons/weapons/shield.png`,       armorBonus:14, hpBonus:40, description:'Near-impenetrable.' },
+  { id:'plate_armor',  name:'Plate Armor',   slot:'armor',   tier:3, tierColor:'#3b82f6', emoji:'🧶', iconUrl:`${CDN}/icons/equipment/armor/plate.png`,    armorBonus:12, hpBonus:50, description:'Pinnacle of protection.' },
+  { id:'warlord_helm', name:'Warlord Helm',  slot:'helmet',  tier:3, tierColor:'#3b82f6', emoji:'⛑️', iconUrl:`${CDN}/icons/equipment/helmets/warlord.png`, armorBonus:7, hpBonus:40, damageBonus:3, description:'Inspires fear.' },
+  { id:'winged_boots', name:'Winged Boots',  slot:'boots',   tier:3, tierColor:'#3b82f6', emoji:'👟', iconUrl:`${CDN}/icons/equipment/boots/winged.png`, speedBonus:0.8, atkSpeedMul:1.1, description:'Fleet-footed swiftness.' },
+  { id:'bloodthirst',  name:'Bloodthirst',   slot:'ring',    tier:3, tierColor:'#3b82f6', emoji:'💍', iconUrl:`${CDN}/icons/equipment/rings/bloodthirst.png`, damageBonus:8, atkSpeedMul:1.12, hpBonus:30, description:'Grows with kills.' },
+];
+
+// Portrait CDN paths by unit race (canonical: client.grudge-studio.com/images/portraits)
+const UNIT_RACE: Record<string, string> = {
+  sky_serf:'human', valor_guard:'human', fate_lancer:'barbarian', rune_marksman:'human',
+  thunder_charger:'human', cosmic_ram:'human', wisdom_seer:'human', raven_scout:'barbarian', eye_watcher:'human',
+  grove_tender:'elf', root_warden:'dwarf', stone_sentinel:'dwarf', leaf_archer:'elf',
+  grove_rider:'elf', treant_ram:'dwarf', nature_channeler:'elf', bark_scout:'elf', sylph_watcher:'elf',
+  thrall_worker:'orc', chaos_grunt:'orc', doom_berserker:'undead', shadow_hunter:'orc',
+  warg_rider:'orc', doom_catapult:'orc', hex_shaman:'undead', plague_bat:'orc', void_wraith:'undead',
+};
+
+function getUnitPortrait(unitType: string): string {
+  const race = UNIT_RACE[unitType] || 'human';
+  return `${PORT_CDN}/${race}.png`;
+}
+
+// Ability definitions by unit role (Q/W/E/R/T hotkeys)
+const ROLE_ABILITIES: Record<string, UnitAbility[]> = {
+  worker:  [
+    { id:'repair',    name:'Repair',     emoji:'🔧', iconUrl:`${CDN}/icons/abilities/repair.png`,      hotkey:'Q', cooldown:0,  manaCost:0,  description:'Repair buildings', lastUsed:-999, passive:false },
+  ],
+  melee:   [
+    { id:'slash',     name:'Slash',      emoji:'⚔️', iconUrl:`${CDN}/icons/weapons/sword.png`,          hotkey:'Q', cooldown:3,  manaCost:10, description:'Swift slash +15% dmg', lastUsed:-999, passive:false },
+    { id:'battle_cry',name:'Battle Cry', emoji:'📣', iconUrl:`${CDN}/icons/abilities/battle_cry.png`,   hotkey:'W', cooldown:15, manaCost:20, description:'+20% ATK for 5s (AoE)', lastUsed:-999, passive:false },
+    { id:'shield_wall',name:'Shield Wall',emoji:'🛡️', iconUrl:`${CDN}/icons/weapons/shield.png`,   hotkey:'E', cooldown:20, manaCost:30, description:'Reduce dmg 50% for 3s', lastUsed:-999, passive:false },
+  ],
+  ranged:  [
+    { id:'aimed_shot',name:'Aimed Shot', emoji:'🎯', iconUrl:`${CDN}/icons/abilities/aimed_shot.png`,  hotkey:'Q', cooldown:4,  manaCost:15, description:'High-dmg aimed shot', lastUsed:-999, passive:false },
+    { id:'volley',    name:'Volley',     emoji:'🏹', iconUrl:`${CDN}/icons/weapons/bow.png`,            hotkey:'W', cooldown:12, manaCost:25, description:'AoE arrow volley', lastUsed:-999, passive:false },
+  ],
+  cavalry: [
+    { id:'charge',    name:'Charge',     emoji:'🐴', iconUrl:`${CDN}/icons/abilities/charge.png`,       hotkey:'Q', cooldown:8,  manaCost:20, description:'Gap-close + 2× dmg hit', lastUsed:-999, passive:false },
+    { id:'trample',   name:'Trample',    emoji:'💨', iconUrl:`${CDN}/icons/abilities/trample.png`,      hotkey:'W', cooldown:18, manaCost:30, description:'AoE knockback trample', lastUsed:-999, passive:false },
+  ],
+  siege:   [
+    { id:'barrage',   name:'Barrage',    emoji:'💣', iconUrl:`${CDN}/icons/abilities/barrage.png`,      hotkey:'Q', cooldown:20, manaCost:30, description:'Rapid multi-shot', lastUsed:-999, passive:false },
+  ],
+  support: [
+    { id:'heal',      name:'Heal',       emoji:'💚', iconUrl:`${CDN}/icons/abilities/heal.png`,         hotkey:'Q', cooldown:8,  manaCost:30, description:'Restore ally HP', lastUsed:-999, passive:false },
+    { id:'ward',      name:'Ward',       emoji:'🛡️', iconUrl:`${CDN}/icons/abilities/ward.png`,    hotkey:'W', cooldown:20, manaCost:40, description:'Protective ward', lastUsed:-999, passive:false },
+  ],
+  recon:   [
+    { id:'stealth',   name:'Stealth',    emoji:'👁️', iconUrl:`${CDN}/icons/abilities/stealth.png`, hotkey:'Q', cooldown:12, manaCost:15, description:'Vanish briefly', lastUsed:-999, passive:false },
+  ],
+  air:     [
+    { id:'dive_bomb', name:'Dive Bomb',  emoji:'🦅', iconUrl:`${CDN}/icons/abilities/dive_bomb.png`,   hotkey:'Q', cooldown:10, manaCost:20, description:'Aerial AoE strike', lastUsed:-999, passive:false },
+  ],
+};
+
+// ── Effective-stat helpers (apply equipment bonuses) ──
+function getEffectiveDmg(unit: GameUnit): number {
+  return unit.damage
+    + (unit.equipment.weapon?.damageBonus  ?? 0)
+    + (unit.equipment.ring?.damageBonus    ?? 0)
+    + (unit.equipment.helmet?.damageBonus  ?? 0);
+}
+function getEffectiveArmor(unit: GameUnit): number {
+  return unit.armor
+    + (unit.equipment.armor?.armorBonus   ?? 0)
+    + (unit.equipment.offhand?.armorBonus ?? 0)
+    + (unit.equipment.helmet?.armorBonus  ?? 0)
+    + (unit.equipment.boots?.armorBonus   ?? 0);
+}
+function getEffectiveSpeed(unit: GameUnit): number {
+  return unit.speed + (unit.equipment.boots?.speedBonus ?? 0);
+}
+function getEffectiveRange(unit: GameUnit): number {
+  return unit.range + (unit.equipment.weapon?.rangeBonus ?? 0);
+}
+function getAttackCooldown(unit: GameUnit): number {
+  // base cooldown from speed stat; 1 attack per ~1.2s at speed 4
+  const baseCD = Math.max(0.5, 5 / (unit.speed + 1));
+  const mul = (unit.equipment.weapon?.atkSpeedMul ?? 1) * (unit.equipment.ring?.atkSpeedMul ?? 1);
+  return baseCD / mul;
+}
+
 export default function Wargus() {
   const containerRef = useRef<HTMLDivElement>(null);
   const minimapRef = useRef<HTMLCanvasElement>(null);
@@ -250,11 +425,21 @@ export default function Wargus() {
   
   const [gameMode, setGameMode] = useState<GameMode>('menu');
   const [playerFaction, setPlayerFaction] = useState<Faction>('crusade');
+  const [mapSizeKey, setMapSizeKey] = useState<MapSizeKey>('standard');
   const [assetsLoaded, setAssetsLoaded] = useState(false);
   const [loadProgress, setLoadProgress] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [gameTime, setGameTime] = useState(0);
+
+  // Edge-scroll mouse tracking
+  const mousePosRef    = useRef<{x:number;y:number}>({x:0,y:0});
+  // Game time accumulator (seconds) — used for attack cooldowns
+  const gameTotalTimeRef = useRef(0);
+  // Double-click detection
+  const lastClickRef   = useRef<{time:number;x:number;z:number}>({time:0,x:-1,z:-1});
+  // Selected unit for equipment panel reactivity
+  const [selectedEquipUnit, setSelectedEquipUnit] = useState<string|null>(null);
   
   const unitsRef = useRef<GameUnit[]>([]);
   const buildingsRef = useRef<GameBuilding[]>([]);
@@ -476,6 +661,28 @@ export default function Wargus() {
 
   const createUnit = useCallback((type: UnitType, faction: Faction, x: number, z: number): GameUnit => {
     const stats = uStat(type);
+    // Default starter equipment by role (T1 items from EQUIP_LIBRARY)
+    const defaultEquip: UnitEquip = {};
+    const role = stats.role;
+    if (role === 'melee' || role === 'worker') {
+      defaultEquip.weapon  = EQUIP_LIBRARY.find(e => e.id === 'iron_sword');
+      defaultEquip.offhand = EQUIP_LIBRARY.find(e => e.id === 'wood_shield');
+      defaultEquip.armor   = EQUIP_LIBRARY.find(e => e.id === 'leather_arm');
+    } else if (role === 'ranged' || role === 'recon') {
+      defaultEquip.weapon = EQUIP_LIBRARY.find(e => e.id === 'wooden_bow');
+      defaultEquip.armor  = EQUIP_LIBRARY.find(e => e.id === 'leather_arm');
+    } else if (role === 'support' || role === 'air') {
+      defaultEquip.weapon = EQUIP_LIBRARY.find(e => e.id === 'oak_staff');
+    } else if (role === 'cavalry') {
+      defaultEquip.weapon = EQUIP_LIBRARY.find(e => e.id === 'iron_sword');
+      defaultEquip.armor  = EQUIP_LIBRARY.find(e => e.id === 'leather_arm');
+    }
+    // Deep-clone abilities so each unit has its own lastUsed counters
+    const abilityDefs = ROLE_ABILITIES[role] || ROLE_ABILITIES['melee'];
+    const abilities   = abilityDefs.map(a => ({ ...a, lastUsed: -999 }));
+
+    const baseMana   = role === 'support' ? 100 : role === 'air' ? 80 : 60;
+
     const unit: GameUnit = {
       id: `unit-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       type,
@@ -484,6 +691,8 @@ export default function Wargus() {
       targetPosition: null,
       health: stats.health,
       maxHealth: stats.health,
+      mana: baseMana,
+      maxMana: baseMana,
       damage: stats.damage,
       armor: stats.armor,
       range: stats.range,
@@ -499,7 +708,11 @@ export default function Wargus() {
       lastGatherTarget: null,
       groupNumber: null,
       isVisible: true,
-      lastSeenPosition: null
+      lastSeenPosition: null,
+      equipment: defaultEquip,
+      abilities,
+      lastAttackTime: -999,
+      attackCooldown: Math.max(0.5, 5 / (stats.speed + 1)),
     };
     
     if (sceneRef.current) {
@@ -588,34 +801,121 @@ export default function Wargus() {
     
     if (sceneRef.current) {
       const bRole = stats.role;
-      const size = bRole === 'economy' ? 3 : bRole === 'population' ? 2 : 2.5;
-      const height = bRole === 'defense' ? 4 : bRole === 'economy' ? 3.5 : bRole === 'mage_production' ? 4 : 2.5;
-      const geometry = new THREE.BoxGeometry(size, height, size);
-      const color = factionPrimary(faction);
-      const material = new THREE.MeshStandardMaterial({ 
-        color,
-        metalness: 0.1,
-        roughness: 0.9,
+      const fColor = factionPrimary(faction);
+      // Faction accent colours: Crusade=gold, Fabled=wood-brown, Legion=void-purple
+      const accentColor = faction === 'crusade' ? 0xd4a800
+                        : faction === 'fabled'  ? 0x5c3a1e
+                        : 0x330033;
+
+      // Role-appropriate geometry
+      const size   = bRole === 'economy' ? 3.2 : bRole === 'population' ? 2.0 : 2.6;
+      const height = bRole === 'defense' ? 5.0
+                   : bRole === 'economy'  ? 4.0
+                   : bRole === 'mage_production' ? 4.5
+                   : 2.8;
+
+      let mainGeometry: THREE.BufferGeometry;
+      if (bRole === 'defense') {
+        // Tower: octagonal cylinder
+        mainGeometry = new THREE.CylinderGeometry(size * 0.5, size * 0.6, height, 8);
+      } else if (bRole === 'cavalry_production' || bRole === 'siege_production') {
+        // Stable / workshop: wide low barn shape
+        mainGeometry = new THREE.BoxGeometry(size * 1.4, height * 0.75, size);
+      } else {
+        mainGeometry = new THREE.BoxGeometry(size, height, size);
+      }
+
+      const material = new THREE.MeshStandardMaterial({
+        color: fColor,
+        metalness: faction === 'legion' ? 0.3 : 0.05,
+        roughness: faction === 'fabled' ? 0.95 : 0.85,
         transparent: isConstructing,
-        opacity: isConstructing ? 0.5 : 1
+        opacity: isConstructing ? 0.5 : 1,
       });
-      const mesh = new THREE.Mesh(geometry, material);
+      const mesh = new THREE.Mesh(mainGeometry, material);
       mesh.position.set(x, height / 2, z);
       mesh.castShadow = true;
       mesh.receiveShadow = true;
       mesh.userData = { buildingId: building.id };
       sceneRef.current.add(mesh);
       building.mesh = mesh;
-      
+
       building.auxMeshes = [];
+
       if (isTowerBldg(type)) {
-        const roofGeom = new THREE.ConeGeometry(size * 0.7, 1.5, 4);
-        const roofMat = new THREE.MeshStandardMaterial({ color: 0x8b0000 });
+        // Battlements: 4 corner merlons + pointy roof
+        for (let i = 0; i < 4; i++) {
+          const ang = (i / 4) * Math.PI * 2;
+          const mGeom = new THREE.BoxGeometry(0.45, 0.7, 0.45);
+          const mMat  = new THREE.MeshStandardMaterial({ color: fColor });
+          const merlon = new THREE.Mesh(mGeom, mMat);
+          merlon.position.set(
+            x + Math.cos(ang) * size * 0.4,
+            height + 0.35,
+            z + Math.sin(ang) * size * 0.4,
+          );
+          sceneRef.current.add(merlon);
+          building.auxMeshes.push(merlon);
+        }
+        const roofGeom = new THREE.ConeGeometry(size * 0.6, 1.5, 6);
+        const roofMat  = new THREE.MeshStandardMaterial({ color: accentColor });
         const roof = new THREE.Mesh(roofGeom, roofMat);
         roof.position.set(x, height + 0.75, z);
-        roof.rotation.y = Math.PI / 4;
         sceneRef.current.add(roof);
         building.auxMeshes.push(roof);
+      } else if (bRole === 'economy') {
+        // Town-hall banner
+        const poleGeom = new THREE.CylinderGeometry(0.06, 0.06, 1.8, 6);
+        const poleMat  = new THREE.MeshStandardMaterial({ color: 0x8b6914 });
+        const pole = new THREE.Mesh(poleGeom, poleMat);
+        pole.position.set(x, height + 0.9, z + size * 0.4);
+        sceneRef.current.add(pole);
+        building.auxMeshes.push(pole);
+        const flagGeom = new THREE.PlaneGeometry(0.9, 0.55);
+        const flagMat  = new THREE.MeshBasicMaterial({ color: accentColor, side: THREE.DoubleSide });
+        const flag = new THREE.Mesh(flagGeom, flagMat);
+        flag.position.set(x + 0.45, height + 1.4, z + size * 0.4);
+        sceneRef.current.add(flag);
+        building.auxMeshes.push(flag);
+      } else if (bRole === 'mage_production') {
+        // Glowing arcane orb atop mage tower
+        const orbColor = faction === 'crusade' ? 0x88aaff
+                       : faction === 'fabled'  ? 0x66ee88
+                       : 0xff44aa;
+        const orbGeom = new THREE.SphereGeometry(0.35, 12, 12);
+        const orbMat  = new THREE.MeshStandardMaterial({
+          color: orbColor, emissive: orbColor, emissiveIntensity: 1.2,
+        });
+        const orb = new THREE.Mesh(orbGeom, orbMat);
+        orb.position.set(x, height + 0.35, z);
+        sceneRef.current.add(orb);
+        building.auxMeshes.push(orb);
+      }
+
+      // Async GLB swap: try loading a 3D model from CDN and replace primitive geometry
+      if (RTS_MODEL_MAP[type]) {
+        GrudgeAssets.getInstance()
+          .loadRTSModel(type, fColor, 1)
+          .then((model) => {
+            if (!model || !sceneRef.current || !building.mesh) return;
+            // Only swap if building still alive and mesh is the original primitive
+            sceneRef.current.remove(building.mesh);
+            model.position.set(x, 0, z);
+            model.userData = { buildingId: building.id };
+            model.castShadow = true;
+            model.receiveShadow = true;
+            if (isConstructing) {
+              model.traverse((child) => {
+                if ((child as THREE.Mesh).isMesh) {
+                  const m = (child as THREE.Mesh).material as THREE.MeshStandardMaterial;
+                  if (m?.isMeshStandardMaterial) { m.transparent = true; m.opacity = 0.5; m.needsUpdate = true; }
+                }
+              });
+            }
+            sceneRef.current.add(model);
+            building.mesh = model as unknown as THREE.Mesh;
+          })
+          .catch(() => { /* keep primitive */ });
       }
       
       const healthBarGroup = new THREE.Group();
@@ -648,13 +948,11 @@ export default function Wargus() {
     
     if (sceneRef.current) {
       if (type === 'gold') {
+        // Immediate gold-mine placeholder crystal cluster
         const geometry = new THREE.DodecahedronGeometry(1.2);
-        const material = new THREE.MeshStandardMaterial({ 
-          color: 0xffd700,
-          metalness: 0.9,
-          roughness: 0.1,
-          emissive: 0xffaa00,
-          emissiveIntensity: 0.6
+        const material = new THREE.MeshStandardMaterial({
+          color: 0xffd700, metalness: 0.9, roughness: 0.1,
+          emissive: 0xffaa00, emissiveIntensity: 0.6,
         });
         const mesh = new THREE.Mesh(geometry, material);
         mesh.position.set(x, 1.2, z);
@@ -662,23 +960,56 @@ export default function Wargus() {
         mesh.userData = { resourceId: node.id };
         sceneRef.current.add(mesh);
         node.mesh = mesh;
+
+        // Async CDN crate swap
+        GrudgeAssets.getInstance().loadModel('env_crate').then((gltf) => {
+          if (!gltf || !sceneRef.current || !node.mesh) return;
+          sceneRef.current.remove(node.mesh!);
+          const crate = gltf.scene.clone();
+          crate.position.set(x, 0, z);
+          crate.scale.setScalar(0.9);
+          crate.userData = { resourceId: node.id };
+          crate.traverse(c => { if ((c as THREE.Mesh).isMesh) (c as THREE.Mesh).castShadow = true; });
+          sceneRef.current.add(crate);
+          node.mesh = crate as unknown as THREE.Mesh;
+        }).catch(() => {});
       } else {
-        const trunkGeometry = new THREE.CylinderGeometry(0.2, 0.3, 2, 8);
+        // Immediate cone+cylinder tree placeholder
+        const trunkGeometry = new THREE.CylinderGeometry(0.22, 0.32, 2.2, 8);
         const trunkMaterial = new THREE.MeshStandardMaterial({ color: 0x4a3728 });
         const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
-        trunk.position.set(x, 1, z);
+        trunk.position.set(x, 1.1, z);
         trunk.castShadow = true;
         sceneRef.current.add(trunk);
         node.trunkMesh = trunk;
-        
-        const leavesGeometry = new THREE.ConeGeometry(1.2, 2.5, 8);
-        const leavesMaterial = new THREE.MeshStandardMaterial({ color: 0x228b22 });
+
+        const leavesGeometry = new THREE.ConeGeometry(1.3, 2.8, 8);
+        const leavesMaterial = new THREE.MeshStandardMaterial({ color: 0x1f7a1f });
         const leaves = new THREE.Mesh(leavesGeometry, leavesMaterial);
-        leaves.position.set(x, 3.25, z);
+        leaves.position.set(x, 3.5, z);
         leaves.castShadow = true;
         leaves.userData = { resourceId: node.id };
         sceneRef.current.add(leaves);
         node.mesh = leaves;
+
+        // Async CDN tree swap — pick one of 4 toon-shooter tree variants
+        const treeKey = `env_tree_${(Math.floor(Math.random() * 4) + 1)}`;
+        GrudgeAssets.getInstance().loadModel(treeKey).then((gltf) => {
+          if (!gltf || !sceneRef.current || !node.mesh || !node.trunkMesh) return;
+          sceneRef.current.remove(node.mesh!);
+          sceneRef.current.remove(node.trunkMesh!);
+          const tree = gltf.scene.clone();
+          tree.position.set(x, 0, z);
+          tree.scale.setScalar(1.0 + Math.random() * 0.3);
+          tree.userData = { resourceId: node.id };
+          tree.traverse(c => { if ((c as THREE.Mesh).isMesh) {
+            (c as THREE.Mesh).castShadow = true;
+            (c as THREE.Mesh).receiveShadow = true;
+          }});
+          sceneRef.current.add(tree);
+          node.mesh = tree as unknown as THREE.Mesh;
+          node.trunkMesh = undefined; // merged into single GLB
+        }).catch(() => {});
       }
     }
     
@@ -820,22 +1151,49 @@ export default function Wargus() {
     const dx = targetX - startX;
     const dz = targetZ - startZ;
     const dist = Math.sqrt(dx * dx + dz * dz);
+
+    // Faction-specific projectile colours
+    const fColor = factionPrimary(faction);
+    const fEmissive = faction === 'crusade' ? 0x3355cc
+                    : faction === 'fabled'  ? 0x227722
+                    : 0x881100;
     
     let meshGeom: THREE.BufferGeometry;
     let meshMat: THREE.MeshStandardMaterial;
     let mass = 0.5;
     
     if (projectileType === 'ballista') {
-      meshGeom = new THREE.CylinderGeometry(0.05, 0.05, 1.2, 6);
-      meshMat = new THREE.MeshStandardMaterial({ color: 0x8b4513, emissive: 0x331100, emissiveIntensity: 0.3 });
-      mass = 2;
+      // Thick bolt — faction-wood colour with metal tip
+      meshGeom = new THREE.CylinderGeometry(0.055, 0.04, 1.4, 8);
+      meshMat  = new THREE.MeshStandardMaterial({
+        color:            0x6b4423,
+        emissive:         fEmissive,
+        emissiveIntensity: 0.25,
+        metalness:        0.4,
+        roughness:        0.6,
+      });
+      mass = 2.5;
     } else if (projectileType === 'magic') {
-      meshGeom = new THREE.SphereGeometry(0.2, 8, 8);
-      meshMat = new THREE.MeshStandardMaterial({ color: 0x8800ff, emissive: 0x4400aa, emissiveIntensity: 0.8 });
+      // Glowing arcane orb — faction tinted
+      meshGeom = new THREE.SphereGeometry(0.22, 10, 10);
+      meshMat  = new THREE.MeshStandardMaterial({
+        color:            fColor,
+        emissive:         fColor,
+        emissiveIntensity: 1.4,
+        metalness:        0,
+        roughness:        0,
+        transparent:      true,
+        opacity:          0.88,
+      });
       mass = 0.3;
     } else {
-      meshGeom = new THREE.CylinderGeometry(0.02, 0.02, 0.6, 4);
-      meshMat = new THREE.MeshStandardMaterial({ color: 0x8b6914 });
+      // Slim arrow — faction-coloured shaft
+      meshGeom = new THREE.CylinderGeometry(0.025, 0.015, 0.7, 6);
+      meshMat  = new THREE.MeshStandardMaterial({
+        color:    faction === 'fabled' ? 0x4a8a3a : 0x9b7a2a,
+        emissive: fEmissive,
+        emissiveIntensity: 0.1,
+      });
       mass = 0.2;
     }
     
@@ -1016,13 +1374,20 @@ export default function Wargus() {
       
       if (proj.life > 0.05 && Math.random() < dt * 30) {
         if (sceneRef.current) {
-          const trailGeom = new THREE.SphereGeometry(0.05, 4, 4);
-          const trailMat = new THREE.MeshBasicMaterial({ color: 0xffaa00, transparent: true, opacity: 0.6 });
+          const trailGeom = new THREE.SphereGeometry(0.045, 4, 4);
+          // Trail colour matches projectile faction tint
+          const pMat = proj.mesh.material as THREE.MeshStandardMaterial;
+          const trailBaseColor = pMat?.emissive
+            ? pMat.emissive.getHex()
+            : (pMat?.color?.getHex() ?? 0xffaa00);
+          const trailMat = new THREE.MeshBasicMaterial({
+            color: trailBaseColor, transparent: true, opacity: 0.55,
+          });
           const trailMesh = new THREE.Mesh(trailGeom, trailMat);
           trailMesh.position.copy(proj.mesh.position);
           sceneRef.current.add(trailMesh);
           proj.trailMeshes.push(trailMesh);
-          if (proj.trailMeshes.length > 8) {
+          if (proj.trailMeshes.length > 10) {
             const old = proj.trailMeshes.shift()!;
             sceneRef.current.remove(old);
             old.geometry.dispose();
@@ -1328,63 +1693,79 @@ export default function Wargus() {
 
   const initializeGameEntities = useCallback((faction: Faction, mode: GameMode) => {
     if (!sceneRef.current) return;
-    
+
     const newUnits: GameUnit[] = [];
     const newBuildings: GameBuilding[] = [];
     const newResources: ResourceNode[] = [];
-    
+
+    const MS = MAP_SIZE;
     const start = factionStart(faction);
-    const playerStartX = 16;
-    const playerStartZ = 16;
-    const enemyStartX = MAP_SIZE - 24;
-    const enemyStartZ = MAP_SIZE - 24;
-    
-    newBuildings.push(createBuilding(start.townHall, faction, playerStartX, playerStartZ, false));
-    newBuildings.push(createBuilding(start.farm, faction, playerStartX + 5, playerStartZ - 3, false));
+
+    // WC3-style: player at bottom-left, enemy at top-right
+    const pX = Math.round(MS * 0.12), pZ = Math.round(MS * 0.12);
+    const eX = Math.round(MS * 0.88), eZ = Math.round(MS * 0.88);
+
+    // — Player base —
+    newBuildings.push(createBuilding(start.townHall, faction, pX, pZ, false));
+    newBuildings.push(createBuilding(start.farm,     faction, pX + 6,  pZ - 4, false));
+    newBuildings.push(createBuilding(start.barracks, faction, pX - 6,  pZ + 4, false));
     for (let i = 0; i < 5; i++) {
-      newUnits.push(createUnit(start.worker, faction, playerStartX + 4 + (i % 3) * 1.2, playerStartZ + Math.floor(i / 3) * 1.2));
+      newUnits.push(createUnit(start.worker, faction, pX + 4 + (i % 3) * 1.4, pZ + Math.floor(i / 3) * 1.4));
     }
-    
+    for (let i = 0; i < 4; i++) {
+      newUnits.push(createUnit(start.melee, faction, pX + i * 1.5, pZ + 5));
+    }
+
+    // — Enemy base —
     if (mode === 'pve' || mode === 'pvp') {
-      const enemyFaction = ENEMY_FACTION[faction];
-      const eStart = factionStart(enemyFaction);
-      newBuildings.push(createBuilding(eStart.townHall, enemyFaction, enemyStartX, enemyStartZ, false));
-      newBuildings.push(createBuilding(eStart.barracks, enemyFaction, enemyStartX - 5, enemyStartZ, false));
-      newBuildings.push(createBuilding(eStart.farm, enemyFaction, enemyStartX + 5, enemyStartZ - 3, false));
+      const ef = ENEMY_FACTION[faction];
+      const eStart = factionStart(ef);
+      newBuildings.push(createBuilding(eStart.townHall, ef, eX,     eZ,     false));
+      newBuildings.push(createBuilding(eStart.barracks, ef, eX - 6, eZ,     false));
+      newBuildings.push(createBuilding(eStart.farm,     ef, eX + 5, eZ - 4, false));
       for (let i = 0; i < 5; i++) {
-        newUnits.push(createUnit(eStart.worker, enemyFaction, enemyStartX + 4 + (i % 3) * 1.2, enemyStartZ + Math.floor(i / 3) * 1.2));
+        newUnits.push(createUnit(eStart.worker, ef, eX + 4 + (i % 3) * 1.4, eZ + Math.floor(i / 3) * 1.4));
       }
-      for (let i = 0; i < 4; i++) {
-        newUnits.push(createUnit(eStart.melee, enemyFaction, enemyStartX - 3 + i * 1.2, enemyStartZ + 4));
+      for (let i = 0; i < 5; i++) {
+        newUnits.push(createUnit(eStart.melee, ef, eX - 3 + i * 1.4, eZ + 5));
       }
     }
-    
-    // Gold mines — near bases and contested center
-    newResources.push(createResourceNode('gold', playerStartX + 10, playerStartZ - 6, 15000));
-    newResources.push(createResourceNode('gold', enemyStartX + 10, enemyStartZ - 6, 15000));
-    newResources.push(createResourceNode('gold', MAP_SIZE / 2 + 12, MAP_SIZE / 2, 8000));
-    newResources.push(createResourceNode('gold', MAP_SIZE / 2 - 12, MAP_SIZE / 2, 8000));
-    newResources.push(createResourceNode('gold', MAP_SIZE / 2, MAP_SIZE / 2 + 15, 6000));
-    newResources.push(createResourceNode('gold', MAP_SIZE / 2, MAP_SIZE / 2 - 15, 6000));
-    // Expansion gold mines
-    newResources.push(createResourceNode('gold', MAP_SIZE * 0.25, MAP_SIZE * 0.5, 5000));
-    newResources.push(createResourceNode('gold', MAP_SIZE * 0.75, MAP_SIZE * 0.5, 5000));
-    
-    // Lumber — near bases
-    for (let i = 0; i < 12; i++) {
-      newResources.push(createResourceNode('lumber', playerStartX + 12 + (i % 4) * 2.5, playerStartZ + Math.floor(i / 4) * 2.5, 150));
-      newResources.push(createResourceNode('lumber', enemyStartX - 8 - (i % 4) * 2.5, enemyStartZ + Math.floor(i / 4) * 2.5, 150));
+
+    // — Gold mines: near each base + 5 contested central mines —
+    newResources.push(createResourceNode('gold', pX + MS*0.08, pZ - MS*0.05, 15000));
+    newResources.push(createResourceNode('gold', eX - MS*0.05, eZ - MS*0.05, 15000));
+    // Top-left and bottom-right expansion mines
+    newResources.push(createResourceNode('gold', MS*0.1,  MS*0.8, 8000));
+    newResources.push(createResourceNode('gold', MS*0.9,  MS*0.2, 8000));
+    // Contested center mines (3-lane junction)
+    const cx = MS / 2, cz = MS / 2;
+    newResources.push(createResourceNode('gold', cx,          cz,          10000));
+    newResources.push(createResourceNode('gold', cx - MS*0.12,cz - MS*0.1, 7000));
+    newResources.push(createResourceNode('gold', cx + MS*0.12,cz + MS*0.1, 7000));
+    newResources.push(createResourceNode('gold', cx - MS*0.12,cz + MS*0.1, 6000));
+    newResources.push(createResourceNode('gold', cx + MS*0.12,cz - MS*0.1, 6000));
+
+    // — Lumber belts near bases and jungle zones between lanes —
+    for (let i = 0; i < 14; i++) {
+      newResources.push(createResourceNode('lumber', pX + 12 + (i % 4) * 2.8, pZ + Math.floor(i/4) * 2.8, 160));
+      newResources.push(createResourceNode('lumber', eX -  8 - (i % 4) * 2.8, eZ + Math.floor(i/4) * 2.8, 160));
     }
-    
-    // Scattered lumber across the larger map
-    for (let i = 0; i < 40; i++) {
-      const x = 20 + Math.random() * (MAP_SIZE - 40);
-      const z = 20 + Math.random() * (MAP_SIZE - 40);
-      if (Math.abs(x - MAP_SIZE / 2) > 12 || Math.abs(z - MAP_SIZE / 2) > 10) {
+    // Top-left and bottom-right jungle zones
+    for (let i = 0; i < 20; i++) {
+      const jx = MS*0.15 + Math.random()*MS*0.25, jz = MS*0.45 + Math.random()*MS*0.3;
+      newResources.push(createResourceNode('lumber', jx, jz, 130));
+      newResources.push(createResourceNode('lumber', MS - jx, MS - jz, 130));
+    }
+    // Scattered lumber across open map
+    const lumberCount = Math.round(40 * (MS / 128));
+    for (let i = 0; i < lumberCount; i++) {
+      const x = 20 + Math.random() * (MS - 40);
+      const z = 20 + Math.random() * (MS - 40);
+      if (Math.abs(x - cx) > 14 || Math.abs(z - cz) > 12) {
         newResources.push(createResourceNode('lumber', x, z, 120));
       }
     }
-    
+
     unitsRef.current = newUnits;
     buildingsRef.current = newBuildings;
     resourceNodesRef.current = newResources;
@@ -1400,10 +1781,17 @@ export default function Wargus() {
       legion: { used: 5, max: 9 },
     });
     
-    setCameraPosition({ x: playerStartX, z: playerStartZ });
+    const MS2 = MAP_SIZE;
+    setCameraPosition({ x: Math.round(MS2*0.12), z: Math.round(MS2*0.12) });
   }, [createUnit, createBuilding, createResourceNode]);
 
-  const startGame = useCallback((mode: GameMode, faction: Faction) => {
+  const startGame = useCallback((mode: GameMode, faction: Faction, szKey: MapSizeKey = mapSizeKey) => {
+    // Apply dynamic map dimensions from MAP_SIZE_CFG
+    const cfg = MAP_SIZE_CFG[szKey];
+    MAP_SIZE      = cfg.tiles;
+    FOG_GRID_SIZE = cfg.fog;
+    gameTotalTimeRef.current = 0;
+    setMapSizeKey(szKey);
     setGameMode(mode);
     setPlayerFaction(faction);
     setIsPaused(false);
@@ -1895,7 +2283,11 @@ export default function Wargus() {
 
   const updateGame = useCallback((deltaTime: number) => {
     if (isPaused || gameMode === 'menu') return;
-    
+
+    // Advance game clock (used for attack cooldowns)
+    gameTotalTimeRef.current += deltaTime;
+    const NOW = gameTotalTimeRef.current;
+
     setGameTime(prev => prev + deltaTime);
     updateFogOfWar();
     
@@ -2069,62 +2461,55 @@ export default function Wargus() {
           const dz = target.position.z - unit.position.z;
           const dist = Math.sqrt(dx * dx + dz * dz);
           
-          if (dist <= unit.range) {
+          const effectiveRange = getEffectiveRange(unit);
+          if (dist <= effectiveRange) {
             const isRanged = isRangedUnit(unit.type);
-            
-            // Face the target
-            if (unit.animUnit) {
-              unit.animUnit.lookAt(target.position.x, target.position.z);
-            }
+            const atkCD = getAttackCooldown(unit);
 
-            if (isRanged) {
-              if (Math.random() < deltaTime * 1.5) {
-                // Play ranged attack animation
-                if (unit.animUnit && unit.animUnit.state !== 'attack2') {
-                  unit.animUnit.play('attack2');
-                }
-                const projType = uStat(unit.type).role === 'siege' ? 'ballista' : uStat(unit.type).role === 'support' ? 'magic' : 'arrow';
+            // Face the target
+            if (unit.animUnit) unit.animUnit.lookAt(target.position.x, target.position.z);
+
+            // Cooldown-based attack check (replaces random-chance approach)
+            if (NOW - unit.lastAttackTime >= atkCD) {
+              unit.lastAttackTime = NOW;
+
+              if (isRanged) {
+                if (unit.animUnit && unit.animUnit.state !== 'attack2') unit.animUnit.play('attack2');
+                const projType = uStat(unit.type).role === 'siege' ? 'ballista'
+                               : uStat(unit.type).role === 'support' ? 'magic' : 'arrow';
                 spawnPhysicsProjectile(
                   unit.position.x, unit.position.y + 1.2, unit.position.z,
                   target.position.x, target.position.z,
-                  unit.damage, unit.attackTarget!, unit.faction,
-                  projType
+                  getEffectiveDmg(unit), unit.attackTarget!, unit.faction, projType
                 );
-              }
-            } else {
-              // Play melee attack animation
-              if (unit.animUnit && unit.animUnit.state !== 'attack' && unit.animUnit.state !== 'hurt') {
-                unit.animUnit.play('attack');
-              }
-              const targetArmor = 'armor' in target ? target.armor : 0;
-              const rawDmg = Math.max(1, unit.damage - targetArmor);
-              const damageDealt = rawDmg * deltaTime;
-              target.health -= damageDealt;
-
-              // Play hurt animation on the target
-              if ('animUnit' in target && (target as GameUnit).animUnit) {
-                const tUnit = target as GameUnit;
-                if (tUnit.animUnit && tUnit.animUnit.state !== 'hurt' && tUnit.animUnit.state !== 'death' && Math.random() < deltaTime * 3) {
-                  tUnit.animUnit.play('hurt');
+              } else {
+                if (unit.animUnit && unit.animUnit.state !== 'attack' && unit.animUnit.state !== 'hurt') {
+                  unit.animUnit.play('attack');
                 }
-              }
-              
-              if (Math.random() < deltaTime * 2) {
-                spawnFloatingText(`-${rawDmg}`, target.position.x + (Math.random() - 0.5), 3, target.position.z + (Math.random() - 0.5), '#FF4444');
-              }
-              
-              if (Math.random() < deltaTime * 4) {
+                const targetArmor = 'equipment' in target
+                  ? getEffectiveArmor(target as GameUnit)
+                  : ('armor' in target ? (target as any).armor : 0);
+                const rawDmg = Math.max(1, getEffectiveDmg(unit) - targetArmor);
+                target.health -= rawDmg;
+
+                if ('animUnit' in target && (target as GameUnit).animUnit) {
+                  const tUnit = target as GameUnit;
+                  if (tUnit.animUnit && tUnit.animUnit.state !== 'hurt' && tUnit.animUnit.state !== 'death') {
+                    tUnit.animUnit.play('hurt');
+                  }
+                }
+                spawnFloatingText(`-${rawDmg}`, target.position.x, 3, target.position.z, '#FF4444');
                 spawnParticles(target.position.x, 1.0, target.position.z, 'spark', 4);
-              }
-              
-              if (target.healthBar) {
-                const healthFill = target.healthBar.children.find(c => c.name === 'healthFill') as THREE.Mesh;
-                if (healthFill) {
-                  const healthPercent = Math.max(0, target.health / target.maxHealth);
-                  healthFill.scale.x = healthPercent;
-                  (healthFill.material as THREE.MeshBasicMaterial).color.setHex(
-                    healthPercent > 0.5 ? 0x00ff00 : healthPercent > 0.25 ? 0xffff00 : 0xff0000
-                  );
+
+                if (target.healthBar) {
+                  const healthFill = target.healthBar.children.find(c => c.name === 'healthFill') as THREE.Mesh;
+                  if (healthFill) {
+                    const hp = Math.max(0, target.health / target.maxHealth);
+                    healthFill.scale.x = hp;
+                    (healthFill.material as THREE.MeshBasicMaterial).color.setHex(
+                      hp > 0.5 ? 0x00ff00 : hp > 0.25 ? 0xffff00 : 0xff0000
+                    );
+                  }
                 }
               }
             }
@@ -2354,6 +2739,9 @@ export default function Wargus() {
   useEffect(() => {
     if (!rendererRef.current || !sceneRef.current || !cameraRef.current) return;
     
+    const EDGE_MARGIN = 30; // px from viewport edge triggers pan
+    const EDGE_SPEED  = 12; // world units/sec
+
     const animate = () => {
       const now = performance.now();
       const deltaTime = Math.min((now - lastTimeRef.current) / 1000, 0.1);
@@ -2363,10 +2751,30 @@ export default function Wargus() {
         updateGame(deltaTime);
         updateParticles(deltaTime);
         updateBuildingFireEffects(deltaTime);
-        // Update all animation mixers
         unitsRef.current.forEach(u => {
           if (u.animUnit) u.animUnit.update(deltaTime);
         });
+
+        // ── Edge scroll: pan camera when mouse is near viewport edges ──
+        if (containerRef.current) {
+          const rect = containerRef.current.getBoundingClientRect();
+          const mx = mousePosRef.current.x - rect.left;
+          const my = mousePosRef.current.y - rect.top;
+          const w = rect.width, h = rect.height;
+          let dx = 0, dz = 0;
+          if (mx > 0 && mx < w && my > 0 && my < h) {
+            if (mx < EDGE_MARGIN)   dx -= EDGE_SPEED * deltaTime;
+            if (mx > w-EDGE_MARGIN) dx += EDGE_SPEED * deltaTime;
+            if (my < EDGE_MARGIN)   dz -= EDGE_SPEED * deltaTime;
+            if (my > h-EDGE_MARGIN) dz += EDGE_SPEED * deltaTime;
+          }
+          if (dx !== 0 || dz !== 0) {
+            setCameraPosition(prev => ({
+              x: Math.max(5, Math.min(MAP_SIZE-5, prev.x + dx)),
+              z: Math.max(5, Math.min(MAP_SIZE-5, prev.z + dz)),
+            }));
+          }
+        }
       }
       
       const elapsed = now / 1000;
@@ -2407,6 +2815,10 @@ export default function Wargus() {
     canvas.addEventListener('mousemove', handleMouseMove);
     canvas.addEventListener('mousedown', handleMouseDown);
     canvas.addEventListener('mouseup', handleMouseUp);
+
+    // Track mouse position globally for edge-scroll
+    const trackMouse = (e: MouseEvent) => { mousePosRef.current = { x: e.clientX, y: e.clientY }; };
+    window.addEventListener('mousemove', trackMouse);
     
     return () => {
       canvas.removeEventListener('click', handleClick);
@@ -2414,6 +2826,7 @@ export default function Wargus() {
       canvas.removeEventListener('mousemove', handleMouseMove);
       canvas.removeEventListener('mousedown', handleMouseDown);
       canvas.removeEventListener('mouseup', handleMouseUp);
+      window.removeEventListener('mousemove', trackMouse);
     };
   }, [handleClick, handleMouseMove, handleMouseDown, handleMouseUp]);
 
@@ -2452,11 +2865,17 @@ export default function Wargus() {
         case 'm':
           setCurrentCommand('move');
           break;
+        case 'a':
+          setCurrentCommand('attack');
+          break;
         case 'p':
           setCurrentCommand('patrol');
           break;
         case 'h':
           issueOrder('hold');
+          break;
+        case 's':
+          if (!e.ctrlKey) issueOrder('stop');
           break;
         case 'b':
           if (selectedUnits.some(id => { const found = unitsRef.current.find(u => u.id === id); return found && isWorkerUnit(found.type); })) {
@@ -2466,6 +2885,59 @@ export default function Wargus() {
         case 'g':
           setCurrentCommand('gather');
           break;
+        case 'f': {
+          // F — center camera on selected units / buildings
+          const selU = unitsRef.current.filter(u => selectedUnits.includes(u.id));
+          if (selU.length > 0) {
+            const cx = selU.reduce((s, u) => s + u.position.x, 0) / selU.length;
+            const cz = selU.reduce((s, u) => s + u.position.z, 0) / selU.length;
+            setCameraPosition({ x: Math.max(5, Math.min(MAP_SIZE-5, cx)), z: Math.max(5, Math.min(MAP_SIZE-5, cz)) });
+          } else if (selectedBuilding) {
+            const b = buildingsRef.current.find(b => b.id === selectedBuilding);
+            if (b) setCameraPosition({ x: Math.max(5, Math.min(MAP_SIZE-5, b.position.x)), z: Math.max(5, Math.min(MAP_SIZE-5, b.position.z)) });
+          }
+          break;
+        }
+        case 'tab': {
+          e.preventDefault();
+          // Tab — cycle to next idle player unit
+          const idle = unitsRef.current.filter(u =>
+            u.faction === playerFaction && !u.attackTarget && !u.targetPosition
+          );
+          if (idle.length > 0) {
+            const cur = selectedUnits[0];
+            const idx = idle.findIndex(u => u.id === cur);
+            const next = idle[(idx + 1) % idle.length];
+            setSelectedUnits([next.id]);
+            setSelectedBuilding(null);
+            setCameraPosition({ x: Math.max(5, Math.min(MAP_SIZE-5, next.position.x)), z: Math.max(5, Math.min(MAP_SIZE-5, next.position.z)) });
+          }
+          break;
+        }
+        case 'z': {
+          // Z — select all on-screen units of same type
+          if (selectedUnits.length > 0) {
+            const first = unitsRef.current.find(u => u.id === selectedUnits[0]);
+            if (first) {
+              const sameType = unitsRef.current
+                .filter(u => u.faction === playerFaction && u.type === first.type && u.isVisible)
+                .slice(0, 12)
+                .map(u => u.id);
+              if (sameType.length > 0) setSelectedUnits(sameType);
+            }
+          }
+          break;
+        }
+      }
+
+      // Ctrl+A — select all visible player units
+      if (e.ctrlKey && e.key.toLowerCase() === 'a') {
+        e.preventDefault();
+        const all = unitsRef.current
+          .filter(u => u.faction === playerFaction && u.isVisible)
+          .slice(0, 24)
+          .map(u => u.id);
+        if (all.length > 0) { setSelectedUnits(all); setSelectedBuilding(null); }
       }
       
       if (e.ctrlKey && e.key >= '1' && e.key <= '9') {
@@ -2531,87 +3003,79 @@ export default function Wargus() {
       <div className="min-h-screen bg-gradient-to-b from-[#1a0a00] via-[#2d1810] to-[#1a0a00] text-white relative overflow-hidden">
         <div className="absolute inset-0 z-0 grid grid-cols-2 grid-rows-2 opacity-20">
           <img src={heroStoneGuardian} alt="" className="w-full h-full object-cover" />
-          <img src={heroDeathMage} alt="" className="w-full h-full object-cover" />
-          <img src={heroHolyPaladin} alt="" className="w-full h-full object-cover" />
-          <img src={heroOrcShaman} alt="" className="w-full h-full object-cover" />
+          <img src={heroDeathMage}     alt="" className="w-full h-full object-cover" />
+          <img src={heroHolyPaladin}   alt="" className="w-full h-full object-cover" />
+          <img src={heroOrcShaman}     alt="" className="w-full h-full object-cover" />
         </div>
-        <div className="absolute inset-0 z-0 bg-gradient-to-b from-[#1a0a00]/60 via-[#2d1810]/40 to-[#1a0a00]/70" />
+        <div className="absolute inset-0 z-0 bg-gradient-to-b from-[#1a0a00]/70 via-[#2d1810]/50 to-[#1a0a00]/80" />
         <div className="absolute top-4 left-4 z-10">
           <Link href="/super-engine">
-            <Button variant="outline" className="border-amber-600 text-amber-400 hover:bg-amber-600 hover:text-black" data-testid="button-back">
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Back
+            <Button variant="outline" className="border-amber-600 text-amber-400 hover:bg-amber-600 hover:text-black">
+              <ArrowLeft className="w-4 h-4 mr-2" />Back
             </Button>
           </Link>
         </div>
-        
-        <div className="relative z-10 flex flex-col items-center justify-center min-h-screen p-8">
-          <div className="relative mb-4">
-            <h1 className="text-7xl font-bold text-transparent bg-clip-text bg-gradient-to-b from-yellow-300 via-amber-500 to-amber-800 drop-shadow-lg"
-                style={{ textShadow: '3px 3px 6px rgba(0,0,0,0.8)' }}>
-              WARGUS
-            </h1>
-          </div>
-          <p className="text-lg text-amber-200/80 mb-10 mt-8">3D Real-Time Strategy • {Object.keys(FACTIONS).length} Factions • {MAP_SIZE}×{MAP_SIZE} Map</p>
-          
-          <div className="bg-[#2d1a10] border-4 border-amber-700 rounded-lg p-8 max-w-md">
-            <h2 className="text-center text-2xl text-amber-400 mb-6 border-b-2 border-amber-700 pb-2">
-              ⚔️ SELECT FACTION ⚔️
-            </h2>
-            
-            <div className="space-y-3">
-              <button
-                onClick={() => startGame('pve', 'crusade')}
-                className="w-full bg-gradient-to-r from-blue-900 via-blue-700 to-blue-900 border-2 border-blue-400 rounded p-4 hover:from-blue-800 hover:via-blue-600 hover:to-blue-800 transition-all"
-                data-testid="button-play-crusade"
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-3xl">👑</span>
-                  <div className="text-center">
-                    <div className="text-xl font-bold text-blue-200">CRUSADE</div>
-                    <div className="text-sm text-blue-300">{FACTIONS.crusade.races.join(' + ')} • {FACTIONS.crusade.motto}</div>
-                  </div>
-                  <span className="text-3xl">🛡️</span>
-                </div>
-              </button>
 
-              <button
-                onClick={() => startGame('pve', 'fabled')}
-                className="w-full bg-gradient-to-r from-green-900 via-green-700 to-green-900 border-2 border-green-400 rounded p-4 hover:from-green-800 hover:via-green-600 hover:to-green-800 transition-all"
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-3xl">🌳</span>
-                  <div className="text-center">
-                    <div className="text-xl font-bold text-green-200">FABLED</div>
-                    <div className="text-sm text-green-300">{FACTIONS.fabled.races.join(' + ')} • {FACTIONS.fabled.motto}</div>
-                  </div>
-                  <span className="text-3xl">🧝</span>
-                </div>
-              </button>
+        <div className="relative z-10 flex flex-col items-center justify-center min-h-screen p-6 gap-6">
+          <h1 className="text-7xl font-black text-transparent bg-clip-text bg-gradient-to-b from-yellow-300 via-amber-500 to-amber-800"
+              style={{textShadow:'3px 3px 8px rgba(0,0,0,0.9)'}}>WARGUS</h1>
+          <p className="text-amber-300/70 text-sm -mt-4">3D Real-Time Strategy • Grudge Studio • Canonical Assets from R2/D1</p>
 
-              <button
-                onClick={() => startGame('pve', 'legion')}
-                className="w-full bg-gradient-to-r from-red-900 via-red-700 to-red-900 border-2 border-red-400 rounded p-4 hover:from-red-800 hover:via-red-600 hover:to-red-800 transition-all"
-                data-testid="button-play-legion"
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-3xl">💀</span>
-                  <div className="text-center">
-                    <div className="text-xl font-bold text-red-200">LEGION</div>
-                    <div className="text-sm text-red-300">{FACTIONS.legion.races.join(' + ')} • {FACTIONS.legion.motto}</div>
-                  </div>
-                  <span className="text-3xl">⚔️</span>
-                </div>
-              </button>
-            </div>
-            
-            <div className="mt-6 pt-4 border-t border-amber-800 text-center text-amber-500 text-sm">
-              Press SPACE to pause • WASD to scroll • Mouse wheel to zoom
+          {/* ─ Map Size Selector ─ */}
+          <div className="bg-[#1c0f08]/90 border-2 border-amber-800 rounded-xl p-4 w-full max-w-lg">
+            <h2 className="text-amber-400 text-sm font-bold tracking-widest uppercase mb-3 border-b border-amber-900 pb-2">🗺️ Map Size</h2>
+            <div className="grid grid-cols-3 gap-2">
+              {(Object.keys(MAP_SIZE_CFG) as MapSizeKey[]).map(k => {
+                const cfg = MAP_SIZE_CFG[k];
+                const isActive = mapSizeKey === k;
+                return (
+                  <button key={k}
+                    onClick={() => setMapSizeKey(k)}
+                    className={`flex flex-col items-center p-3 rounded-lg border-2 transition-all
+                      ${isActive ? 'border-amber-400 bg-amber-900/60 text-amber-200'
+                                 : 'border-amber-900/60 bg-black/30 text-amber-500 hover:border-amber-700 hover:bg-amber-900/30'}`}
+                  >
+                    <span className="text-2xl mb-1">{k==='standard'?'🗻':k==='large'?'🌍':'🌌'}</span>
+                    <span className="font-bold text-xs">{cfg.label}</span>
+                    <span className="text-[10px] opacity-70 mt-0.5">{cfg.desc}</span>
+                  </button>
+                );
+              })}
             </div>
           </div>
-          
-          <div ref={containerRef} className="hidden" />
+
+          {/* ─ Faction + Mode Selector ─ */}
+          <div className="bg-[#1c0f08]/90 border-2 border-amber-800 rounded-xl p-4 w-full max-w-lg">
+            <h2 className="text-amber-400 text-sm font-bold tracking-widest uppercase mb-3 border-b border-amber-900 pb-2">⚔️ Select Faction</h2>
+            <div className="space-y-2">
+              {[
+                { id:'crusade', label:'CRUSADE', sub:`${FACTIONS.crusade.races.join(' + ')} • ${FACTIONS.crusade.motto}`, color:'blue',  left:'👑', right:'🛡️' },
+                { id:'fabled',  label:'FABLED',  sub:`${FACTIONS.fabled.races.join(' + ')} • ${FACTIONS.fabled.motto}`,   color:'green', left:'🌳', right:'🧙' },
+                { id:'legion',  label:'LEGION',  sub:`${FACTIONS.legion.races.join(' + ')} • ${FACTIONS.legion.motto}`,   color:'red',   left:'💀', right:'⚔️' },
+              ].map(f => (
+                <button key={f.id}
+                  onClick={() => startGame('pve', f.id as Faction, mapSizeKey)}
+                  className={`w-full bg-gradient-to-r from-${f.color}-900 via-${f.color}-800 to-${f.color}-900
+                    border-2 border-${f.color}-600 rounded-lg p-3 hover:from-${f.color}-800 hover:via-${f.color}-700
+                    hover:to-${f.color}-800 transition-all`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-3xl">{f.left}</span>
+                    <div className="text-center">
+                      <div className={`text-lg font-black text-${f.color}-200`}>{f.label}</div>
+                      <div className={`text-xs text-${f.color}-300/80`}>{f.sub}</div>
+                    </div>
+                    <span className="text-3xl">{f.right}</span>
+                  </div>
+                </button>
+              ))}
+            </div>
+            <div className="mt-3 pt-3 border-t border-amber-900/60 text-center text-amber-600 text-xs">
+              SPACE pause • WASD/Edge scroll • Wheel zoom • F focus • Tab idle • Z same type • Ctrl+A all
+            </div>
+          </div>
         </div>
+        <div ref={containerRef} className="hidden" />
       </div>
     );
   }
@@ -2642,9 +3106,50 @@ export default function Wargus() {
     );
   }
 
+  // ── WC3 HUD helpers ──
+  const NOW_UI = gameTotalTimeRef.current;
+  const equipSlots: {slot: EquipSlot; label: string; pos: string}[] = [
+    { slot:'weapon',  label:'WPN',  pos:'top-left'  },
+    { slot:'offhand', label:'OFF',  pos:'top-right' },
+    { slot:'armor',   label:'ARM',  pos:'mid-left'  },
+    { slot:'helmet',  label:'HLM',  pos:'mid-right' },
+    { slot:'boots',   label:'BTS',  pos:'btm-left'  },
+    { slot:'ring',    label:'RNG',  pos:'btm-right' },
+  ];
+
+  // WC3 3×3 command card layout
+  // Row 0: abilities Q/W/E (slots 0/1/2)
+  // Row 1: abilities R/T + blank
+  // Row 2: unit-specific bottom commands
+  const firstUnit = selectedUnitData[0];
+  const unitAbilities = firstUnit?.abilities ?? [];
+  const bottomCmds = firstUnit ? (
+    isWorkerUnit(firstUnit.type)
+      ? ['gather','build','repair','move','stop','attackmove']
+      : uStat(firstUnit.type).role === 'siege'
+        ? ['move','stop','patrol','attack']
+        : ['attack','attackmove','patrol','move','stop','hold']
+  ) : [];
+
+  const CMD_GRID_9 = [
+    // Row 0: abilities
+    unitAbilities[0] ? { type:'ability' as const, data: unitAbilities[0] } : null,
+    unitAbilities[1] ? { type:'ability' as const, data: unitAbilities[1] } : null,
+    unitAbilities[2] ? { type:'ability' as const, data: unitAbilities[2] } : null,
+    // Row 1: abilities
+    unitAbilities[3] ? { type:'ability' as const, data: unitAbilities[3] } : null,
+    unitAbilities[4] ? { type:'ability' as const, data: unitAbilities[4] } : null,
+    null,
+    // Row 2: standard orders
+    bottomCmds[0] ? { type:'order' as const, data: COMMAND_ICONS[bottomCmds[0]], cmd: bottomCmds[0] as OrderType } : null,
+    bottomCmds[1] ? { type:'order' as const, data: COMMAND_ICONS[bottomCmds[1]], cmd: bottomCmds[1] as OrderType } : null,
+    bottomCmds[2] ? { type:'order' as const, data: COMMAND_ICONS[bottomCmds[2]], cmd: bottomCmds[2] as OrderType } : null,
+  ];
+  const ABILITY_HOTKEYS = ['Q','W','E','R','T'];
+
   return (
     <div className="relative w-full h-screen bg-black overflow-hidden">
-      <div ref={containerRef} className="absolute inset-0" style={{ bottom: '140px', cursor: cursorStyle }} data-testid="game-container" />
+      <div ref={containerRef} className="absolute inset-0" style={{ bottom: '182px', cursor: cursorStyle }} data-testid="game-container" />
       
       {dragSelect && (
         <div
@@ -2802,238 +3307,361 @@ export default function Wargus() {
         </div>
       )}
       
-      <div className="absolute bottom-0 left-0 right-0 h-[140px] bg-gradient-to-t from-[#1a0a00] via-[#2d1810] to-[#1a0a00] border-t-4 border-amber-700 flex z-10">
-        <div className="w-[160px] p-2 border-r-2 border-amber-800">
-          <canvas 
-            ref={minimapRef} 
-            width={140} 
-            height={120} 
-            className="w-full h-full border-2 border-amber-700 cursor-crosshair"
+      {/* WC3-style HUD — 182px, craftpix fantasy theme, canonical CDN portraits + ObjectStore icons */}
+      <div className="absolute bottom-0 left-0 right-0 h-[182px] flex z-10"
+           style={{background:'linear-gradient(to top, #120800 0%, #1e0d04 55%, #2a1508 100%)',
+                   borderTop:'3px solid #92400e', boxShadow:'0 -4px 24px rgba(0,0,0,0.7)'}}>
+
+        {/* ─ MINIMAP ─ */}
+        <div className="w-[168px] p-2 flex-shrink-0 border-r border-amber-900/60">
+          <canvas ref={minimapRef} width={152} height={152}
+            className="w-full h-full cursor-crosshair rounded"
+            style={{border:'2px solid #92400e',boxShadow:'0 0 8px rgba(146,64,14,0.5)'}}
             onClick={handleMinimapClick}
-            onContextMenu={(e) => { e.preventDefault(); handleMinimapClick(e); }}
+            onContextMenu={e => { e.preventDefault(); handleMinimapClick(e); }}
             data-testid="minimap"
           />
         </div>
-        
-        <div className="w-[220px] p-2 border-r-2 border-amber-800 flex flex-col items-center justify-center overflow-hidden">
-          {selectedUnitData.length === 1 && firstSelectedUnit && (
+
+        {/* ─ PORTRAIT + UNIT INFO ─ */}
+        <div className="w-[206px] flex-shrink-0 p-2 border-r border-amber-900/60 flex flex-col gap-1">
+          {firstSelectedUnit ? (
             <>
-              <div className="text-4xl mb-1">{uStat(firstSelectedUnit.type).icon}</div>
-              <div className="text-amber-300 font-bold text-sm">{uStat(firstSelectedUnit.type).name}</div>
-              <div className="flex items-center gap-1 mt-1 w-full px-2">
-                <span className="text-xs text-red-400">♥</span>
-                <div className="flex-1 bg-gray-800 h-2 rounded">
-                  <div className="h-full rounded transition-all" style={{
-                    width: `${(firstSelectedUnit.health / firstSelectedUnit.maxHealth) * 100}%`,
-                    backgroundColor: firstSelectedUnit.health / firstSelectedUnit.maxHealth > 0.5 ? '#22c55e' : firstSelectedUnit.health / firstSelectedUnit.maxHealth > 0.25 ? '#eab308' : '#ef4444'
-                  }} />
+              {/* Portrait: CDN race image with emoji fallback */}
+              <div className="flex gap-2">
+                <div className="relative w-[72px] h-[72px] flex-shrink-0 rounded overflow-hidden"
+                     style={{border:'2px solid '+factionHex(firstSelectedUnit.faction),
+                             boxShadow:'0 0 8px '+factionHex(firstSelectedUnit.faction)+'66'}}>
+                  <img src={getUnitPortrait(firstSelectedUnit.type)} alt=""
+                    className="w-full h-full object-cover object-top"
+                    onError={e => { (e.target as HTMLImageElement).style.display='none'; }}
+                  />
+                  <div className="absolute inset-0 flex items-center justify-center text-4xl"
+                       style={{pointerEvents:'none'}}>
+                    {uStat(firstSelectedUnit.type).icon}
+                  </div>
+                  {/* Tier-color border overlay for equipped weapon */}
+                  {firstSelectedUnit.equipment.weapon && (
+                    <div className="absolute bottom-0 right-0 w-4 h-4 rounded-tl text-[9px] flex items-center justify-center"
+                         style={{background: firstSelectedUnit.equipment.weapon.tierColor}}>
+                      T{firstSelectedUnit.equipment.weapon.tier}
+                    </div>
+                  )}
                 </div>
-                <span className="text-xs text-green-400 w-16 text-right">{Math.ceil(firstSelectedUnit.health)}/{firstSelectedUnit.maxHealth}</span>
+                <div className="flex-1 flex flex-col justify-between">
+                  <div>
+                    <div className="text-amber-200 font-bold text-xs leading-none">{uStat(firstSelectedUnit.type).name}</div>
+                    <div className="text-[10px] mt-0.5" style={{color:factionHex(firstSelectedUnit.faction)}}>
+                      {FACTIONS[firstSelectedUnit.faction]?.name} • {uStat(firstSelectedUnit.type).role}
+                    </div>
+                  </div>
+                  {/* HP bar */}
+                  <div>
+                    <div className="flex justify-between text-[10px] mb-0.5">
+                      <span className="text-red-400">❤️ HP</span>
+                      <span className="text-green-300">{Math.ceil(firstSelectedUnit.health)}/{firstSelectedUnit.maxHealth}</span>
+                    </div>
+                    <div className="w-full bg-black/60 h-2 rounded-full overflow-hidden" style={{border:'1px solid #333'}}>
+                      <div className="h-full rounded-full transition-all" style={{
+                        width:`${Math.max(0,(firstSelectedUnit.health/firstSelectedUnit.maxHealth)*100)}%`,
+                        background: firstSelectedUnit.health/firstSelectedUnit.maxHealth > 0.5 ? '#22c55e'
+                                  : firstSelectedUnit.health/firstSelectedUnit.maxHealth > 0.25 ? '#eab308' : '#ef4444',
+                        boxShadow:'0 0 4px currentColor'
+                      }}/>
+                    </div>
+                    {/* Mana bar */}
+                    <div className="w-full bg-black/60 h-1.5 rounded-full mt-0.5 overflow-hidden" style={{border:'1px solid #333'}}>
+                      <div className="h-full rounded-full bg-blue-500 transition-all"
+                           style={{width:`${Math.max(0,(firstSelectedUnit.mana/firstSelectedUnit.maxMana)*100)}%`}}/>
+                    </div>
+                  </div>
+                </div>
               </div>
-              <div className="text-amber-500 text-xs mt-1">
-                ⚔️{firstSelectedUnit.damage} 🛡️{firstSelectedUnit.armor} 📏{firstSelectedUnit.range.toFixed(1)}
+              {/* Stat row using effective values */}
+              <div className="grid grid-cols-4 gap-0.5 text-center text-[10px]">
+                {[
+                  ['⚔️', getEffectiveDmg(firstSelectedUnit), 'DMG'],
+                  ['🛡️', getEffectiveArmor(firstSelectedUnit), 'ARM'],
+                  ['💨', getEffectiveSpeed(firstSelectedUnit).toFixed(1), 'SPD'],
+                  ['📏', getEffectiveRange(firstSelectedUnit).toFixed(1), 'RNG'],
+                ].map(([ico, val, lbl]) => (
+                  <div key={String(lbl)} className="bg-black/40 rounded px-1 py-0.5">
+                    <div className="text-xs">{ico}</div>
+                    <div className="text-amber-200 font-bold">{val}</div>
+                    <div className="text-amber-600">{lbl}</div>
+                  </div>
+                ))}
               </div>
               {firstSelectedUnit.currentOrder && (
-                <div className="text-cyan-400 text-xs mt-1">
+                <div className="text-cyan-400 text-[10px] text-center">
                   {COMMAND_ICONS[firstSelectedUnit.currentOrder]?.icon} {COMMAND_ICONS[firstSelectedUnit.currentOrder]?.name}
                 </div>
               )}
-              {firstSelectedUnit.groupNumber && (
-                <div className="text-amber-600 text-xs">Group {firstSelectedUnit.groupNumber}</div>
-              )}
             </>
-          )}
-          {selectedUnitData.length > 1 && (
+          ) : selectedBuildingData ? (
+            <>
+              <div className="flex gap-2 items-start">
+                <div className="text-5xl">{bStat(selectedBuildingData.type).icon}</div>
+                <div className="flex-1">
+                  <div className="text-amber-200 font-bold text-xs">{bStat(selectedBuildingData.type).name}</div>
+                  <div className="text-[10px] text-amber-500">{selectedBuildingData.faction} • {bStat(selectedBuildingData.type).role}</div>
+                  <div className="mt-1">
+                    <div className="text-[10px] text-red-400">❤️ {Math.ceil(selectedBuildingData.health)}/{selectedBuildingData.maxHealth}</div>
+                    <div className="w-full bg-black/60 h-2 rounded mt-0.5" style={{border:'1px solid #333'}}>
+                      <div className="h-full rounded transition-all bg-green-500" style={{width:`${(selectedBuildingData.health/selectedBuildingData.maxHealth)*100}%`}}/>
+                    </div>
+                    {selectedBuildingData.isConstructing && (
+                      <>
+                        <div className="text-amber-500 text-[10px] mt-0.5">🚧 {Math.floor(selectedBuildingData.constructionProgress)}%</div>
+                        <div className="w-full bg-black/60 h-1.5 rounded" style={{border:'1px solid #333'}}>
+                          <div className="h-full bg-amber-500 rounded transition-all" style={{width:`${selectedBuildingData.constructionProgress}%`}}/>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </>
+          ) : selectedUnitData.length > 1 ? (
             <div className="w-full h-full overflow-y-auto">
-              <div className="text-amber-400 text-xs font-bold mb-1 text-center">{selectedUnitData.length} units selected</div>
-              <div className="grid grid-cols-4 gap-0.5">
-                {selectedUnitData.slice(0, 16).map(u => (
-                  <button
-                    key={u.id}
+              <div className="text-amber-400 text-[10px] font-bold mb-1 text-center">{selectedUnitData.length} units</div>
+              <div className="grid grid-cols-5 gap-0.5">
+                {selectedUnitData.slice(0, 20).map(u => (
+                  <button key={u.id}
                     onClick={() => { setSelectedUnits([u.id]); setSelectedBuilding(null); }}
-                    className="flex flex-col items-center p-0.5 rounded border border-amber-800/50 hover:border-amber-400 bg-amber-900/20 transition-all"
+                    className="flex flex-col items-center p-0.5 rounded hover:bg-amber-900/40 transition-all"
+                    style={{border:`1px solid ${factionHex(u.faction)}44`}}
                   >
-                    <span className="text-lg leading-none">{uStat(u.type).icon}</span>
-                    <div className="w-full bg-gray-800 h-1 rounded mt-0.5">
-                      <div className="h-full rounded" style={{
-                        width: `${(u.health / u.maxHealth) * 100}%`,
-                        backgroundColor: u.health / u.maxHealth > 0.5 ? '#22c55e' : '#ef4444'
-                      }} />
+                    <span className="text-base leading-none">{uStat(u.type).icon}</span>
+                    <div className="w-full bg-black/60 h-0.5 rounded mt-0.5" style={{border:'none'}}>
+                      <div className="h-full rounded"
+                           style={{width:`${(u.health/u.maxHealth)*100}%`,background:u.health/u.maxHealth>0.5?'#22c55e':'#ef4444'}}/>
                     </div>
                   </button>
                 ))}
               </div>
-              {selectedUnitData.length > 16 && (
-                <div className="text-amber-500 text-xs text-center mt-1">+{selectedUnitData.length - 16} more</div>
-              )}
             </div>
-          )}
-          {selectedBuildingData && (
-            <>
-              <div className="text-4xl mb-1">{bStat(selectedBuildingData.type).icon}</div>
-              <div className="text-amber-300 font-bold text-sm">{bStat(selectedBuildingData.type).name}</div>
-              <div className="flex items-center gap-1 mt-1 w-full px-2">
-                <span className="text-xs text-red-400">♥</span>
-                <div className="flex-1 bg-gray-800 h-2 rounded">
-                  <div className="h-full rounded transition-all" style={{
-                    width: `${(selectedBuildingData.health / selectedBuildingData.maxHealth) * 100}%`,
-                    backgroundColor: selectedBuildingData.health / selectedBuildingData.maxHealth > 0.5 ? '#22c55e' : '#ef4444'
-                  }} />
-                </div>
-                <span className="text-xs text-green-400 w-16 text-right">{Math.ceil(selectedBuildingData.health)}/{selectedBuildingData.maxHealth}</span>
-              </div>
-              {selectedBuildingData.isConstructing && (
-                <div className="w-full mt-1 px-2">
-                  <div className="text-amber-500 text-xs text-center">Building... {Math.floor(selectedBuildingData.constructionProgress)}%</div>
-                  <div className="w-full bg-gray-800 h-2 rounded mt-1">
-                    <div className="bg-amber-500 h-full rounded transition-all" style={{ width: `${selectedBuildingData.constructionProgress}%` }} />
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-          {!firstSelectedUnit && !selectedBuildingData && (
-            <div className="text-amber-600 text-sm text-center">
-              <div className="text-2xl mb-1">🎮</div>
-              No selection
+          ) : (
+            <div className="flex-1 flex flex-col items-center justify-center text-amber-700">
+              <div className="text-3xl mb-1">🏙️</div>
+              <div className="text-xs">{MAP_SIZE_CFG[mapSizeKey]?.label}</div>
+              <div className="text-[10px] mt-0.5 text-amber-800">Click to select</div>
             </div>
           )}
         </div>
-        
+
+        {/* ─ EQUIPMENT SLOTS (6) — CDN icons from ObjectStore ─ */}
+        {firstSelectedUnit && (
+          <div className="w-[156px] flex-shrink-0 p-1.5 border-r border-amber-900/60">
+            <div className="text-[9px] text-amber-600 font-bold tracking-widest uppercase mb-1 text-center">⛓️ Equipment</div>
+            <div className="grid grid-cols-2 gap-1">
+              {equipSlots.map(({ slot, label }) => {
+                const item = firstSelectedUnit.equipment[slot];
+                return (
+                  <div key={slot}
+                    className="relative flex flex-col items-center justify-center rounded cursor-pointer
+                               transition-all hover:brightness-125 group"
+                    style={{
+                      width:68, height:58,
+                      border: item ? `2px solid ${item.tierColor}` : '1px solid #44220f',
+                      background: item ? `${item.tierColor}18` : 'rgba(0,0,0,0.4)',
+                      boxShadow: item ? `0 0 6px ${item.tierColor}44` : 'none',
+                    }}
+                    title={item ? `${item.name}: ${item.description}` : label}
+                  >
+                    {item ? (
+                      <>
+                        <img src={item.iconUrl} alt={item.name}
+                          className="w-8 h-8 object-contain"
+                          onError={e => { (e.target as HTMLImageElement).style.display='none'; }}
+                        />
+                        <div className="text-[8px] font-bold text-center leading-none mt-0.5"
+                             style={{color:item.tierColor}}>{item.name.split(' ').slice(-1)[0]}</div>
+                        <span className="absolute top-0.5 right-0.5 text-[7px] font-black"
+                              style={{color:item.tierColor}}>T{item.tier}</span>
+                      </>
+                    ) : (
+                      <>
+                        <div className="text-amber-800 text-lg">
+                          {slot==='weapon'?'⚔️':slot==='offhand'?'🛡️':slot==='armor'?'🥋':slot==='helmet'?'⛑️':slot==='boots'?'👟':'💍'}
+                        </div>
+                        <div className="text-[8px] text-amber-800">{label}</div>
+                      </>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* ─ COMMAND CARD (3×3 WC3 style) — abilities + orders ─ */}
         <div className="flex-1 p-2">
           {showBuildMenu && isPeasantSelected ? (
             <div className="grid grid-cols-4 gap-1 h-full">
               {getBuildingsForFaction(playerFaction).filter(bd => bd.role !== 'economy').map(bd => {
-                const type = bd.id;
-                const stats = bStat(type);
+                const stats = bStat(bd.id);
                 const canAfford = resources[playerFaction].gold >= stats.cost.gold && resources[playerFaction].lumber >= stats.cost.lumber;
                 return (
-                  <button
-                    key={type}
-                    onClick={() => { setBuildingToBuild(type); setShowBuildMenu(false); }}
+                  <button key={bd.id}
+                    onClick={() => { setBuildingToBuild(bd.id); setShowBuildMenu(false); }}
                     disabled={!canAfford}
-                    className={`flex flex-col items-center justify-center rounded border-2 transition-all text-xs
-                      ${buildingToBuild === type ? 'border-green-400 bg-green-900/50' : 
-                        canAfford ? 'border-amber-700 bg-amber-900/30 hover:bg-amber-800/50 hover:border-amber-500' : 
-                        'border-gray-700 bg-gray-900/50 opacity-50 cursor-not-allowed'}`}
-                    data-testid={`button-build-${type}`}
+                    className={`flex flex-col items-center justify-center rounded text-xs transition-all
+                      ${!canAfford ? 'opacity-40 cursor-not-allowed' : 'hover:brightness-125'}`}
+                    style={{border:`2px solid ${canAfford?'#92400e':'#333'}`, background:'rgba(0,0,0,0.5)'}}
+                    data-testid={`button-build-${bd.id}`}
                   >
                     <span className="text-2xl">{stats.icon}</span>
-                    <span className="text-amber-300 truncate w-full text-center">{stats.name}</span>
-                    <span className="text-yellow-400">{stats.cost.gold}💰 {stats.cost.lumber > 0 && `${stats.cost.lumber}🪵`}</span>
+                    <span className="text-amber-300 truncate w-full text-center text-[10px]">{stats.name}</span>
+                    <span className="text-yellow-400 text-[9px]">{stats.cost.gold}💰{stats.cost.lumber>0?` ${stats.cost.lumber}🪯`:''}</span>
                   </button>
                 );
               })}
             </div>
           ) : selectedBuildingData && bStat(selectedBuildingData.type).trains.length > 0 && !selectedBuildingData.isConstructing ? (
             <div className="h-full">
-              <div className="grid grid-cols-4 gap-1">
+              <div className="grid grid-cols-4 gap-1 mb-1">
                 {bStat(selectedBuildingData.type).trains.map(unitType => {
                   const stats = uStat(unitType);
-                  const canAfford = resources[playerFaction].gold >= stats.cost.gold && 
-                                   resources[playerFaction].lumber >= stats.cost.lumber &&
-                                   food[playerFaction].used < food[playerFaction].max;
+                  const canAfford = resources[playerFaction].gold >= stats.cost.gold &&
+                    resources[playerFaction].lumber >= stats.cost.lumber && food[playerFaction].used < food[playerFaction].max;
                   return (
-                    <button
-                      key={unitType}
-                      onClick={() => trainUnit(unitType)}
-                      disabled={!canAfford}
-                      className={`flex flex-col items-center justify-center p-2 rounded border-2 transition-all
-                        ${canAfford ? 'border-amber-700 bg-amber-900/30 hover:bg-amber-800/50 hover:border-amber-500' : 
-                          'border-gray-700 bg-gray-900/50 opacity-50 cursor-not-allowed'}`}
+                    <button key={unitType} onClick={() => trainUnit(unitType)} disabled={!canAfford}
+                      className={`flex flex-col items-center justify-center p-1 rounded transition-all
+                        ${canAfford ? 'hover:brightness-125' : 'opacity-40 cursor-not-allowed'}`}
+                      style={{border:`2px solid ${canAfford?'#92400e':'#333'}`, background:'rgba(0,0,0,0.5)'}}
                       data-testid={`button-train-${unitType}`}
                     >
-                      <span className="text-3xl">{stats.icon}</span>
-                      <span className="text-amber-300 text-xs">{stats.name}</span>
-                      <span className="text-yellow-400 text-xs">{stats.cost.gold}💰</span>
+                      <img src={getUnitPortrait(unitType)} alt=""
+                        className="w-8 h-8 object-cover rounded"
+                        onError={e => { (e.target as HTMLImageElement).style.display='none'; }}
+                      />
+                      <span className="text-lg leading-none -mt-8">{stats.icon}</span>
+                      <span className="text-amber-300 text-[10px] mt-0.5">{stats.name}</span>
+                      <span className="text-yellow-400 text-[9px]">{stats.cost.gold}💰</span>
                     </button>
                   );
                 })}
               </div>
               {selectedBuildingData.productionQueue.length > 0 && (
-                <div className="mt-2 flex items-center gap-2">
-                  <span className="text-amber-500 text-xs">Queue:</span>
-                  {selectedBuildingData.productionQueue.map((ut, i) => (
-                    <span key={i} className="text-lg">{uStat(ut).icon}</span>
+                <div className="flex items-center gap-1">
+                  <span className="text-amber-500 text-[10px]">Queue:</span>
+                  {selectedBuildingData.productionQueue.slice(0,5).map((ut, i) => (
+                    <span key={i} className="text-base">{uStat(ut).icon}</span>
                   ))}
-                  <div className="flex-1 bg-gray-800 h-2 rounded ml-2">
-                    <div className="bg-amber-500 h-full rounded transition-all" style={{ width: `${selectedBuildingData.productionProgress}%` }} />
+                  <div className="flex-1 bg-black/60 h-1.5 rounded ml-1">
+                    <div className="bg-amber-500 h-full rounded transition-all"
+                         style={{width:`${selectedBuildingData.productionProgress}%`}}/>
                   </div>
                 </div>
               )}
             </div>
           ) : selectedUnitData.length > 0 ? (
-            <div className="grid grid-cols-6 gap-1 h-full">
-              {firstSelectedUnit && uStat(firstSelectedUnit.type).commands.map(cmd => {
-                const cmdInfo = COMMAND_ICONS[cmd];
-                if (!cmdInfo) return null;
+            /* ─ WC3 3×3 Command Grid ─ */
+            <div className="grid grid-cols-3 gap-1 h-full" style={{maxHeight:158}}>
+              {CMD_GRID_9.map((slot, idx) => {
+                if (!slot) return <div key={idx} className="rounded" style={{background:'rgba(0,0,0,0.2)'}} />;
+                const isCooldownActive = slot.type === 'ability'
+                  ? NOW_UI - slot.data.lastUsed < slot.data.cooldown : false;
+                const cdPct = slot.type === 'ability' && slot.data.cooldown > 0
+                  ? Math.max(0, 1 - (NOW_UI - slot.data.lastUsed) / slot.data.cooldown) : 0;
+                const hkey = slot.type === 'ability'
+                  ? ABILITY_HOTKEYS[idx]    // Q W E R T
+                  : slot.type === 'order' ? slot.cmd.toUpperCase()[0] : '';
+                const isActive = slot.type === 'order' && currentCommand === slot.cmd;
+
                 return (
-                  <button
-                    key={cmd}
+                  <button key={idx}
                     onClick={() => {
-                      if (cmd === 'stop') issueOrder('stop');
-                      else if (cmd === 'hold') issueOrder('hold');
-                      else if (cmd === 'build') setShowBuildMenu(true);
-                      else setCurrentCommand(cmd as OrderType);
+                      if (slot.type === 'order') {
+                        if (slot.cmd === 'stop') issueOrder('stop');
+                        else if (slot.cmd === 'hold') issueOrder('hold');
+                        else if (slot.cmd === 'build') setShowBuildMenu(true);
+                        else setCurrentCommand(slot.cmd);
+                      }
+                      // ability fire TBD via game loop
                     }}
-                    className={`flex flex-col items-center justify-center rounded border-2 transition-all
-                      ${currentCommand === cmd ? 'border-green-400 bg-green-900/50' : 
-                        'border-amber-700 bg-amber-900/30 hover:bg-amber-800/50 hover:border-amber-500'}`}
-                    data-testid={`button-cmd-${cmd}`}
+                    className="relative flex flex-col items-center justify-center rounded transition-all overflow-hidden"
+                    style={{
+                      border: isActive ? '2px solid #4ade80' : '2px solid #44220f',
+                      background: isActive ? 'rgba(74,222,128,0.15)' : 'rgba(0,0,0,0.45)',
+                    }}
+                    data-testid={`button-cmd-${slot.type==='order'?slot.cmd:slot.data.id}`}
                   >
-                    <span className="text-2xl">{cmdInfo.icon}</span>
-                    <span className="text-amber-300 text-xs">{cmdInfo.name}</span>
-                    <span className="text-amber-500 text-xs">[{cmdInfo.hotkey}]</span>
+                    {/* Cooldown overlay sweep */}
+                    {isCooldownActive && (
+                      <div className="absolute inset-0 bg-black/60 z-10"
+                           style={{clipPath:`inset(${(1-cdPct)*100}% 0 0 0)`}} />
+                    )}
+                    <img
+                      src={slot.type==='ability' ? slot.data.iconUrl
+                         : `${CDN}/icons/abilities/${slot.type==='order'?slot.cmd:'move'}.png`}
+                      alt="" className="w-7 h-7 object-contain relative z-0"
+                      onError={e => { (e.target as HTMLImageElement).style.display='none'; }}
+                    />
+                    <span className="text-xl leading-none -mt-7 relative z-0">
+                      {slot.type==='ability' ? slot.data.emoji : (COMMAND_ICONS[slot.cmd]?.icon ?? '')}
+                    </span>
+                    <span className="text-[9px] text-amber-300 mt-0.5 relative z-0">
+                      {slot.type==='ability' ? slot.data.name : (COMMAND_ICONS[slot.cmd]?.name ?? '')}
+                    </span>
+                    {hkey && (
+                      <span className="absolute top-0.5 left-0.5 text-[8px] font-black text-amber-400/80">[{hkey}]</span>
+                    )}
+                    {isCooldownActive && (
+                      <span className="absolute bottom-0.5 right-0.5 text-[8px] text-amber-300 z-20">
+                        {Math.ceil(slot.data.cooldown - (NOW_UI - slot.data.lastUsed))}s
+                      </span>
+                    )}
                   </button>
                 );
               })}
             </div>
           ) : (
-            <div className="h-full flex items-center justify-center text-amber-600">
-              Select units or buildings to see commands
+            <div className="h-full flex items-center justify-center text-amber-800 text-xs">
+              Select units or buildings
             </div>
           )}
         </div>
-        
-        <div className="w-[170px] p-2 border-l-2 border-amber-800 text-xs text-amber-400 overflow-y-auto">
-          <div className="font-bold text-amber-300 mb-1 border-b border-amber-800 pb-1">GROUPS</div>
+
+        {/* ─ GROUPS + KEYS ─ */}
+        <div className="w-[148px] flex-shrink-0 p-1.5 border-l border-amber-900/60 text-[10px] text-amber-500">
+          <div className="font-bold text-amber-400 mb-1 text-[9px] tracking-widest uppercase border-b border-amber-900/60 pb-1">Groups</div>
           <div className="grid grid-cols-3 gap-0.5 mb-2">
             {[1,2,3,4,5,6,7,8,9].map(n => {
-              const group = unitGroupsRef.current[n];
-              const count = group ? group.filter(id => unitsRef.current.some(u => u.id === id)).length : 0;
+              const grp = unitGroupsRef.current[n];
+              const cnt = grp ? grp.filter(id => unitsRef.current.some(u => u.id === id)).length : 0;
               return (
-                <button
-                  key={n}
+                <button key={n}
                   onClick={() => {
-                    if (count > 0) {
-                      const validIds = group!.filter(id => unitsRef.current.some(u => u.id === id));
-                      setSelectedUnits(validIds);
-                      setSelectedBuilding(null);
+                    if (cnt > 0) {
+                      const ids = grp!.filter(id => unitsRef.current.some(u => u.id === id));
+                      setSelectedUnits(ids); setSelectedBuilding(null);
                     }
                   }}
-                  className={`text-center rounded py-0.5 border transition-all ${
-                    count > 0 
-                      ? 'border-amber-600 bg-amber-900/40 hover:bg-amber-800/60 text-amber-300' 
-                      : 'border-gray-700 bg-gray-900/30 text-gray-600'
-                  }`}
+                  className="text-center rounded py-0.5 transition-all"
+                  style={{border:`1px solid ${cnt>0?'#92400e':'#222'}`,
+                          background:cnt>0?'rgba(146,64,14,0.25)':'rgba(0,0,0,0.3)',
+                          color:cnt>0?'#fcd34d':'#555'}}
                 >
-                  <div className="font-bold">{n}</div>
-                  {count > 0 && <div className="text-[10px]">{count}</div>}
+                  <div className="font-bold text-xs">{n}</div>
+                  {cnt > 0 && <div className="text-[9px] text-amber-400">{cnt}u</div>}
                 </button>
               );
             })}
           </div>
-          <div className="font-bold text-amber-300 mb-1 border-b border-amber-800 pb-1">KEYS</div>
-          <div className="space-y-0.5">
-            <div>WASD - Scroll</div>
-            <div>Wheel - Zoom</div>
-            <div>Drag - Box Select</div>
-            <div>Shift+Click - Add</div>
-            <div>RClick - Order</div>
-            <div>Ctrl+# - Set Group</div>
-            <div>M A P H S B G</div>
-            <div>Space - Pause</div>
-            <div>Esc - Cancel</div>
+          <div className="font-bold text-amber-400 mb-0.5 text-[9px] tracking-widest uppercase border-b border-amber-900/60 pb-1">Hotkeys</div>
+          <div className="space-y-0.5 text-[9px] text-amber-700">
+            <div className="text-amber-500 font-bold">WASD • Edge • Wheel</div>
+            <div>F • Focus selection</div>
+            <div>Tab • Idle unit</div>
+            <div>Z • Same type</div>
+            <div>Ctrl+A • All units</div>
+            <div>A • Attack  M • Move</div>
+            <div>P • Patrol  H • Hold</div>
+            <div>G • Gather  B • Build</div>
+            <div>Ctrl+1-9 • Group</div>
+            <div>␣ Pause  Esc • Cancel</div>
           </div>
         </div>
       </div>
