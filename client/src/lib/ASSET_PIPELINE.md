@@ -59,8 +59,11 @@ FBX in browser = **fallback only**, not production SSOT.
 
 ## Three + Cloudflare checklist
 
-- [ ] `GLTFLoader` + `DRACOLoader` (gstatic 1.5.7)
-- [ ] Meshopt when decoder present
-- [ ] CDN CORS: assets.grudge-studio.com
-- [ ] Atlas webp on R2 under textures/grudge6/...
-- [ ] three pin toward 0.185 when upgrading fleet-wide
+- [x] `GLTFLoader` + `DRACOLoader` (gstatic 1.5.7) via `production-gltf-loader`
+- [x] Meshopt when decoder present
+- [x] CDN CORS: assets.grudge-studio.com
+- [x] Atlas webp on R2 under textures/grudge6/...
+- [x] three **^0.185.1** (fleet package.json pins)
+- [x] Rapier `@dimforge/rapier3d-compat@^0.19.3` — install with `--legacy-peer-deps` if grudge-control peers conflict
+- [x] RTS gear presets: `shared/rts-gear-presets.ts` (24 race×role)
+- [x] Building structure GLBs: `rts-building-loader.ts` → Structure_1–4

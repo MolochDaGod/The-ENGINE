@@ -27,17 +27,22 @@ import {
   type RaceId,
 } from "@shared/character-meshes";
 import type { CharacterPrefab } from "@shared/character-prefabs";
-import { toUnarmedPrefab } from "@shared/game-roster";
 import {
   loadRaceWardrobeGlb,
-  prefabFromRaceClass,
   raceFbxCandidates,
   raceGlbCandidates,
   normalizeRaceModel,
   prepareRaceMaterials,
 } from "@/engine/character/RaceEquipment";
 import type { FactionId, UnitRole } from "@shared/grudge-rts-data";
-import { FACTIONS, getUnit } from "@shared/grudge-rts-data";
+import { getUnit } from "@shared/grudge-rts-data";
+import { prefabFromRtsGear } from "@shared/rts-gear-presets";
+import {
+  animPackClipCandidates,
+  type AnimPackId,
+  loadGltfCached,
+  loadGltfInstance,
+} from "@/lib/production-gltf-loader";
 
 const CDN = "https://assets.grudge-studio.com";
 const gltfLoader = new GLTFLoader();
@@ -441,29 +446,9 @@ export async function createGrudge6RtsUnit(
   opts: CreateRtsUnitOpts,
 ): Promise<Grudge6RtsUnit | null> {
   const { race, classId, unarmed } = raceForRtsUnit(opts.unitId, opts.faction);
-  const basePrefab = prefabFromRaceClass(race, classId);
-  const prefab: CharacterPrefab = unarmed
-    ? {
-        ...toUnarmedPrefab(basePrefab),
-        equipment: {
-          ...toUnarmedPrefab(basePrefab).equipment,
-          body: "A",
-          arms: "A",
-          legs: "A",
-          head: "A",
-          shoulders: null,
-          rightHand: null,
-          rightHandType: null,
-          leftHand: null,
-          leftHandType: null,
-          shield: null,
-          utility: [],
-        },
-        animationPack: "unarmed",
-      }
-    : basePrefab;
-
   const role = opts.role ?? getUnit(opts.unitId)?.role ?? "melee";
+  // Full D1-style gear presets: 6 races × worker/warrior/ranger/mage
+  const prefab: CharacterPrefab = prefabFromRtsGear(race, role);
   const targetH =
     opts.targetHeight ??
     (role === "siege" ? 2.2 : role === "cavalry" ? 1.9 : role === "worker" ? 1.7 : 1.8);

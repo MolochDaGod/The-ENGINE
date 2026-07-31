@@ -93,7 +93,7 @@ interface GameBuilding {
   researchQueue: string[];
   researchProgress: number;
   rallyPoint: Position3D | null;
-  mesh?: THREE.Mesh;
+  mesh?: THREE.Mesh | THREE.Object3D;
   auxMeshes?: THREE.Mesh[];
   healthBar?: THREE.Group;
   isVisible: boolean;
@@ -719,16 +719,26 @@ export default function Wargus() {
     };
     
     if (sceneRef.current) {
-      const size = cSize.w;
-      const height = cSize.h;
-      const depth = cSize.d;
-      // Procedural building mesh (not skinned character wardrobe)
-      const geometry = new THREE.BoxGeometry(size, height, depth);
-      const color = factionPrimary(faction);
-      const material = new THREE.MeshStandardMaterial({ 
-        color,
-        metalness: 0.1,
-        roughness: 0.9,
+      const bRole = stats.role;
+      const fColor = factionPrimary(faction);
+      const size = cSize?.w ?? (bRole === 'economy' ? 3.2 : bRole === 'population' ? 2.0 : 2.6);
+      const height = cSize?.h ?? (bRole === 'defense' ? 5.0 : bRole === 'economy' ? 4.0 : 2.8);
+      const depth = cSize?.d ?? size;
+
+      // Placeholder until CDN Structure_*.glb loads (not race kits)
+      let geometry: THREE.BufferGeometry;
+      if (bRole === 'defense') {
+        geometry = new THREE.CylinderGeometry(size * 0.5, size * 0.6, height, 8);
+      } else if (bRole === 'cavalry_production' || bRole === 'siege_production') {
+        geometry = new THREE.BoxGeometry(size * 1.4, height * 0.75, depth);
+      } else {
+        geometry = new THREE.BoxGeometry(size, height, depth);
+      }
+
+      const material = new THREE.MeshStandardMaterial({
+        color: fColor,
+        metalness: faction === 'legion' ? 0.3 : 0.05,
+        roughness: faction === 'fabled' ? 0.95 : 0.85,
         transparent: isConstructing,
         opacity: isConstructing ? 0.5 : 1
       });
@@ -739,7 +749,38 @@ export default function Wargus() {
       mesh.userData = { buildingId: building.id, kind: 'building' };
       sceneRef.current.add(mesh);
       building.mesh = mesh;
-      
+
+      // Async structure GLB from assets CDN
+      void import('@/lib/rts-building-loader').then(({ loadBuildingStructureGlb }) => {
+        loadBuildingStructureGlb(type, bRole, fColor, { w: size, h: height, d: depth }).then((vis) => {
+          if (!vis || !sceneRef.current || !building.mesh) return;
+          sceneRef.current.remove(building.mesh);
+          const old = building.mesh as THREE.Mesh;
+          old.geometry?.dispose?.();
+          const mat = old.material;
+          if (Array.isArray(mat)) mat.forEach(m => m.dispose());
+          else if (mat) (mat as THREE.Material).dispose();
+          vis.root.position.set(x, 0, z);
+          vis.root.userData = { buildingId: building.id, kind: 'building' };
+          if (isConstructing) {
+            vis.root.traverse((o) => {
+              const m = o as THREE.Mesh;
+              if (!m.isMesh || !m.material) return;
+              const mats = Array.isArray(m.material) ? m.material : [m.material];
+              mats.forEach((mm) => {
+                const std = mm as THREE.MeshStandardMaterial;
+                if (std) {
+                  std.transparent = true;
+                  std.opacity = 0.5;
+                }
+              });
+            });
+          }
+          sceneRef.current.add(vis.root);
+          building.mesh = vis.root;
+        });
+      });
+
       building.auxMeshes = [];
       if (isTowerBldg(type)) {
         const roofGeom = new THREE.ConeGeometry(size * 0.7, 1.5, 4);
