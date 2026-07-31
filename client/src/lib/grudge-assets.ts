@@ -16,6 +16,7 @@ import * as THREE from 'three';
 import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { TextureLoader } from 'three';
 import { clone as skeletonClone } from 'three/examples/jsm/utils/SkeletonUtils.js';
+import { getProductionGltfLoader } from '@/lib/production-gltf-loader';
 
 function hasSkinnedMesh(root: THREE.Object3D): boolean {
   let found = false;
@@ -205,7 +206,13 @@ export class GrudgeAssets {
   private _failedPaths = new Set<string>();
 
   private constructor() {
-    this._loader = new GLTFLoader();
+    // Production stack: Draco + optional Meshopt (fleet / Cloudflare R2 CDN)
+    try {
+      this._loader = getProductionGltfLoader();
+    } catch {
+      this._loader = new GLTFLoader();
+      this._loader.setCrossOrigin('anonymous');
+    }
   }
 
   static getInstance(): GrudgeAssets {
@@ -615,12 +622,13 @@ export async function createAnimatedUnit(
   return unit;
 }
 
-/** Character unit if mapped to char_* — never env_structure buildings. */
+/** Character unit if mapped to rts_char_* / char_* — never env_structure buildings. */
 export function isGrudge6RtsUnit(entityId: string): boolean {
   const key = RTS_MODEL_MAP[entityId];
   if (!key) return !/hall|barracks|tower|farm|forge|mill|chapel|armory|stable|citadel|pit/i.test(entityId);
   if (key.startsWith('env_')) return false;
-  return key.startsWith('char_');
+  if (key.startsWith('rts_mount_') || key.startsWith('rts_siege_')) return false;
+  return key.startsWith('rts_char_') || key.startsWith('char_');
 }
 
 export interface Grudge6RtsUnitCompat {

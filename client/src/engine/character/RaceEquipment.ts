@@ -9,11 +9,9 @@
  */
 
 import * as THREE from "three";
-import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { clone as skeletonClone } from "three/examples/jsm/utils/SkeletonUtils.js";
 import {
   applyEquipmentVisibility,
-  portraitGlbUrl,
   type EquipmentVisibilityMode,
   type RaceId,
 } from "@shared/character-meshes";
@@ -23,11 +21,13 @@ import {
   type CharacterPrefab,
   type ClassId,
 } from "@shared/character-prefabs";
-
-const loader = new GLTFLoader();
-
-type CachedGltf = { scene: THREE.Group; animations: THREE.AnimationClip[] };
-const glbCache = new Map<string, Promise<CachedGltf>>();
+import {
+  loadGltfInstance,
+  productionRaceGlbCandidates,
+  productionRaceFbxFallback,
+  applyProductionRaceAtlas,
+  type RaceIdLite,
+} from "@/lib/production-gltf-loader";
 
 export type RaceEquipmentLoadResult = {
   scene: THREE.Group;
@@ -55,60 +55,17 @@ export function cloneRaceScene(source: THREE.Object3D): THREE.Group {
   return cloned;
 }
 
-function loadGlbCached(url: string): Promise<CachedGltf> {
-  let p = glbCache.get(url);
-  if (!p) {
-    p = new Promise((resolve, reject) => {
-      if (!url.startsWith("/")) loader.setCrossOrigin("anonymous");
-      loader.load(
-        url,
-        (gltf) => {
-          resolve({
-            scene: gltf.scene as THREE.Group,
-            animations: gltf.animations ?? [],
-          });
-        },
-        undefined,
-        reject,
-      );
-    });
-    glbCache.set(url, p);
-  }
-  return p.then((cached) => ({
-    scene: cloneRaceScene(cached.scene),
-    animations: cached.animations.map((c) => c.clone()),
-  }));
-}
-
-const ASSETS = "https://assets.grudge-studio.com";
-const GRUDGE6_RACE_FILE: Record<RaceId, string> = {
-  human: "WK_Characters",
-  barbarian: "BRB_Characters",
-  elf: "ELF_Characters",
-  dwarf: "DWF_Characters",
-  orc: "ORC_Characters",
-  undead: "UD_Characters",
-};
-
-/** Candidate URLs: Toon-RTS pack, then production grudge6 race GLB. */
+/** Production-first race GLB candidates (Draco-ready CDN). */
 export function raceGlbCandidates(race: RaceId): string[] {
-  const file = GRUDGE6_RACE_FILE[race] || "WK_Characters";
-  return [
-    portraitGlbUrl(race),
-    `${ASSETS}/asset-packs/toon-rts-characters/glb/characters/${race}.glb`,
-    `${ASSETS}/models/grudge6/races/${file}.glb`,
-    `/models/grudge/${race}.glb`,
-  ];
+  return productionRaceGlbCandidates(race as RaceIdLite);
 }
 
 export function raceFbxCandidates(race: RaceId): string[] {
-  const file = GRUDGE6_RACE_FILE[race] || "WK_Characters";
-  return [`${ASSETS}/models/grudge6/races/${file}.fbx`];
+  return [productionRaceFbxFallback(race as RaceIdLite)];
 }
 
 /**
- * Load a race wardrobe GLB (Toon-RTS D1 multi-mesh).
- * Prefers CDN textured pack; falls back to local /models/grudge.
+ * Load race wardrobe: production GLB first, SkeletonUtils instance, atlas rebind.
  */
 export async function loadRaceWardrobeGlb(
   race: RaceId,
@@ -117,8 +74,12 @@ export async function loadRaceWardrobeGlb(
   let lastErr: unknown;
   for (const url of urls) {
     try {
-      const { scene, animations } = await loadGlbCached(url);
-      return { scene, animations, sourceUrl: url };
+      const { scene, animations, sourceUrl } = await loadGltfInstance(url, {
+        forceSkinned: true,
+      });
+      // Fleet texture SSOT — webp atlas, flipY=false
+      await applyProductionRaceAtlas(scene, race as RaceIdLite);
+      return { scene, animations, sourceUrl };
     } catch (e) {
       lastErr = e;
     }

@@ -7,7 +7,6 @@
  */
 
 import * as THREE from "three";
-import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { FBXLoader } from "three/examples/jsm/loaders/FBXLoader.js";
 import {
   applyEquipmentVisibility,
@@ -28,10 +27,14 @@ import {
   cloneRaceScene,
 } from "@/engine/character/RaceEquipment";
 import type { FactionId, UnitRole } from "@shared/grudge-rts-data";
-import { FACTIONS, getUnit } from "@shared/grudge-rts-data";
+import { getUnit } from "@shared/grudge-rts-data";
+import {
+  animPackClipCandidates,
+  type AnimPackId,
+  loadGltfCached,
+  loadGltfInstance,
+} from "@/lib/production-gltf-loader";
 
-const CDN = "https://assets.grudge-studio.com";
-const gltfLoader = new GLTFLoader();
 const fbxLoader = new FBXLoader();
 
 const FACTION_RACES: Record<FactionId, [RaceId, RaceId]> = {
@@ -56,22 +59,19 @@ export function raceForRtsUnit(
   return { race: primary, classId: "warrior", unarmed: false };
 }
 
-const ANIM_URLS: Record<string, string[]> = {
-  idle: [`${CDN}/models/animations/grudge6_brb/base/Idle.glb`, `${CDN}/models/animations/grudge6_brb/base/Idle.fbx`],
-  walk: [`${CDN}/models/animations/glocomotion/walk.glb`, `${CDN}/models/animations/grudge6_brb/base/Walk.glb`],
-  run: [`${CDN}/models/animations/glocomotion/run.glb`, `${CDN}/models/animations/grudge6_brb/base/Run.glb`],
-  attack: [`${CDN}/models/animations/glocomotion/punching.glb`, `${CDN}/models/animations/grudge6_brb/base/Punching.glb`],
-  hurt: [`${CDN}/models/animations/glocomotion/hit.glb`],
-  death: [`${CDN}/models/animations/glocomotion/death.glb`],
-  gather: [`${CDN}/models/animations/glocomotion/punching.glb`],
-};
-
 const clipCache = new Map<string, Promise<THREE.AnimationClip | null>>();
 
 function stripPositionTracks(clip: THREE.AnimationClip): THREE.AnimationClip {
   const next = clip.clone();
   next.tracks = next.tracks.filter((t) => !/\.position$/i.test(t.name));
   return next;
+}
+
+function packForUnit(unarmed: boolean, classId: string): AnimPackId {
+  if (unarmed) return "unarmed";
+  if (classId === "ranger") return "longbow";
+  if (classId === "mage") return "magic";
+  return "sword_shield";
 }
 
 async function loadClipFromUrl(url: string): Promise<THREE.AnimationClip | null> {
@@ -82,7 +82,8 @@ async function loadClipFromUrl(url: string): Promise<THREE.AnimationClip | null>
         const fbx = await fbxLoader.loadAsync(url);
         return fbx.animations?.[0] ? stripPositionTracks(fbx.animations[0]) : null;
       }
-      const gltf = await gltfLoader.loadAsync(url);
+      // Draco-capable path
+      const gltf = await loadGltfCached(url);
       return gltf.animations?.[0] ? stripPositionTracks(gltf.animations[0]) : null;
     } catch {
       return null;
@@ -96,6 +97,7 @@ async function loadNamedClip(
   logical: string,
   root: THREE.Object3D,
   embedded: THREE.AnimationClip[],
+  pack: AnimPackId,
 ): Promise<THREE.AnimationClip | null> {
   const aliases: Record<string, RegExp> = {
     idle: /idle|stand/i,
@@ -111,7 +113,9 @@ async function loadNamedClip(
     const emb = embedded.find((c) => re.test(c.name));
     if (emb) return stripPositionTracks(emb);
   }
-  for (const url of ANIM_URLS[logical] ?? []) {
+  const clipKey =
+    logical === "attack2" ? "attack" : (logical as "idle" | "walk" | "run" | "attack" | "hurt" | "death" | "gather");
+  for (const url of animPackClipCandidates(pack, clipKey)) {
     const clip = await loadClipFromUrl(url);
     if (clip) {
       clip.name = logical;
@@ -371,13 +375,14 @@ export async function createGrudge6RtsUnit(opts: CreateRtsUnitOpts): Promise<Gru
   normalizeRaceModel(scene, targetH);
   scene.rotation.y = 0;
 
+  const pack = packForUnit(unarmed || role === "worker", classId);
   const clipMap: Partial<Record<RtsAnimState, THREE.AnimationClip>> = {};
   const need: RtsAnimState[] = unarmed
     ? ["idle", "walk", "run", "attack", "gather", "hurt", "death"]
     : ["idle", "walk", "run", "attack", "attack2", "hurt", "death"];
   await Promise.all(
     need.map(async (name) => {
-      const clip = await loadNamedClip(name, scene, embedded);
+      const clip = await loadNamedClip(name, scene, embedded, pack);
       if (clip) clipMap[name] = clip;
     }),
   );
@@ -410,7 +415,7 @@ export async function preloadGrudge6Rts(
     list.map(async (race) => {
       for (const url of raceGlbCandidates(race)) {
         try {
-          await gltfLoader.loadAsync(url);
+          await loadGltfInstance(url, { forceSkinned: true });
           break;
         } catch {
           /* next */
