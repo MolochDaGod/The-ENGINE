@@ -11,7 +11,7 @@ import * as CANNON from 'cannon-es';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
-import { type AnimatedUnit, createRTSAnimatedUnit, preloadRTS, RTS_MODEL_MAP, GrudgeAssets } from '@/lib/grudge-assets';
+import { type AnimatedUnit, type Grudge6RtsUnitCompat, createRTSAnimatedUnit, preloadRTS, RTS_MODEL_MAP, GrudgeAssets } from '@/lib/grudge-assets';
 import { FACTIONS, getBuildingsForFaction, getUnitsForFaction, getUnit, getBuilding, ALL_BUILDINGS, ALL_UNITS, type FactionId, type BuildingDef, type UnitDef, type UnitRole, type BuildingRole } from '@shared/grudge-rts-data';
 
 type Faction = FactionId;
@@ -111,7 +111,7 @@ interface GameUnit {
   mesh?: THREE.Mesh | THREE.Object3D;
   selectionRing?: THREE.Mesh;
   healthBar?: THREE.Group;
-  animUnit?: AnimatedUnit;
+  animUnit?: AnimatedUnit | Grudge6RtsUnitCompat;
   isVisible: boolean;
   lastSeenPosition: Position3D | null;
   // Equipment & abilities (WC3-style per-unit)
@@ -721,31 +721,39 @@ export default function Wargus() {
       const fColor = factionPrimary(faction);
       const modelScale = role === 'siege' ? 0.8 : role === 'cavalry' ? 0.6 : 0.5;
 
-      // Try loading animated 3D model from CDN (type IS the data-layer entity ID)
-      if (RTS_MODEL_MAP[type]) {
-        createRTSAnimatedUnit(type, fColor, modelScale).then(animUnit => {
-          if (animUnit && sceneRef.current) {
-            animUnit.setPosition(x, 0, z);
-            animUnit.root.userData = { unitId: unit.id };
-            sceneRef.current.add(animUnit.root);
-            unit.mesh = animUnit.root;
-            unit.animUnit = animUnit;
-          }
-        });
-      }
-
-      // Immediate fallback mesh (shown until GLB loads)
-      if (!unit.mesh) {
+      // Capsule until grudge6 race kit / vehicle GLB loads (buildings never use this path)
+      {
         const geometry = new THREE.CapsuleGeometry(size * 0.4, size * 0.6, 8, 16);
         const material = new THREE.MeshStandardMaterial({ color: fColor, metalness: 0.4, roughness: 0.6 });
         const mesh = new THREE.Mesh(geometry, material);
         mesh.position.set(x, size * 0.5, z);
         mesh.castShadow = true;
         mesh.receiveShadow = true;
-        mesh.userData = { unitId: unit.id };
+        mesh.userData = { unitId: unit.id, kind: 'unit' };
         sceneRef.current.add(mesh);
         unit.mesh = mesh;
       }
+
+      // grudge6 kit: SkeletonUtils clone, armor-only workers, bag/wood only when carrying
+      createRTSAnimatedUnit(type, fColor, modelScale, faction).then(animUnit => {
+        if (!animUnit || !sceneRef.current) return;
+        if (unit.mesh && unit.mesh !== animUnit.root) {
+          sceneRef.current.remove(unit.mesh);
+          const old = unit.mesh as THREE.Mesh;
+          old.geometry?.dispose?.();
+          const mat = old.material;
+          if (Array.isArray(mat)) mat.forEach(m => m.dispose());
+          else if (mat) (mat as THREE.Material).dispose();
+        }
+        animUnit.setPosition(x, 0, z);
+        animUnit.root.userData = { unitId: unit.id, kind: 'unit' };
+        sceneRef.current.add(animUnit.root);
+        unit.mesh = animUnit.root;
+        unit.animUnit = animUnit as AnimatedUnit;
+        if (unit.carryingResource && 'setCarrying' in animUnit && animUnit.setCarrying) {
+          animUnit.setCarrying(unit.carryingResource.type);
+        }
+      });
 
       // Selection ring
       const ringGeometry = new THREE.RingGeometry(size * 0.6, size * 0.8, 32);
@@ -2304,6 +2312,8 @@ export default function Wargus() {
               const gatherAmount = Math.min(10, resource.amount);
               resource.amount -= gatherAmount;
               unit.carryingResource = { type: resource.type, amount: gatherAmount };
+              // grudge6 workers: show bag (gold) or wood only while hauling
+              unit.animUnit?.setCarrying?.(resource.type);
               
               if (resource.amount <= 0) {
                 if (resource.type === 'lumber' && resource.mesh && resource.trunkMesh) {
@@ -2351,6 +2361,7 @@ export default function Wargus() {
               const resType = unit.carryingResource.type;
               const resAmount = unit.carryingResource.amount;
               unit.carryingResource = null;
+              unit.animUnit?.setCarrying?.(null);
               const textColor = resType === 'gold' ? '#FFD700' : '#22DD22';
               const textIcon = resType === 'gold' ? '💰' : '🪵';
               spawnFloatingText(`+${resAmount} ${textIcon}`, townhall.position.x, 5, townhall.position.z, textColor);

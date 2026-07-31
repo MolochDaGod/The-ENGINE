@@ -213,6 +213,148 @@ export function applyEquipmentVisibility(
   return { meshCount: names.length, visibleCount, mode };
 }
 
+/** RTS gather carry — bag (gold) / wood (lumber) only while hauling. */
+export type CarryVisual = "none" | "gold" | "lumber";
+
+const CARRY_OR_PROP_RE =
+  /xtra_|bone_bag|bone_wood|quiver|shield|weapon_|units_(sword|axe|hammer|mace|dagger|bow|staff|pick|spear)|(^|_)bag($|_)|(^|_)wood($|_)/i;
+
+const ARMOR_SLOT_RE = {
+  body: /(^|_)(units_)?body(_|$)/i,
+  arms: /(^|_)(units_)?arms(_|$)/i,
+  legs: /(^|_)(units_)?legs(_|$)/i,
+  head: /(^|_)(units_)?(head|helm)(_|$)/i,
+};
+
+/**
+ * HARD RTS worker kit: hide wardrobe → show one body/arms/legs/head.
+ * Bag/wood/weapons stay OFF until setCarryVisuals.
+ */
+export function applyRtsWorkerKit(
+  root: {
+    traverse: (
+      fn: (obj: {
+        name: string;
+        visible: boolean;
+        isMesh?: boolean;
+        isSkinnedMesh?: boolean;
+      }) => void,
+    ) => void;
+  },
+): { shown: string[]; hiddenProps: number; meshCount: number } {
+  type MeshObj = {
+    name: string;
+    visible: boolean;
+    isMesh?: boolean;
+    isSkinnedMesh?: boolean;
+  };
+  const meshes: MeshObj[] = [];
+  root.traverse((obj) => {
+    if ((obj as MeshObj).isMesh || (obj as MeshObj).isSkinnedMesh) {
+      meshes.push(obj as MeshObj);
+    }
+  });
+
+  for (const m of meshes) m.visible = false;
+
+  const bySlot: Record<string, MeshObj[]> = {
+    body: [],
+    arms: [],
+    legs: [],
+    head: [],
+  };
+  let hiddenProps = 0;
+
+  for (const m of meshes) {
+    const n = m.name || "";
+    if (!n || /^(Bip|mixamorig|Armature|Root|Skeleton)/i.test(n)) {
+      m.visible = true;
+      continue;
+    }
+    if (CARRY_OR_PROP_RE.test(n)) {
+      m.visible = false;
+      hiddenProps++;
+      continue;
+    }
+    if (ARMOR_SLOT_RE.body.test(n)) bySlot.body.push(m);
+    else if (ARMOR_SLOT_RE.arms.test(n)) bySlot.arms.push(m);
+    else if (ARMOR_SLOT_RE.legs.test(n)) bySlot.legs.push(m);
+    else if (ARMOR_SLOT_RE.head.test(n)) bySlot.head.push(m);
+  }
+
+  const pickOne = (list: MeshObj[]): MeshObj | undefined => {
+    if (!list.length) return undefined;
+    return (
+      list.find((m) => /_a$/i.test(m.name.replace(/\s+/g, ""))) ||
+      list.find((m) => /_a(_|\.|$)/i.test(m.name)) ||
+      list[0]
+    );
+  };
+
+  const shown: string[] = [];
+  for (const slot of ["body", "arms", "legs", "head"] as const) {
+    const one = pickOne(bySlot[slot]);
+    if (one) {
+      one.visible = true;
+      shown.push(one.name);
+    }
+  }
+
+  if (shown.length === 0) {
+    const candidates = meshes
+      .filter((m) => {
+        const n = m.name || "";
+        return n && !CARRY_OR_PROP_RE.test(n) && !/^(Bip|mixamorig|Armature)/i.test(n);
+      })
+      .sort((a, b) => {
+        const sa = (a as { isSkinnedMesh?: boolean }).isSkinnedMesh ? 0 : 1;
+        const sb = (b as { isSkinnedMesh?: boolean }).isSkinnedMesh ? 0 : 1;
+        return sa - sb;
+      });
+    for (const m of candidates.slice(0, 4)) {
+      m.visible = true;
+      shown.push(m.name);
+    }
+  }
+
+  return { shown, hiddenProps, meshCount: meshes.length };
+}
+
+/** Toggle Xtra_bag / Xtra_wood only — never armor. */
+export function setCarryVisuals(
+  root: {
+    traverse: (
+      fn: (obj: {
+        name: string;
+        visible: boolean;
+        isMesh?: boolean;
+        isSkinnedMesh?: boolean;
+      }) => void,
+    ) => void;
+  },
+  carry: CarryVisual,
+): { bag: number; wood: number } {
+  let bag = 0;
+  let wood = 0;
+  root.traverse((obj) => {
+    const isMesh =
+      (obj as { isMesh?: boolean }).isMesh ||
+      (obj as { isSkinnedMesh?: boolean }).isSkinnedMesh;
+    if (!isMesh || !obj.name) return;
+    const n = obj.name.toLowerCase();
+    const isBag = /xtra[_\s]?bag|bone[_\s]?bag/.test(n);
+    const isWood = /xtra[_\s]?wood|bone[_\s]?wood/.test(n);
+    if (isBag) {
+      obj.visible = carry === "gold";
+      if (obj.visible) bag++;
+    } else if (isWood) {
+      obj.visible = carry === "lumber";
+      if (obj.visible) wood++;
+    }
+  });
+  return { bag, wood };
+}
+
 /** CDN Toon-RTS race pack (D1) — canonical textured multi-mesh characters. */
 export const TOON_RTS_CHARACTERS_CDN =
   "https://assets.grudge-studio.com/asset-packs/toon-rts-characters/glb/characters";

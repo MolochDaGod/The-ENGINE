@@ -10,6 +10,7 @@
 
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { clone as skeletonClone } from "three/examples/jsm/utils/SkeletonUtils.js";
 import {
   applyEquipmentVisibility,
   portraitGlbUrl,
@@ -37,6 +38,23 @@ export type RaceEquipmentLoadResult = {
   meshStats: { meshCount: number; visibleCount: number; mode: EquipmentVisibilityMode };
 };
 
+/**
+ * SkeletonUtils.clone — plain scene.clone(true) breaks SkinnedMesh binding
+ * (invisible bodies, only rigid bags/wood draw).
+ */
+export function cloneRaceScene(source: THREE.Object3D): THREE.Group {
+  const cloned = skeletonClone(source) as THREE.Group;
+  cloned.traverse((o) => {
+    const sm = o as THREE.SkinnedMesh;
+    if (sm.isSkinnedMesh) {
+      sm.frustumCulled = false;
+      sm.castShadow = true;
+      sm.receiveShadow = true;
+    }
+  });
+  return cloned;
+}
+
 function loadGlbCached(url: string): Promise<CachedGltf> {
   let p = glbCache.get(url);
   if (!p) {
@@ -57,14 +75,35 @@ function loadGlbCached(url: string): Promise<CachedGltf> {
     glbCache.set(url, p);
   }
   return p.then((cached) => ({
-    scene: cached.scene.clone(true) as THREE.Group,
+    scene: cloneRaceScene(cached.scene),
     animations: cached.animations.map((c) => c.clone()),
   }));
 }
 
-/** Candidate URLs: CDN Toon-RTS first, then portal local pack. */
+const ASSETS = "https://assets.grudge-studio.com";
+const GRUDGE6_RACE_FILE: Record<RaceId, string> = {
+  human: "WK_Characters",
+  barbarian: "BRB_Characters",
+  elf: "ELF_Characters",
+  dwarf: "DWF_Characters",
+  orc: "ORC_Characters",
+  undead: "UD_Characters",
+};
+
+/** Candidate URLs: Toon-RTS pack, then production grudge6 race GLB. */
 export function raceGlbCandidates(race: RaceId): string[] {
-  return [portraitGlbUrl(race), `/models/grudge/${race}.glb`];
+  const file = GRUDGE6_RACE_FILE[race] || "WK_Characters";
+  return [
+    portraitGlbUrl(race),
+    `${ASSETS}/asset-packs/toon-rts-characters/glb/characters/${race}.glb`,
+    `${ASSETS}/models/grudge6/races/${file}.glb`,
+    `/models/grudge/${race}.glb`,
+  ];
+}
+
+export function raceFbxCandidates(race: RaceId): string[] {
+  const file = GRUDGE6_RACE_FILE[race] || "WK_Characters";
+  return [`${ASSETS}/models/grudge6/races/${file}.fbx`];
 }
 
 /**
@@ -116,26 +155,55 @@ export function resolveCharacterPrefab(idOrRace: string, classId?: ClassId): Cha
 }
 
 /**
- * Ground + uniform scale a race model for gameplay (metres).
+ * SI fit from **currently visible** skinned body only + 100× decade fix.
+ * Never force all wardrobe meshes visible before measure (bag-blob scale).
  */
 export function normalizeRaceModel(root: THREE.Object3D, targetHeight = 1.75): void {
-  const prev: Array<{ obj: THREE.Object3D; v: boolean }> = [];
-  root.traverse((o) => {
-    const m = o as THREE.Mesh;
-    if (m.isMesh || (m as THREE.SkinnedMesh).isSkinnedMesh) {
-      prev.push({ obj: o, v: o.visible });
-      o.visible = true;
-    }
-  });
+  root.updateMatrixWorld(true);
 
-  const box = new THREE.Box3().setFromObject(root);
-  const size = box.getSize(new THREE.Vector3());
-  const scale = targetHeight / Math.max(size.y, 0.001);
-  root.scale.setScalar(scale);
-  const box2 = new THREE.Box3().setFromObject(root);
-  root.position.y -= box2.min.y;
+  const bodyBox = (r: THREE.Object3D): THREE.Box3 => {
+    const box = new THREE.Box3();
+    let any = false;
+    r.traverse((o) => {
+      const sk = o as THREE.SkinnedMesh;
+      if (!sk.isSkinnedMesh || !o.visible) return;
+      if (/xtra_|bag|wood|quiver|weapon_|shield/i.test(o.name || "")) return;
+      try {
+        if (!any) {
+          box.setFromObject(o);
+          any = true;
+        } else box.expandByObject(o);
+      } catch {
+        /* incomplete skin */
+      }
+    });
+    if (!any) box.setFromObject(r);
+    return box;
+  };
 
-  for (const { obj, v } of prev) obj.visible = v;
+  let box = bodyBox(root);
+  let size = box.getSize(new THREE.Vector3());
+  let h = Math.max(size.y, 1e-6);
+
+  if (h > targetHeight * 8 || h < targetHeight * 0.08) {
+    const decade = Math.pow(10, Math.round(Math.log10(targetHeight / h)));
+    root.scale.multiplyScalar(decade);
+    root.updateMatrixWorld(true);
+    box = bodyBox(root);
+    size = box.getSize(new THREE.Vector3());
+    h = Math.max(size.y, 1e-6);
+  }
+
+  let fit = targetHeight / h;
+  if (fit > 12) fit = 12;
+  if (fit < 1 / 12) fit = 1 / 12;
+  root.scale.multiplyScalar(fit);
+  root.updateMatrixWorld(true);
+  box = bodyBox(root);
+  root.position.y += 0 - box.min.y;
+  root.updateMatrixWorld(true);
+  box = bodyBox(root);
+  root.position.y += 0 - box.min.y;
 }
 
 /**
@@ -188,23 +256,22 @@ export async function loadRaceWithEquipment(opts: {
 }): Promise<RaceEquipmentLoadResult> {
   const mode = opts.mode ?? "unarmed";
   const { scene, animations, sourceUrl } = await loadRaceWardrobeGlb(opts.race);
-  normalizeRaceModel(scene, opts.targetHeight ?? 1.75);
-  // Material family tint hint (metal / leather / cloth) — light only, preserve maps
+  // Order: materials → visibility → SI scale (never scale full wardrobe first)
   const armorTint =
     opts.prefab.classId === "warrior"
-      ? 0xb0b8c0 // metal
+      ? 0xb0b8c0
       : opts.prefab.classId === "mage"
-        ? 0xc4b8e8 // cloth
+        ? 0xc4b8e8
         : opts.prefab.classId === "ranger"
-          ? 0x8b7355 // leather
-          : 0x9a7b5a; // leather+cloth worge
+          ? 0x8b7355
+          : 0x9a7b5a;
   prepareRaceMaterials(scene, {
     tint: opts.tint ?? armorTint,
     emissive: opts.emissive,
     enemy: opts.enemy,
   });
-  // Equipped mode uses prefab.equipment (per-hero T0/T1 practice gear)
   const meshStats = applyEquipmentVisibility(scene, opts.prefab, mode);
+  normalizeRaceModel(scene, opts.targetHeight ?? 1.75);
 
   return {
     scene,

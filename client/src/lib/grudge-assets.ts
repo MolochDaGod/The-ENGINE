@@ -15,6 +15,28 @@
 import * as THREE from 'three';
 import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { TextureLoader } from 'three';
+import { clone as skeletonClone } from 'three/examples/jsm/utils/SkeletonUtils.js';
+
+function hasSkinnedMesh(root: THREE.Object3D): boolean {
+  let found = false;
+  root.traverse((o) => {
+    if ((o as THREE.SkinnedMesh).isSkinnedMesh) found = true;
+  });
+  return found;
+}
+
+/** SkeletonUtils for skinned characters — plain clone breaks body meshes. */
+function cloneSceneGraph(source: THREE.Object3D, forceSkinned = false): THREE.Group {
+  const skinned = forceSkinned || hasSkinnedMesh(source);
+  const out = (skinned ? skeletonClone(source) : source.clone(true)) as THREE.Group;
+  if (skinned) {
+    out.traverse((o) => {
+      const sm = o as THREE.SkinnedMesh;
+      if (sm.isSkinnedMesh) sm.frustumCulled = false;
+    });
+  }
+  return out;
+}
 
 // ═══════════════════════════════════════════════════════════════════
 // CDN + Object Storage Config
@@ -581,30 +603,70 @@ export async function createAnimatedUnit(
   const gltf = await assets.loadModel(manifestKey);
   if (!gltf) return null;
 
-  const clone = gltf.scene.clone();
+  const clone = cloneSceneGraph(gltf.scene, manifestKey.startsWith('char_'));
   const clips = gltf.animations;
   const unit = new AnimatedUnit(clone, clips, factionColor, scale);
 
-  // Apply race atlas for grudge6 Toon RTS characters
   const atlasRelPath = RTS_RACE_ATLAS[manifestKey];
   if (atlasRelPath) {
-    // Fire-and-forget — mesh still renders with embedded GLB materials if atlas 404s
     applyRaceAtlas(unit.root, `${CDN_BASE}/${atlasRelPath}`);
   }
 
   return unit;
 }
 
+/** Character unit if mapped to char_* — never env_structure buildings. */
+export function isGrudge6RtsUnit(entityId: string): boolean {
+  const key = RTS_MODEL_MAP[entityId];
+  if (!key) return !/hall|barracks|tower|farm|forge|mill|chapel|armory|stable|citadel|pit/i.test(entityId);
+  if (key.startsWith('env_')) return false;
+  return key.startsWith('char_');
+}
+
+export interface Grudge6RtsUnitCompat {
+  root: THREE.Group;
+  state: string;
+  isDead: boolean;
+  play(state: string): void;
+  update(dt: number): void;
+  setPosition(x: number, y: number, z: number): void;
+  lookAt(targetX: number, targetZ: number): void;
+  dispose(): void;
+  setCarrying?(resource: 'gold' | 'lumber' | null): void;
+}
+
 /**
- * Create an animated unit for a specific RTS entity.
- * Maps entity ID → character model, applies faction color.
+ * RTS unit visual: grudge6 race kit for characters; rigid GLB for siege.
+ * Buildings must use createBuilding — not this function.
  */
 export async function createRTSAnimatedUnit(
   entityId: string,
   factionColor: number,
   scale: number = 0.5,
-): Promise<AnimatedUnit | null> {
+  faction?: 'crusade' | 'fabled' | 'legion',
+): Promise<AnimatedUnit | Grudge6RtsUnitCompat | null> {
   const manifestKey = RTS_MODEL_MAP[entityId];
+  if (manifestKey?.startsWith('env_structure')) {
+    console.warn('[createRTSAnimatedUnit] refused building id', entityId);
+    return null;
+  }
+
+  if (isGrudge6RtsUnit(entityId)) {
+    try {
+      const { createGrudge6RtsUnit } = await import('@/lib/rts-grudge6-units');
+      const targetHeight = scale >= 0.75 ? 2.0 : scale >= 0.58 ? 1.9 : scale >= 0.52 ? 1.75 : 1.7;
+      const g6 = await createGrudge6RtsUnit({
+        unitId: entityId,
+        faction: faction ?? 'crusade',
+        factionColor,
+        targetHeight,
+      });
+      if (g6) return g6 as unknown as Grudge6RtsUnitCompat;
+    } catch (e) {
+      console.warn('[createRTSAnimatedUnit] grudge6 failed, fallback', e);
+    }
+  }
+
   if (!manifestKey) return null;
   return createAnimatedUnit(manifestKey, factionColor, scale);
 }
