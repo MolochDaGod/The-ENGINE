@@ -63,27 +63,55 @@ function toAssetProxyPath(pathOrUrl: string): string {
   return `/api/assets${p}`;
 }
 
-/** Resolve CDN asset paths — proxied on portal hosts for reliable GLB/icon loading. */
-export function assetUrl(path: string): string {
+/**
+ * Resolve CDN asset paths.
+ * Prefer **absolute assets.grudge-studio.com** (CORS *). Same-origin `/api/assets`
+ * proxy is available as fallback for environments that block cross-origin GLB.
+ *
+ * Never use assets.grudge.studio (dead 522) — only assets.grudge-studio.com.
+ */
+export function assetUrl(path: string, opts?: { preferProxy?: boolean }): string {
   if (!path) return "";
   if (/^(data:|blob:)/i.test(path)) return path;
 
-  if (/^https?:/i.test(path)) {
-    if (useAssetProxy()) {
+  // Normalize legacy dead host
+  const fixed = path.replace(
+    /^https?:\/\/assets\.grudge\.studio(?=\/|$)/i,
+    ASSETS_ORIGIN.replace(/\/$/, ""),
+  );
+
+  if (/^https?:/i.test(fixed)) {
+    if (opts?.preferProxy && useAssetProxy()) {
       try {
-        const u = new URL(path);
-        if (u.hostname === "assets.grudge-studio.com") {
+        const u = new URL(fixed);
+        if (
+          u.hostname === "assets.grudge-studio.com" ||
+          u.hostname === "assets.grudge.studio"
+        ) {
           return toAssetProxyPath(`${u.pathname}${u.search}`);
         }
       } catch {
         /* keep original */
       }
     }
-    return path;
+    return fixed;
   }
 
+  const p = fixed.startsWith("/") ? fixed : `/${fixed}`;
+  // Default: absolute CDN (works for img + fetch with CORS *)
+  return `${ASSETS_ORIGIN.replace(/\/$/, "")}${p}`;
+}
+
+/** Absolute CDN URL only (icons / portraits — never go through broken proxies). */
+export function cdnAssetUrl(path: string): string {
+  if (!path) return "";
+  if (/^(data:|blob:|https?:)/i.test(path)) {
+    return path.replace(
+      /^https?:\/\/assets\.grudge\.studio(?=\/|$)/i,
+      ASSETS_ORIGIN.replace(/\/$/, ""),
+    );
+  }
   const p = path.startsWith("/") ? path : `/${path}`;
-  if (useAssetProxy()) return toAssetProxyPath(p);
   return `${ASSETS_ORIGIN.replace(/\/$/, "")}${p}`;
 }
 

@@ -50,6 +50,7 @@ export {
   prepareRaceMaterials,
   normalizeRaceModel,
   raceGlbCandidates,
+  raceFbxCandidates,
 } from './character/RaceEquipment';
 export type { RaceEquipmentLoadResult } from './character/RaceEquipment';
 

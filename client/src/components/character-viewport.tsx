@@ -5,12 +5,19 @@ import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment
 import { Loader2, RotateCcw, Swords, Footprints, Heart, Skull, Zap } from "lucide-react";
 import { GrudgeAssets } from "@/lib/grudge-assets";
 import { loadPortraitGlb, normalizePortraitModel } from "@/lib/portrait-glb-loader";
+import { attachCosmetic, buildCosmeticMesh, removeCosmetics } from "@/lib/cosmetic-mesh";
+import { getCosmeticById } from "@shared/cosmetics-roster";
 import { getEquipmentMeshNames, type CharacterPrefab } from "@shared/character-prefabs";
 import {
   portraitGlbUrl,
   resolvePrefabVisibleMeshes,
   resolveUnarmedVisibleMeshes,
 } from "@shared/character-meshes";
+import {
+  applyMaterialPresetsToRoot,
+  labelSceneMeshes,
+  type MeshLabel,
+} from "@shared/mesh-material-labels";
 
 const ANIM_BTNS = [
   { id: "idle", label: "Idle", Icon: RotateCcw },
@@ -30,6 +37,14 @@ interface Props {
   laneMode?: boolean;
   /** CDN manifest keys for pregame weapon attach */
   weaponManifestKeys?: string[];
+  /** Roster cosmetic: wings id */
+  wingsId?: string | null;
+  /** Roster cosmetic: cape id */
+  capeId?: string | null;
+  /** Tune metalness/roughness from mesh labels (keeps atlas maps) */
+  applyMaterialLabels?: boolean;
+  /** Report mesh labels after load (for roster inspector) */
+  onMeshLabels?: (labels: MeshLabel[]) => void;
 }
 
 export default function CharacterViewport({
@@ -38,6 +53,10 @@ export default function CharacterViewport({
   unarmed,
   laneMode,
   weaponManifestKeys,
+  wingsId,
+  capeId,
+  applyMaterialLabels = true,
+  onMeshLabels,
 }: Props) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
@@ -127,14 +146,55 @@ export default function CharacterViewport({
 
     try {
       const group = await loadPortraitGlb(prefab.race);
-      normalizePortraitModel(group, 2.0);
+      // 1.8 m human scale, feet on y=0 (matches Open characterDeploy)
+      normalizePortraitModel(group, 1.8);
 
       const idx = meshIndexRef.current;
       idx.clear();
       group.traverse((obj) => {
-        if (obj.name) idx.set(obj.name, obj);
+        // Index mesh / skinned pieces for wardrobe isolation
+        if (
+          obj.name &&
+          ((obj as THREE.Mesh).isMesh || (obj as THREE.SkinnedMesh).isSkinnedMesh)
+        ) {
+          idx.set(obj.name, obj);
+        }
       });
       applyMeshVisibility();
+      // If visibility logic left nothing, force-show all meshes (bad name match)
+      let anyVis = false;
+      idx.forEach((obj) => {
+        if (obj.visible) anyVis = true;
+      });
+      if (!anyVis && idx.size > 0) {
+        idx.forEach((obj) => {
+          obj.visible = true;
+        });
+      }
+
+      // Mesh-level labels (skin / cloth / leather / metal) for edit tooling
+      const labels = labelSceneMeshes(group);
+      if (applyMaterialLabels) {
+        applyMaterialPresetsToRoot(
+          THREE as never,
+          group as unknown as { traverse: (fn: (obj: Record<string, unknown>) => void) => void },
+        );
+      }
+      onMeshLabels?.(labels);
+
+      // Cosmetics: wings + cape (Unity lineage / procedural fallback)
+      removeCosmetics(group);
+      for (const cosId of [wingsId, capeId]) {
+        if (!cosId) continue;
+        const def = getCosmeticById(cosId);
+        if (!def) continue;
+        try {
+          const node = await buildCosmeticMesh(def);
+          attachCosmetic(group, node, def.attachBone);
+        } catch {
+          /* non-fatal */
+        }
+      }
 
       scene.add(group);
       rootRef.current = group;
@@ -174,6 +234,10 @@ export default function CharacterViewport({
     prefab,
     vfxMode,
     weaponManifestKeys,
+    wingsId,
+    capeId,
+    applyMaterialLabels,
+    onMeshLabels,
     clearScene,
     spawnVfx,
     applyMeshVisibility,

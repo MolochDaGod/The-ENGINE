@@ -7,12 +7,33 @@ import heroDeathMage from "@assets/heroes/death_mage.png";
 import heroHolyPaladin from "@assets/heroes/holy_paladin.png";
 import heroOrcShaman from "@assets/heroes/orc_shaman.png";
 import * as THREE from 'three';
-import * as CANNON from 'cannon-es';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
-import { type AnimatedUnit, createRTSAnimatedUnit, preloadRTS, RTS_MODEL_MAP } from '@/lib/grudge-assets';
-import { FACTIONS, getBuildingsForFaction, getUnitsForFaction, getUnit, getBuilding, ALL_BUILDINGS, ALL_UNITS, type FactionId, type BuildingDef, type UnitDef, type UnitRole, type BuildingRole } from '@shared/grudge-rts-data';
+import { type AnimatedUnit, type Grudge6RtsUnitCompat, createRTSAnimatedUnit, preloadRTS, RTS_MODEL_MAP } from '@/lib/grudge-assets';
+import {
+  buildingColliderSize,
+  buildingFootprintBlocks,
+  type BuildingColliderSize,
+} from '@/lib/rts-grudge6-units';
+import { RtsRapierWorld, type RtsRapierBody } from '@/lib/rts-rapier-world';
+import {
+  FACTIONS,
+  getBuildingsForFaction,
+  getUnitsForFaction,
+  getUnit,
+  getBuilding,
+  getUpgradesAtBuilding,
+  getUpgrade,
+  ALL_BUILDINGS,
+  ALL_UNITS,
+  type FactionId,
+  type BuildingDef,
+  type UnitDef,
+  type UnitRole,
+  type BuildingRole,
+  type UpgradeDef,
+} from '@shared/grudge-rts-data';
 
 type Faction = FactionId;
 type UnitType = string;
@@ -51,7 +72,8 @@ interface GameUnit {
   mesh?: THREE.Mesh | THREE.Object3D;
   selectionRing?: THREE.Mesh;
   healthBar?: THREE.Group;
-  animUnit?: AnimatedUnit;
+  /** grudge6 RTS unit or legacy AnimatedUnit */
+  animUnit?: AnimatedUnit | Grudge6RtsUnitCompat;
   isVisible: boolean;
   lastSeenPosition: Position3D | null;
 }
@@ -67,11 +89,17 @@ interface GameBuilding {
   constructionProgress: number;
   productionQueue: UnitType[];
   productionProgress: number;
+  /** Upgrade research queue (upgrade ids) */
+  researchQueue: string[];
+  researchProgress: number;
   rallyPoint: Position3D | null;
   mesh?: THREE.Mesh;
   auxMeshes?: THREE.Mesh[];
   healthBar?: THREE.Group;
   isVisible: boolean;
+  /** Static Rapier cuboid for placement / projectiles */
+  physicsBody?: RtsRapierBody;
+  colliderSize?: BuildingColliderSize;
 }
 
 interface ResourceNode {
@@ -141,6 +169,22 @@ function isRangedUnit(id: string) { const r = uStat(id).role; return r === 'rang
 function factionPrimary(f: FactionId): number { return FACTIONS[f].colors.primary; }
 function factionHex(f: FactionId): string { return '#' + factionPrimary(f).toString(16).padStart(6, '0'); }
 
+/** Aggregate researched upgrade stat mods for a unit at spawn / combat. */
+function sumUpgradeMods(
+  faction: FactionId,
+  researched: Set<string>,
+): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const id of researched) {
+    const u = getUpgrade(id);
+    if (!u?.statMod || u.faction !== faction) continue;
+    for (const [k, v] of Object.entries(u.statMod)) {
+      out[k] = (out[k] || 0) + (v as number);
+    }
+  }
+  return out;
+}
+
 /** Get faction's starting entity IDs */
 function factionStart(f: FactionId) {
   const bs = getBuildingsForFaction(f);
@@ -188,7 +232,7 @@ interface Particle {
 
 interface PhysicsProjectile {
   mesh: THREE.Mesh;
-  body: CANNON.Body;
+  body: RtsRapierBody;
   damage: number;
   targetId: string | null;
   faction: Faction;
@@ -198,7 +242,7 @@ interface PhysicsProjectile {
 
 interface PhysicsDebris {
   mesh: THREE.Mesh;
-  body: CANNON.Body;
+  body: RtsRapierBody;
   life: number;
 }
 
@@ -271,6 +315,70 @@ export default function Wargus() {
     fabled: { gold: 2000, lumber: 1000 },
     legion: { gold: 2000, lumber: 1000 },
   });
+  /** Researched upgrade ids per faction — apply melee/ranged/armor stat mods */
+  const researchedUpgradesRef = useRef<Record<FactionId, Set<string>>>({
+    crusade: new Set(),
+    fabled: new Set(),
+    legion: new Set(),
+  });
+  const [researchedTick, setResearchedTick] = useState(0);
+
+  const applyUpgradeStats = useCallback((unit: GameUnit) => {
+    const mods = sumUpgradeMods(unit.faction, researchedUpgradesRef.current[unit.faction]);
+    const role = uStat(unit.type).role;
+    let hpPct = mods.all_hp_pct || 0;
+    let atkPct = 0;
+    let defPct = mods.all_def_pct || 0;
+    if (role === 'melee' || role === 'cavalry') {
+      atkPct += mods.melee_atk_pct || 0;
+      if (mods.melee_spd_pct) unit.speed *= 1 + mods.melee_spd_pct / 100;
+    }
+    if (role === 'ranged' || role === 'air' || role === 'recon') {
+      atkPct += mods.ranged_atk_pct || 0;
+      if (mods.ranged_rng_flat) unit.range += mods.ranged_rng_flat;
+    }
+    if (mods.armored_hp_pct && (role === 'melee' || role === 'cavalry')) {
+      hpPct += mods.armored_hp_pct;
+    }
+    if (hpPct) {
+      unit.maxHealth = Math.round(unit.maxHealth * (1 + hpPct / 100));
+      unit.health = unit.maxHealth;
+    }
+    if (atkPct) unit.damage = Math.round(unit.damage * (1 + atkPct / 100));
+    if (defPct) unit.armor = Math.round(unit.armor * (1 + defPct / 100));
+  }, []);
+
+  const queueUpgrade = useCallback((upgradeId: string) => {
+    if (!selectedBuilding) return;
+    const building = buildingsRef.current.find(b => b.id === selectedBuilding);
+    if (!building || building.faction !== playerFaction) return;
+    const upg = getUpgrade(upgradeId);
+    if (!upg) return;
+    if (researchedUpgradesRef.current[playerFaction].has(upgradeId)) return;
+    if (building.researchQueue.includes(upgradeId)) return;
+    if (upg.prerequisite) {
+      const prereq = upg.prerequisite;
+      const hasUpgrade = researchedUpgradesRef.current[playerFaction].has(prereq);
+      const hasBuilding = buildingsRef.current.some(
+        b => b.faction === playerFaction && !b.isConstructing && b.type === prereq,
+      );
+      if (!hasUpgrade && !hasBuilding) return;
+    }
+    if (
+      resources[playerFaction].gold < upg.cost.gold ||
+      resources[playerFaction].lumber < upg.cost.wood
+    ) {
+      return;
+    }
+    setResources(prev => ({
+      ...prev,
+      [playerFaction]: {
+        gold: prev[playerFaction].gold - upg.cost.gold,
+        lumber: prev[playerFaction].lumber - upg.cost.wood,
+      },
+    }));
+    building.researchQueue.push(upgradeId);
+  }, [selectedBuilding, playerFaction, resources]);
   const [food, setFood] = useState<Record<FactionId, { used: number; max: number }>>({
     crusade: { used: 5, max: 9 },
     fabled: { used: 5, max: 9 },
@@ -290,16 +398,19 @@ export default function Wargus() {
   const composerRef = useRef<EffectComposer | null>(null);
   const waterMeshRef = useRef<THREE.Mesh | null>(null);
   const fireParticlesRef = useRef<Map<string, THREE.Mesh[]>>(new Map());
-  const physicsWorldRef = useRef<CANNON.World | null>(null);
+  const physicsWorldRef = useRef<RtsRapierWorld | null>(null);
   const physicsProjectilesRef = useRef<PhysicsProjectile[]>([]);
   const physicsDebrisRef = useRef<PhysicsDebris[]>([]);
   const fallingTreesRef = useRef<FallingTree[]>([]);
-  const groundBodyRef = useRef<CANNON.Body | null>(null);
+  const groundBodyRef = useRef<RtsRapierBody | null>(null);
   
   const gameLoopRef = useRef<number | null>(null);
   const lastTimeRef = useRef<number>(0);
   const isInitializedRef = useRef(false);
+  /** Scene graph created (renderer live); physics may still be loading WASM */
+  const sceneReadyRef = useRef(false);
   const pendingGameRef = useRef<{ mode: GameMode; faction: Faction } | null>(null);
+  const initEntitiesRef = useRef<((faction: Faction, mode: GameMode) => void) | null>(null);
 
   const initFogGrid = useCallback(() => {
     const grid: FogCell[][] = [];
@@ -504,35 +615,46 @@ export default function Wargus() {
     
     if (sceneRef.current) {
       const role = stats.role;
+      // Units only — buildings use createBuilding (rigid boxes + Rapier, no skeleton)
       const size = role === 'cavalry' ? 0.6 : role === 'siege' ? 0.8 : 0.45;
       const fColor = factionPrimary(faction);
-      const modelScale = role === 'siege' ? 0.8 : role === 'cavalry' ? 0.6 : 0.5;
+      // Character SI height mapping lives in createRTSAnimatedUnit; siege uses prop scale
+      const modelScale = role === 'siege' ? 0.85 : role === 'cavalry' ? 0.6 : 0.5;
 
-      // Try loading animated 3D model from CDN (type IS the data-layer entity ID)
-      if (RTS_MODEL_MAP[type]) {
-        createRTSAnimatedUnit(type, fColor, modelScale).then(animUnit => {
-          if (animUnit && sceneRef.current) {
-            animUnit.setPosition(x, 0, z);
-            animUnit.root.userData = { unitId: unit.id };
-            sceneRef.current.add(animUnit.root);
-            unit.mesh = animUnit.root;
-            unit.animUnit = animUnit;
-          }
-        });
-      }
-
-      // Immediate fallback mesh (shown until GLB loads)
-      if (!unit.mesh) {
+      // Capsule placeholder until character kit / vehicle GLB loads
+      {
         const geometry = new THREE.CapsuleGeometry(size * 0.4, size * 0.6, 8, 16);
         const material = new THREE.MeshStandardMaterial({ color: fColor, metalness: 0.4, roughness: 0.6 });
         const mesh = new THREE.Mesh(geometry, material);
         mesh.position.set(x, size * 0.5, z);
         mesh.castShadow = true;
         mesh.receiveShadow = true;
-        mesh.userData = { unitId: unit.id };
+        mesh.userData = { unitId: unit.id, kind: 'unit' };
         sceneRef.current.add(mesh);
         unit.mesh = mesh;
       }
+
+      // Character: grudge6 race kit (mesh+texture+skeleton+anims). Siege: vehicle GLB.
+      // Never race-kit for buildings.
+      createRTSAnimatedUnit(type, fColor, modelScale, faction).then(animUnit => {
+        if (!animUnit || !sceneRef.current) return;
+        if (unit.mesh && unit.mesh !== animUnit.root) {
+          sceneRef.current.remove(unit.mesh);
+          const old = unit.mesh as THREE.Mesh;
+          old.geometry?.dispose?.();
+          const mat = old.material;
+          if (Array.isArray(mat)) mat.forEach(m => m.dispose());
+          else if (mat) (mat as THREE.Material).dispose();
+        }
+        animUnit.setPosition(x, 0, z);
+        animUnit.root.userData = { unitId: unit.id, kind: 'unit' };
+        sceneRef.current.add(animUnit.root);
+        unit.mesh = animUnit.root;
+        unit.animUnit = animUnit;
+        if (unit.carryingResource && animUnit.setCarrying) {
+          animUnit.setCarrying(unit.carryingResource.type);
+        }
+      });
 
       // Selection ring
       const ringGeometry = new THREE.RingGeometry(size * 0.6, size * 0.8, 32);
@@ -560,7 +682,8 @@ export default function Wargus() {
       fg.position.z = 0.01;
       fg.name = 'healthFill';
       healthBarGroup.add(fg);
-      healthBarGroup.position.set(x, size * 1.8, z);
+      // SI human ~1.65–1.9 m — float bar just above head
+      healthBarGroup.position.set(x, role === 'siege' ? 2.8 : role === 'cavalry' ? 2.4 : 2.05, z);
       healthBarGroup.rotation.x = -Math.PI / 4;
       sceneRef.current.add(healthBarGroup);
       unit.healthBar = healthBarGroup;
@@ -569,8 +692,14 @@ export default function Wargus() {
     return unit;
   }, []);
 
+  /**
+   * Buildings: rigid boxes + Rapier fixed cuboids.
+   * NO grudge6 race kits, NO AnimationMixer, NO skeleton equip, NO SI-human fit.
+   * (Units use createUnit → createRTSAnimatedUnit instead.)
+   */
   const createBuilding = useCallback((type: BuildingType, faction: Faction, x: number, z: number, isConstructing: boolean = false): GameBuilding => {
     const stats = bStat(type);
+    const cSize = buildingColliderSize(stats.role);
     const building: GameBuilding = {
       id: `building-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       type,
@@ -582,15 +711,19 @@ export default function Wargus() {
       constructionProgress: isConstructing ? 0 : 100,
       productionQueue: [],
       productionProgress: 0,
+      researchQueue: [],
+      researchProgress: 0,
       rallyPoint: null,
-      isVisible: true
+      isVisible: true,
+      colliderSize: cSize,
     };
     
     if (sceneRef.current) {
-      const bRole = stats.role;
-      const size = bRole === 'economy' ? 3 : bRole === 'population' ? 2 : 2.5;
-      const height = bRole === 'defense' ? 4 : bRole === 'economy' ? 3.5 : bRole === 'mage_production' ? 4 : 2.5;
-      const geometry = new THREE.BoxGeometry(size, height, size);
+      const size = cSize.w;
+      const height = cSize.h;
+      const depth = cSize.d;
+      // Procedural building mesh (not skinned character wardrobe)
+      const geometry = new THREE.BoxGeometry(size, height, depth);
       const color = factionPrimary(faction);
       const material = new THREE.MeshStandardMaterial({ 
         color,
@@ -603,7 +736,7 @@ export default function Wargus() {
       mesh.position.set(x, height / 2, z);
       mesh.castShadow = true;
       mesh.receiveShadow = true;
-      mesh.userData = { buildingId: building.id };
+      mesh.userData = { buildingId: building.id, kind: 'building' };
       sceneRef.current.add(mesh);
       building.mesh = mesh;
       
@@ -616,6 +749,18 @@ export default function Wargus() {
         roof.rotation.y = Math.PI / 4;
         sceneRef.current.add(roof);
         building.auxMeshes.push(roof);
+      }
+
+      // Static Rapier cuboid (SI metres) — fleet physics SSOT
+      if (physicsWorldRef.current) {
+        building.physicsBody = physicsWorldRef.current.addBuildingBox(
+          x,
+          height / 2,
+          z,
+          size / 2,
+          height / 2,
+          depth / 2,
+        );
       }
       
       const healthBarGroup = new THREE.Group();
@@ -819,24 +964,28 @@ export default function Wargus() {
     
     const dx = targetX - startX;
     const dz = targetZ - startZ;
-    const dist = Math.sqrt(dx * dx + dz * dz);
+    const dist = Math.max(0.01, Math.sqrt(dx * dx + dz * dz));
     
     let meshGeom: THREE.BufferGeometry;
     let meshMat: THREE.MeshStandardMaterial;
     let mass = 0.5;
+    let radius = 0.08;
     
     if (projectileType === 'ballista') {
       meshGeom = new THREE.CylinderGeometry(0.05, 0.05, 1.2, 6);
       meshMat = new THREE.MeshStandardMaterial({ color: 0x8b4513, emissive: 0x331100, emissiveIntensity: 0.3 });
       mass = 2;
+      radius = 0.12;
     } else if (projectileType === 'magic') {
       meshGeom = new THREE.SphereGeometry(0.2, 8, 8);
       meshMat = new THREE.MeshStandardMaterial({ color: 0x8800ff, emissive: 0x4400aa, emissiveIntensity: 0.8 });
       mass = 0.3;
+      radius = 0.2;
     } else {
       meshGeom = new THREE.CylinderGeometry(0.02, 0.02, 0.6, 4);
       meshMat = new THREE.MeshStandardMaterial({ color: 0x8b6914 });
       mass = 0.2;
+      radius = 0.06;
     }
     
     const mesh = new THREE.Mesh(meshGeom, meshMat);
@@ -844,21 +993,16 @@ export default function Wargus() {
     mesh.castShadow = true;
     sceneRef.current.add(mesh);
     
-    const shape = projectileType === 'magic' 
-      ? new CANNON.Sphere(0.2) 
-      : new CANNON.Cylinder(0.05, 0.05, projectileType === 'ballista' ? 1.2 : 0.6, 6);
-    const body = new CANNON.Body({ mass, shape });
-    body.position.set(startX, startY, startZ);
-    
     const speed = projectileType === 'ballista' ? 12 : projectileType === 'magic' ? 15 : 18;
     const arcHeight = projectileType === 'ballista' ? 8 : projectileType === 'magic' ? 3 : 5;
     const vx = (dx / dist) * speed;
     const vz = (dz / dist) * speed;
     const flightTime = dist / speed;
-    const vy = (arcHeight / flightTime) + (9.82 * flightTime * 0.5);
+    const vy = (arcHeight / flightTime) + (9.81 * flightTime * 0.5);
     
-    body.velocity.set(vx, vy, vz);
-    physicsWorldRef.current.addBody(body);
+    const body = physicsWorldRef.current.addProjectileSphere(
+      startX, startY, startZ, radius, mass, vx, vy, vz,
+    );
     
     physicsProjectilesRef.current.push({
       mesh,
@@ -895,20 +1039,17 @@ export default function Wargus() {
       mesh.castShadow = true;
       sceneRef.current.add(mesh);
       
-      const shape = new CANNON.Box(new CANNON.Vec3(debrisSize / 2, debrisSize / 2, debrisSize / 2));
-      const body = new CANNON.Body({ mass: 1 + Math.random() * 2, shape });
-      body.position.set(px, py, pz);
-      body.velocity.set(
+      const half = debrisSize / 2;
+      const mass = 1 + Math.random() * 2;
+      const body = physicsWorldRef.current.addDebrisBox(
+        px, py, pz, half, mass,
         (Math.random() - 0.5) * 8,
         3 + Math.random() * 6,
-        (Math.random() - 0.5) * 8
-      );
-      body.angularVelocity.set(
+        (Math.random() - 0.5) * 8,
         (Math.random() - 0.5) * 10,
         (Math.random() - 0.5) * 10,
-        (Math.random() - 0.5) * 10
+        (Math.random() - 0.5) * 10,
       );
-      physicsWorldRef.current.addBody(body);
       
       physicsDebrisRef.current.push({ mesh, body, life: 0 });
     }
@@ -948,21 +1089,21 @@ export default function Wargus() {
   }, []);
 
   const updatePhysics = useCallback((dt: number) => {
-    if (!physicsWorldRef.current) return;
+    const world = physicsWorldRef.current;
+    if (!world) return;
     
-    physicsWorldRef.current.step(1 / 60, dt, 3);
+    // Fixed 1/60 step accumulator (grudge-rapier SSOT)
+    world.step(dt);
     
     physicsProjectilesRef.current = physicsProjectilesRef.current.filter(proj => {
       proj.life += dt;
       
-      proj.mesh.position.set(
-        proj.body.position.x,
-        proj.body.position.y,
-        proj.body.position.z
-      );
+      const t = world.getTranslation(proj.body);
+      proj.mesh.position.set(t.x, t.y, t.z);
       
-      const vel = proj.body.velocity;
-      if (vel.length() > 0.1) {
+      const vel = proj.body.body.linvel();
+      const speed = Math.hypot(vel.x, vel.y, vel.z);
+      if (speed > 0.1) {
         const dir = new THREE.Vector3(vel.x, vel.y, vel.z).normalize();
         const up = new THREE.Vector3(0, 1, 0);
         const quat = new THREE.Quaternion();
@@ -974,7 +1115,7 @@ export default function Wargus() {
         }
       }
       
-      if (proj.body.position.y <= 0.1 || proj.life > 5) {
+      if (t.y <= 0.1 || proj.life > 5) {
         if (proj.targetId) {
           const targetUnit = unitsRef.current.find(u => u.id === proj.targetId);
           const targetBuilding = buildingsRef.current.find(b => b.id === proj.targetId);
@@ -1005,12 +1146,12 @@ export default function Wargus() {
         sceneRef.current?.remove(proj.mesh);
         proj.mesh.geometry.dispose();
         (proj.mesh.material as THREE.Material).dispose();
-        proj.trailMeshes.forEach(t => {
-          sceneRef.current?.remove(t);
-          t.geometry.dispose();
-          (t.material as THREE.Material).dispose();
+        proj.trailMeshes.forEach(tr => {
+          sceneRef.current?.remove(tr);
+          tr.geometry.dispose();
+          (tr.material as THREE.Material).dispose();
         });
-        physicsWorldRef.current?.removeBody(proj.body);
+        world.removeBody(proj.body);
         return false;
       }
       
@@ -1030,11 +1171,11 @@ export default function Wargus() {
           }
         }
       }
-      proj.trailMeshes.forEach((t, i) => {
+      proj.trailMeshes.forEach((tr, i) => {
         const age = (proj.trailMeshes.length - i) / proj.trailMeshes.length;
-        (t.material as THREE.MeshBasicMaterial).opacity = 0.6 * (1 - age);
+        (tr.material as THREE.MeshBasicMaterial).opacity = 0.6 * (1 - age);
         const s = 1 - age * 0.5;
-        t.scale.set(s, s, s);
+        tr.scale.set(s, s, s);
       });
       
       return true;
@@ -1043,17 +1184,10 @@ export default function Wargus() {
     physicsDebrisRef.current = physicsDebrisRef.current.filter(debris => {
       debris.life += dt;
       
-      debris.mesh.position.set(
-        debris.body.position.x,
-        debris.body.position.y,
-        debris.body.position.z
-      );
-      debris.mesh.quaternion.set(
-        debris.body.quaternion.x,
-        debris.body.quaternion.y,
-        debris.body.quaternion.z,
-        debris.body.quaternion.w
-      );
+      const t = world.getTranslation(debris.body);
+      const r = world.getRotation(debris.body);
+      debris.mesh.position.set(t.x, t.y, t.z);
+      debris.mesh.quaternion.set(r.x, r.y, r.z, r.w);
       
       if (debris.life > 3) {
         const fadeProgress = (debris.life - 3) / 2;
@@ -1065,7 +1199,7 @@ export default function Wargus() {
         sceneRef.current?.remove(debris.mesh);
         debris.mesh.geometry.dispose();
         (debris.mesh.material as THREE.Material).dispose();
-        physicsWorldRef.current?.removeBody(debris.body);
+        world.removeBody(debris.body);
         return false;
       }
       return true;
@@ -1111,7 +1245,7 @@ export default function Wargus() {
   const [webglError, setWebglError] = useState(false);
 
   const initializeScene = useCallback(() => {
-    if (!containerRef.current || isInitializedRef.current) return;
+    if (!containerRef.current || sceneReadyRef.current) return;
     
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x1a1a2e);
@@ -1309,21 +1443,25 @@ export default function Wargus() {
     
     initFogGrid();
     
-    const physicsWorld = new CANNON.World({
-      gravity: new CANNON.Vec3(0, -9.82, 0),
+    sceneReadyRef.current = true;
+
+    // Rapier WASM world (async) — fleet physics SSOT; entities wait until ready
+    void RtsRapierWorld.create().then((world) => {
+      if (!sceneRef.current) {
+        world.free();
+        return;
+      }
+      physicsWorldRef.current = world;
+      groundBodyRef.current = world.addGroundPlane();
+      isInitializedRef.current = true;
+      if (pendingGameRef.current) {
+        const { faction, mode } = pendingGameRef.current;
+        pendingGameRef.current = null;
+        initEntitiesRef.current?.(faction, mode);
+      }
+    }).catch((err) => {
+      console.error('[Wargus] Rapier init failed', err);
     });
-    physicsWorld.broadphase = new CANNON.NaiveBroadphase();
-    physicsWorld.defaultContactMaterial.friction = 0.5;
-    physicsWorld.defaultContactMaterial.restitution = 0.3;
-    physicsWorldRef.current = physicsWorld;
-    
-    const groundShape = new CANNON.Plane();
-    const groundBody = new CANNON.Body({ mass: 0, shape: groundShape });
-    groundBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
-    physicsWorld.addBody(groundBody);
-    groundBodyRef.current = groundBody;
-    
-    isInitializedRef.current = true;
   }, [initFogGrid]);
 
   const initializeGameEntities = useCallback((faction: Faction, mode: GameMode) => {
@@ -1342,7 +1480,9 @@ export default function Wargus() {
     newBuildings.push(createBuilding(start.townHall, faction, playerStartX, playerStartZ, false));
     newBuildings.push(createBuilding(start.farm, faction, playerStartX + 5, playerStartZ - 3, false));
     for (let i = 0; i < 5; i++) {
-      newUnits.push(createUnit(start.worker, faction, playerStartX + 4 + (i % 3) * 1.2, playerStartZ + Math.floor(i / 3) * 1.2));
+      const w = createUnit(start.worker, faction, playerStartX + 4 + (i % 3) * 1.2, playerStartZ + Math.floor(i / 3) * 1.2);
+      applyUpgradeStats(w);
+      newUnits.push(w);
     }
     
     if (mode === 'pve' || mode === 'pvp') {
@@ -1352,10 +1492,14 @@ export default function Wargus() {
       newBuildings.push(createBuilding(eStart.barracks, enemyFaction, enemyStartX - 5, enemyStartZ, false));
       newBuildings.push(createBuilding(eStart.farm, enemyFaction, enemyStartX + 5, enemyStartZ - 3, false));
       for (let i = 0; i < 5; i++) {
-        newUnits.push(createUnit(eStart.worker, enemyFaction, enemyStartX + 4 + (i % 3) * 1.2, enemyStartZ + Math.floor(i / 3) * 1.2));
+        const w = createUnit(eStart.worker, enemyFaction, enemyStartX + 4 + (i % 3) * 1.2, enemyStartZ + Math.floor(i / 3) * 1.2);
+        applyUpgradeStats(w);
+        newUnits.push(w);
       }
       for (let i = 0; i < 4; i++) {
-        newUnits.push(createUnit(eStart.melee, enemyFaction, enemyStartX - 3 + i * 1.2, enemyStartZ + 4));
+        const m = createUnit(eStart.melee, enemyFaction, enemyStartX - 3 + i * 1.2, enemyStartZ + 4);
+        applyUpgradeStats(m);
+        newUnits.push(m);
       }
     }
     
@@ -1388,6 +1532,7 @@ export default function Wargus() {
     unitsRef.current = newUnits;
     buildingsRef.current = newBuildings;
     resourceNodesRef.current = newResources;
+    // note: applyUpgradeStats used on spawners above
     
     setResources({
       crusade: { gold: 2000, lumber: 1000 },
@@ -1401,7 +1546,10 @@ export default function Wargus() {
     });
     
     setCameraPosition({ x: playerStartX, z: playerStartZ });
-  }, [createUnit, createBuilding, createResourceNode]);
+  }, [createUnit, createBuilding, createResourceNode, applyUpgradeStats]);
+
+  // Stable pointer for Rapier async ready → spawn pending match
+  initEntitiesRef.current = initializeGameEntities;
 
   const startGame = useCallback((mode: GameMode, faction: Faction) => {
     setGameMode(mode);
@@ -1413,14 +1561,28 @@ export default function Wargus() {
     setBuildingToBuild(null);
     setCurrentCommand(null);
     setShowBuildMenu(false);
+    researchedUpgradesRef.current = {
+      crusade: new Set(),
+      fabled: new Set(),
+      legion: new Set(),
+    };
+    setResearchedTick(0);
+    // Warm grudge6 race kits + unarmed locomotion in background
+    if (!assetsLoaded) {
+      preloadRTS((loaded, total) => {
+        setLoadProgress(total ? loaded / total : 0);
+      }).then(() => setAssetsLoaded(true)).catch(() => setAssetsLoaded(true));
+    }
     
     if (sceneRef.current) {
       unitsRef.current.forEach(u => {
+        if (u.animUnit) u.animUnit.dispose();
         if (u.mesh) sceneRef.current?.remove(u.mesh);
         if (u.selectionRing) sceneRef.current?.remove(u.selectionRing);
         if (u.healthBar) sceneRef.current?.remove(u.healthBar);
       });
       buildingsRef.current.forEach(b => {
+        physicsWorldRef.current?.removeBody(b.physicsBody);
         if (b.mesh) sceneRef.current?.remove(b.mesh);
         if (b.healthBar) sceneRef.current?.remove(b.healthBar);
         if (b.auxMeshes) b.auxMeshes.forEach(m => sceneRef.current?.remove(m));
@@ -1476,12 +1638,13 @@ export default function Wargus() {
     updateFogMesh();
     unitGroupsRef.current = {};
     
-    if (isInitializedRef.current && sceneRef.current) {
+    // Wait for Rapier WASM + scene (buildings need physics bodies at spawn)
+    if (isInitializedRef.current && sceneRef.current && physicsWorldRef.current) {
       initializeGameEntities(faction, mode);
     } else {
       pendingGameRef.current = { mode, faction };
     }
-  }, [initFogGrid, initializeGameEntities, updateFogMesh]);
+  }, [initFogGrid, initializeGameEntities, updateFogMesh, assetsLoaded]);
 
   const issueOrder = useCallback((order: OrderType, targetX?: number, targetZ?: number, targetId?: string) => {
     if (selectedUnits.length === 0) return;
@@ -1742,6 +1905,21 @@ export default function Wargus() {
     
     if (buildingToBuild && targetPos) {
       const stats = bStat(buildingToBuild);
+      const placeSize = buildingColliderSize(stats.role);
+      const blocked = buildingFootprintBlocks(
+        targetPos.x,
+        targetPos.z,
+        placeSize,
+        buildingsRef.current.map(b => ({
+          x: b.position.x,
+          z: b.position.z,
+          size: b.colliderSize || buildingColliderSize(bStat(b.type).role),
+        })),
+      );
+      if (blocked) {
+        spawnFloatingText('Blocked!', targetPos.x, 3, targetPos.z, '#FF6666');
+        return;
+      }
       if (resources[playerFaction].gold >= stats.cost.gold && resources[playerFaction].lumber >= stats.cost.lumber) {
         const newBuilding = createBuilding(buildingToBuild, playerFaction, targetPos.x, targetPos.z, true);
         buildingsRef.current.push(newBuilding);
@@ -1839,11 +2017,18 @@ export default function Wargus() {
         const pos = groundIntersect.point;
         placementPreviewRef.current.position.set(pos.x, 1, pos.z);
         placementPreviewRef.current.visible = true;
-        
-        const canPlace = !buildingsRef.current.some(b => 
-          Math.abs(b.position.x - pos.x) < 4 && Math.abs(b.position.z - pos.z) < 4
+        const pSize = buildingColliderSize(bStat(buildingToBuild).role);
+        const blocked = buildingFootprintBlocks(
+          pos.x,
+          pos.z,
+          pSize,
+          buildingsRef.current.map(b => ({
+            x: b.position.x,
+            z: b.position.z,
+            size: b.colliderSize || buildingColliderSize(bStat(b.type).role),
+          })),
         );
-        (placementPreviewRef.current.material as THREE.MeshBasicMaterial).color.setHex(canPlace ? 0x00ff00 : 0xff0000);
+        (placementPreviewRef.current.material as THREE.MeshBasicMaterial).color.setHex(blocked ? 0xff0000 : 0x00ff00);
       }
       setCursorStyle('crosshair');
       return;
@@ -1909,9 +2094,18 @@ export default function Wargus() {
           if (unit.gatherTarget) {
             const resource = resourceNodesRef.current.find(r => r.id === unit.gatherTarget);
             if (resource && resource.amount > 0) {
+              // Play gather at resource before filling bag/wood prop
+              if (unit.animUnit) {
+                unit.animUnit.lookAt(resource.position.x, resource.position.z);
+                // grudge6: gather one-shot; legacy AnimatedUnit falls through to attack/punch
+                const au = unit.animUnit as Grudge6RtsUnitCompat;
+                if (typeof au.play === 'function') au.play('gather');
+              }
               const gatherAmount = Math.min(10, resource.amount);
               resource.amount -= gatherAmount;
               unit.carryingResource = { type: resource.type, amount: gatherAmount };
+              // Show Xtra_bag (gold) or Xtra_wood (lumber) only while hauling
+              unit.animUnit?.setCarrying?.(resource.type);
               
               if (resource.amount <= 0) {
                 if (resource.type === 'lumber' && resource.mesh && resource.trunkMesh) {
@@ -1959,6 +2153,8 @@ export default function Wargus() {
               const resType = unit.carryingResource.type;
               const resAmount = unit.carryingResource.amount;
               unit.carryingResource = null;
+              // Empty hands again — hide bag/wood mesh
+              unit.animUnit?.setCarrying?.(null);
               const textColor = resType === 'gold' ? '#FFD700' : '#22DD22';
               const textIcon = resType === 'gold' ? '💰' : '🪵';
               spawnFloatingText(`+${resAmount} ${textIcon}`, townhall.position.x, 5, townhall.position.z, textColor);
@@ -2203,8 +2399,18 @@ export default function Wargus() {
         }));
         return false;
       }
-      // Set idle animation for units not doing anything
-      if (unit.animUnit && !unit.targetPosition && !unit.attackTarget && unit.animUnit.state !== 'idle' && unit.animUnit.state !== 'hurt') {
+      // Idle when not moving/attacking/gathering (don't interrupt one-shots)
+      if (
+        unit.animUnit &&
+        !unit.targetPosition &&
+        !unit.attackTarget &&
+        unit.animUnit.state !== 'idle' &&
+        unit.animUnit.state !== 'hurt' &&
+        unit.animUnit.state !== 'death' &&
+        unit.animUnit.state !== 'gather' &&
+        unit.animUnit.state !== 'attack' &&
+        unit.animUnit.state !== 'attack2'
+      ) {
         unit.animUnit.play('idle');
       }
       return true;
@@ -2236,16 +2442,53 @@ export default function Wargus() {
           building.constructionProgress = newProgress;
         }
       }
+
+      // Upgrade research queue (forge / armory / chapel)
+      if (
+        building.researchQueue &&
+        building.researchQueue.length > 0 &&
+        !building.isConstructing &&
+        building.productionQueue.length === 0
+      ) {
+        const upgId = building.researchQueue[0];
+        const upg = getUpgrade(upgId);
+        if (upg) {
+          const researchTime = Math.max(8, upg.researchTime || 20);
+          building.researchProgress += (deltaTime * 100) / researchTime;
+          if (building.researchProgress >= 100) {
+            researchedUpgradesRef.current[building.faction].add(upgId);
+            setResearchedTick(t => t + 1);
+            spawnFloatingText(upg.name, building.position.x, 5, building.position.z, '#88CCFF');
+            building.researchQueue.shift();
+            building.researchProgress = 0;
+          }
+        } else {
+          building.researchQueue.shift();
+          building.researchProgress = 0;
+        }
+      }
       
       if (building.productionQueue.length > 0 && !building.isConstructing) {
         const unitType = building.productionQueue[0];
         const unitStats = uStat(unitType);
-        building.productionProgress += (deltaTime * 100 / unitStats.buildTime);
+        // Unit training speed upgrades
+        let trainMul = 1;
+        const researched = researchedUpgradesRef.current[building.faction];
+        if (researched) {
+          for (const id of researched) {
+            const u = getUpgrade(id);
+            const pct = u?.statMod?.unit_build_time_pct;
+            if (typeof pct === 'number') trainMul *= 1 + pct / 100;
+          }
+        }
+        building.productionProgress += (deltaTime * 100 / unitStats.buildTime) / Math.max(0.5, trainMul);
         
         if (building.productionProgress >= 100) {
           const rallyX = building.rallyPoint?.x || building.position.x + 3;
           const rallyZ = building.rallyPoint?.z || building.position.z;
           const newUnit = createUnit(unitType, building.faction, rallyX, rallyZ);
+          // Apply researched HP/ATK/DEF mods at spawn
+          applyUpgradeStats(newUnit);
           unitsRef.current.push(newUnit);
           
           setFood(prev => ({
@@ -2280,6 +2523,7 @@ export default function Wargus() {
     buildingsRef.current = buildingsRef.current.filter(building => {
       if (building.health <= 0) {
         spawnBuildingDebris(building);
+        physicsWorldRef.current?.removeBody(building.physicsBody);
         if (building.mesh) sceneRef.current?.remove(building.mesh);
         if (building.healthBar) sceneRef.current?.remove(building.healthBar);
         if (building.auxMeshes) building.auxMeshes.forEach(m => sceneRef.current?.remove(m));
@@ -2337,17 +2581,22 @@ export default function Wargus() {
   }, [isPaused, gameMode, selectedUnits, playerFaction, createUnit, resources, food, updateFogOfWar, renderMinimap, spawnFloatingText, updateFloatingTexts, spawnParticles, updatePhysics, spawnPhysicsProjectile, spawnBuildingDebris, spawnFallingTree]);
 
   useEffect(() => {
-    if (gameMode !== 'menu' && containerRef.current && !isInitializedRef.current) {
+    if (gameMode !== 'menu' && containerRef.current && !sceneReadyRef.current) {
       setTimeout(() => {
         if (containerRef.current && containerRef.current.clientWidth > 0) {
           initializeScene();
-          if (pendingGameRef.current) {
-            const { faction, mode } = pendingGameRef.current;
-            initializeGameEntities(faction, mode);
-            pendingGameRef.current = null;
-          }
+          // Entities spawn after Rapier ready (pendingGameRef handled in create().then)
         }
       }, 100);
+    } else if (
+      gameMode !== 'menu' &&
+      isInitializedRef.current &&
+      physicsWorldRef.current &&
+      pendingGameRef.current
+    ) {
+      const { faction, mode } = pendingGameRef.current;
+      pendingGameRef.current = null;
+      initializeGameEntities(faction, mode);
     }
   }, [gameMode, initializeScene, initializeGameEntities]);
 
@@ -2693,7 +2942,7 @@ export default function Wargus() {
             variant="ghost"
             size="sm"
             onClick={() => {
-              isInitializedRef.current = false;
+              // Keep Rapier world + scene; only re-spawn entities
               startGame(gameMode, playerFaction);
             }}
             className="text-amber-400 hover:text-amber-200 hover:bg-amber-900/50 h-7 px-2"
@@ -2764,9 +3013,10 @@ export default function Wargus() {
             <div>• P - Patrol</div>
             <div>• S - Stop</div>
             <div>• H - Hold Position</div>
-            <div>• G - Gather (peasants)</div>
-            <div>• B - Build menu (peasants)</div>
-            <div>• R - Repair (peasants)</div>
+            <div>• G - Gather (workers — bag/wood while carrying)</div>
+            <div>• B - Build menu (workers)</div>
+            <div>• R - Repair (workers)</div>
+            <div>• Select forge/armory → research upgrades</div>
             <div className="font-bold text-amber-400 mt-2">Groups:</div>
             <div>• Ctrl+1-9 - Assign group</div>
             <div>• 1-9 - Select group</div>
@@ -2925,31 +3175,33 @@ export default function Wargus() {
                 );
               })}
             </div>
-          ) : selectedBuildingData && bStat(selectedBuildingData.type).trains.length > 0 && !selectedBuildingData.isConstructing ? (
-            <div className="h-full">
-              <div className="grid grid-cols-4 gap-1">
-                {bStat(selectedBuildingData.type).trains.map(unitType => {
-                  const stats = uStat(unitType);
-                  const canAfford = resources[playerFaction].gold >= stats.cost.gold && 
-                                   resources[playerFaction].lumber >= stats.cost.lumber &&
-                                   food[playerFaction].used < food[playerFaction].max;
-                  return (
-                    <button
-                      key={unitType}
-                      onClick={() => trainUnit(unitType)}
-                      disabled={!canAfford}
-                      className={`flex flex-col items-center justify-center p-2 rounded border-2 transition-all
-                        ${canAfford ? 'border-amber-700 bg-amber-900/30 hover:bg-amber-800/50 hover:border-amber-500' : 
-                          'border-gray-700 bg-gray-900/50 opacity-50 cursor-not-allowed'}`}
-                      data-testid={`button-train-${unitType}`}
-                    >
-                      <span className="text-3xl">{stats.icon}</span>
-                      <span className="text-amber-300 text-xs">{stats.name}</span>
-                      <span className="text-yellow-400 text-xs">{stats.cost.gold}💰</span>
-                    </button>
-                  );
-                })}
-              </div>
+          ) : selectedBuildingData && !selectedBuildingData.isConstructing ? (
+            <div className="h-full overflow-y-auto">
+              {bStat(selectedBuildingData.type).trains.length > 0 && (
+                <div className="grid grid-cols-4 gap-1">
+                  {bStat(selectedBuildingData.type).trains.map(unitType => {
+                    const stats = uStat(unitType);
+                    const canAfford = resources[playerFaction].gold >= stats.cost.gold &&
+                                     resources[playerFaction].lumber >= stats.cost.lumber &&
+                                     food[playerFaction].used < food[playerFaction].max;
+                    return (
+                      <button
+                        key={unitType}
+                        onClick={() => trainUnit(unitType)}
+                        disabled={!canAfford}
+                        className={`flex flex-col items-center justify-center p-2 rounded border-2 transition-all
+                          ${canAfford ? 'border-amber-700 bg-amber-900/30 hover:bg-amber-800/50 hover:border-amber-500' :
+                            'border-gray-700 bg-gray-900/50 opacity-50 cursor-not-allowed'}`}
+                        data-testid={`button-train-${unitType}`}
+                      >
+                        <span className="text-3xl">{stats.icon}</span>
+                        <span className="text-amber-300 text-xs">{stats.name}</span>
+                        <span className="text-yellow-400 text-xs">{stats.cost.gold}💰</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
               {selectedBuildingData.productionQueue.length > 0 && (
                 <div className="mt-2 flex items-center gap-2">
                   <span className="text-amber-500 text-xs">Queue:</span>
@@ -2959,6 +3211,68 @@ export default function Wargus() {
                   <div className="flex-1 bg-gray-800 h-2 rounded ml-2">
                     <div className="bg-amber-500 h-full rounded transition-all" style={{ width: `${selectedBuildingData.productionProgress}%` }} />
                   </div>
+                </div>
+              )}
+              {/* Upgrades researched at this building (forge / armory / chapel) */}
+              {(() => {
+                const upgs = getUpgradesAtBuilding(selectedBuildingData.type, playerFaction).slice(0, 8);
+                if (upgs.length === 0) return null;
+                void researchedTick; // re-render when research completes
+                return (
+                  <div className="mt-2">
+                    <div className="text-amber-400 text-xs font-bold mb-1">Upgrades</div>
+                    <div className="grid grid-cols-4 gap-1">
+                      {upgs.map((upg: UpgradeDef) => {
+                        const done = researchedUpgradesRef.current[playerFaction].has(upg.id);
+                        const queued = selectedBuildingData.researchQueue?.includes(upg.id);
+                        const canAfford =
+                          !done &&
+                          !queued &&
+                          resources[playerFaction].gold >= upg.cost.gold &&
+                          resources[playerFaction].lumber >= upg.cost.wood;
+                        return (
+                          <button
+                            key={upg.id}
+                            title={`${upg.name}: ${upg.effect}`}
+                            onClick={() => queueUpgrade(upg.id)}
+                            disabled={done || queued || !canAfford}
+                            className={`flex flex-col items-center p-1 rounded border text-[10px] leading-tight
+                              ${done ? 'border-green-600 bg-green-900/40 text-green-300' :
+                                queued ? 'border-blue-500 bg-blue-900/40 text-blue-200' :
+                                canAfford ? 'border-amber-700 bg-amber-900/30 hover:bg-amber-800/50 text-amber-200' :
+                                'border-gray-700 opacity-40 cursor-not-allowed text-gray-400'}`}
+                            data-testid={`button-upgrade-${upg.id}`}
+                          >
+                            <span className="text-lg">{done ? '✅' : '⬆️'}</span>
+                            <span className="truncate w-full text-center">{upg.name}</span>
+                            {!done && (
+                              <span className="text-yellow-400">{upg.cost.gold}g</span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {(selectedBuildingData.researchQueue?.length ?? 0) > 0 && (
+                      <div className="mt-1 flex items-center gap-2">
+                        <span className="text-blue-400 text-xs">Research:</span>
+                        <span className="text-xs text-blue-200 truncate">
+                          {getUpgrade(selectedBuildingData.researchQueue[0])?.name}
+                        </span>
+                        <div className="flex-1 bg-gray-800 h-2 rounded">
+                          <div
+                            className="bg-blue-500 h-full rounded transition-all"
+                            style={{ width: `${selectedBuildingData.researchProgress}%` }}
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+              {bStat(selectedBuildingData.type).trains.length === 0 &&
+                getUpgradesAtBuilding(selectedBuildingData.type, playerFaction).length === 0 && (
+                <div className="text-amber-600 text-sm text-center py-4">
+                  No production or upgrades at this building
                 </div>
               )}
             </div>

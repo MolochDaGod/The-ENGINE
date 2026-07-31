@@ -41,6 +41,9 @@ export interface PlayerLoadout {
   heroId: string;
   primaryWeapon: string;
   secondaryWeapon: string | null;
+  /** Unity / roster cosmetics (optional) */
+  wingsId?: string | null;
+  capeId?: string | null;
 }
 
 export const LOADOUT_STORAGE_KEY = "grudge:pregame-loadout";
@@ -70,7 +73,8 @@ export function getArmorMeshNames(prefab: CharacterPrefab): string[] {
     `${p}Units_Arms_${e.arms}`,
     `${p}Units_Legs_${e.legs}`,
   ];
-  if (e.head) names.push(`${p}Units_head_${e.head}`);
+  // Always include a head (null helm loadout → bare head_A)
+  names.push(`${p}Units_head_${e.head || "A"}`);
   if (e.shoulders) names.push(`${p}Units_shoulderpads_${e.shoulders}`);
   return names;
 }
@@ -121,6 +125,8 @@ export function parseRosterSearch(search: string): Partial<PlayerLoadout> {
     heroId: params.get("hero") ?? undefined,
     primaryWeapon: params.get("primary") ?? undefined,
     secondaryWeapon: params.get("secondary"),
+    wingsId: params.get("wings"),
+    capeId: params.get("cape"),
   };
 }
 
@@ -129,6 +135,8 @@ export function buildRosterSearch(loadout: PlayerLoadout): string {
   params.set("hero", loadout.heroId);
   params.set("primary", loadout.primaryWeapon);
   if (loadout.secondaryWeapon) params.set("secondary", loadout.secondaryWeapon);
+  if (loadout.wingsId) params.set("wings", loadout.wingsId);
+  if (loadout.capeId) params.set("cape", loadout.capeId);
   return `?${params.toString()}`;
 }
 
@@ -141,5 +149,24 @@ export function defaultPlayerLoadout(): PlayerLoadout {
     heroId: CHARACTER_PREFABS[0]?.id ?? "barbarian_warrior",
     primaryWeapon: "pistol",
     secondaryWeapon: "knife",
+    wingsId: null,
+    capeId: null,
   };
+}
+
+/** Map pregame weapon id → ObjectStore weapon-skills type id (best effort). */
+export function weaponSkillsTypeForPregame(weaponId: string): string {
+  const map: Record<string, string> = {
+    knife: "dagger",
+    shovel: "axe",
+    pistol: "pistol",
+    smg: "smg",
+    shotgun: "shotgun",
+    ak: "rifle",
+    sniper: "rifle",
+    revolver: "pistol",
+    grenade: "throwable",
+    launcher: "launcher",
+  };
+  return map[weaponId] ?? weaponId;
 }

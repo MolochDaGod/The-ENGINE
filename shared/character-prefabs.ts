@@ -93,13 +93,34 @@ const RACE_META: Record<RaceId, { prefix: string; faction: FactionId; modelDir: 
 };
 
 const ASSETS_CDN = "https://assets.grudge-studio.com";
+/** Open launcher race faces (verified PNG) — secondary portrait source. */
+const OPEN_RACES = "https://open.grudge-studio.com/races";
 
 export function prefabRaceIconUrl(race: RaceId): string {
   return `${ASSETS_CDN}/icons/pack/races/${race}.png`;
 }
 
 export function prefabClassIconUrl(classId: ClassId): string {
-  return `${ASSETS_CDN}/icons/pack/classes/${classId}.png`;
+  // CDN has worge + worg aliases
+  const key = classId === "worge" ? "worge" : classId;
+  return `${ASSETS_CDN}/icons/pack/classes/${key}.png`;
+}
+
+/**
+ * Ordered portrait candidates for a race×class hero card.
+ * Prefer race icon (always on CDN); Open race PNG; class badge as last.
+ */
+export function prefabPortraitCandidates(
+  race: RaceId,
+  classId: ClassId,
+): string[] {
+  return [
+    prefabRaceIconUrl(race),
+    `${OPEN_RACES}/${race}.png`,
+    // Open uses high_elf for some elves
+    race === "elf" ? `${OPEN_RACES}/elf.png` : "",
+    prefabClassIconUrl(classId),
+  ].filter(Boolean);
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -137,7 +158,7 @@ const CLASS_CONFIGS: Record<ClassId, {
   mage: {
     animPack: "magic",
     equipment: {
-      head: null,
+      head: "A", // bare / default head mesh (not helmetless-invisible)
       shoulders: null,
       rightHand: null, rightHandType: null,
       leftHand: "A", leftHandType: "staff",
@@ -158,7 +179,7 @@ const CLASS_CONFIGS: Record<ClassId, {
   ranger: {
     animPack: "longbow",
     equipment: {
-      head: null,
+      head: "A",
       shoulders: null,
       rightHand: null, rightHandType: null,
       leftHand: null, leftHandType: "bow",
@@ -179,7 +200,7 @@ const CLASS_CONFIGS: Record<ClassId, {
   worge: {
     animPack: "2h_melee",
     equipment: {
-      head: null,
+      head: "A",
       shoulders: null,
       rightHand: "A", rightHandType: "axe",
       leftHand: null, leftHandType: null,
@@ -222,11 +243,13 @@ function buildPrefab(race: RaceId, classId: ClassId): CharacterPrefab {
   };
 
   // Starting armor variant per class (material: metal / leather / cloth / mix)
+  // head letter = face/helm mesh variant. Prefer "A" bare/default when unhelmeted —
+  // never leave head unset at runtime (see character-meshes pickHeadMesh).
   const armorVariant: Record<ClassId, { body: string; arms: string; legs: string; head: string | null; shoulders: string | null }> = {
-    warrior: { body: "A", arms: "A", legs: "A", head: "A", shoulders: "A" }, // Metal plate
-    mage:    { body: "C", arms: "C", legs: "B", head: null, shoulders: null }, // Cloth
-    ranger:  { body: "B", arms: "B", legs: "B", head: null, shoulders: null }, // Leather
-    worge:   { body: "D", arms: "A", legs: "C", head: null, shoulders: null }, // Leather+cloth
+    warrior: { body: "A", arms: "A", legs: "A", head: "A", shoulders: "A" }, // Metal plate + helm A
+    mage:    { body: "C", arms: "C", legs: "B", head: "A", shoulders: null }, // Cloth + bare head A
+    ranger:  { body: "B", arms: "B", legs: "B", head: "A", shoulders: null }, // Leather + bare head A
+    worge:   { body: "D", arms: "A", legs: "C", head: "A", shoulders: null }, // Mix + bare head A
   };
 
   /**
@@ -382,7 +405,8 @@ export function getEquipmentMeshNames(prefab: CharacterPrefab): string[] {
   meshes.push(`${p}Units_Body_${e.body}`);
   meshes.push(`${p}Units_Arms_${e.arms}`);
   meshes.push(`${p}Units_Legs_${e.legs}`);
-  if (e.head) meshes.push(`${p}Units_head_${e.head}`);
+  // Always declare a head mesh id (bare default A when unset)
+  meshes.push(`${p}Units_head_${e.head || "A"}`);
   if (e.shoulders) meshes.push(`${p}Units_shoulderpads_${e.shoulders}`);
   if (e.rightHand && e.rightHandType) meshes.push(`${p}Units_${e.rightHandType}_${e.rightHand}`);
   if (e.leftHand && e.leftHandType) {

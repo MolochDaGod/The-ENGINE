@@ -21,6 +21,7 @@ import {
   type ClassId,
   type FactionId,
 } from "@shared/character-prefabs";
+import { HeroPortrait } from "@/components/hero-portrait";
 
 const RACE_ORDER: RaceId[] = ["human", "barbarian", "elf", "dwarf", "orc", "undead"];
 const CLASS_ORDER: ClassId[] = ["warrior", "mage", "ranger", "worge"];
@@ -73,21 +74,11 @@ function HeroThumb({
           className="w-10 h-10 sm:w-12 sm:h-12 rounded-full overflow-hidden border-2 mb-1.5 shadow-lg"
           style={{ borderColor: hero.classColor + "99", background: hero.classColor + "22" }}
         >
-          <img
-            src={hero.iconUrl}
-            alt=""
+          <HeroPortrait
+            prefab={hero}
             className="w-full h-full object-cover"
-            loading="lazy"
-            onError={(e) => {
-              const el = e.currentTarget;
-              el.style.display = "none";
-              const sibling = el.nextElementSibling as HTMLElement | null;
-              if (sibling) sibling.classList.remove("hidden");
-            }}
+            alt={hero.name}
           />
-          <span className="hidden w-full h-full flex items-center justify-center text-lg">
-            {CLASS_ICONS[hero.classId]}
-          </span>
         </div>
         <span className="text-[9px] sm:text-[10px] font-heading text-[hsl(45,30%,92%)] text-center leading-tight line-clamp-2 px-0.5">
           {hero.name}
@@ -133,13 +124,10 @@ function HeroPopOut({
                 className="w-20 h-20 rounded-xl overflow-hidden border-2 shrink-0 shadow-xl"
                 style={{ borderColor: hero.classColor + "aa", background: hero.classColor + "25" }}
               >
-                <img
-                  src={hero.iconUrl}
-                  alt={hero.name}
+                <HeroPortrait
+                  prefab={hero}
                   className="w-full h-full object-cover"
-                  onError={(e) => {
-                    e.currentTarget.src = hero.raceIconUrl;
-                  }}
+                  alt={hero.name}
                 />
               </div>
               <div className="min-w-0 flex-1">
