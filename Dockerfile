@@ -21,8 +21,8 @@ RUN apk add --no-cache git
 
 COPY package.json package-lock.json* ./
 RUN npm ci --omit=dev --legacy-peer-deps --ignore-scripts || npm install --omit=dev --legacy-peer-deps --ignore-scripts
-# drizzle-kit needed for DB migrations at startup
-RUN npm install drizzle-kit
+# drizzle-kit needed for DB migrations at startup (must keep legacy-peer-deps — grudge-control peerOptional)
+RUN npm install drizzle-kit --legacy-peer-deps --ignore-scripts
 
 # Copy built client + server
 COPY --from=build /app/dist ./dist
