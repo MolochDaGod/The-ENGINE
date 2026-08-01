@@ -30,7 +30,7 @@ export interface ModeConfig {
 const SURVIVAL: ModeConfig = {
   id: 'survival',
   name: 'SURVIVAL',
-  description: 'Survive endless waves of increasingly powerful enemies. How long can you last?',
+  description: 'Survive endless waves of grudge6 enemies. How long can you last?',
   icon: '☠️',
   allies: [], // no allies in survival
   waves: [

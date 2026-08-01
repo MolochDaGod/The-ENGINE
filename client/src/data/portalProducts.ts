@@ -101,7 +101,8 @@ const _PORTAL_PRODUCTS_RAW = [
     id: "avernus-arena",
     name: "Avernus Arena",
     href: "/avernus-arena",
-    description: "Dark-fantasy arena combat with PvP and PvPvE rotations.",
+    description:
+      "Dark-fantasy pit combat with grudge6 Toon RTS heroes, Danger Room controls, weapon skill packs, and REST sessions.",
     status: "beta",
     section: "play",
     tags: ["pvp", "pvpve", "arena"],

@@ -2273,6 +2273,95 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Friends + tournaments + studio admin (was never mounted)
   registerStudioFeatures(app);
 
+  // ── Avernus Arena REST (grudge6 config + sessions) ────────────────────────
+  {
+    const avernusConfig = {
+      gameId: "avernus-arena",
+      name: "Avernus Arena",
+      version: "2.0.0",
+      modes: [
+        { id: "survival", name: "SURVIVAL", description: "Endless grudge6 waves.", icon: "☠️" },
+        { id: "team_deathmatch", name: "TEAM DEATHMATCH", description: "Squad vs enemy kits.", icon: "⚔️" },
+        { id: "boss_rush", name: "BOSS RUSH", description: "Boss gauntlet.", icon: "👑" },
+        { id: "escort", name: "ESCORT", description: "Protect the VIP.", icon: "🛡️" },
+      ],
+      races: [
+        { id: "human", name: "Human", prefix: "WK_" },
+        { id: "barbarian", name: "Barbarian", prefix: "BRB_" },
+        { id: "elf", name: "Elf", prefix: "ELF_" },
+        { id: "dwarf", name: "Dwarf", prefix: "DWF_" },
+        { id: "orc", name: "Orc", prefix: "ORC_" },
+        { id: "undead", name: "Undead", prefix: "UD_" },
+      ],
+      weapons: [
+        { type: "sword_shield", name: "Sword & Shield", packId: "sword-shield" },
+        { type: "greatsword", name: "Greatsword", packId: "great-sword" },
+        { type: "bow", name: "Longbow", packId: "longbow" },
+        { type: "sabres", name: "Dual Sabres", packId: "unarmed" },
+        { type: "scythe", name: "Scythe", packId: "great-sword" },
+        { type: "runeblade", name: "Runeblade", packId: "magic-caster" },
+      ],
+      controls: [
+        { keys: "WASD / Arrows", label: "Move (camera-relative)" },
+        { keys: "LMB", label: "Light attack / combo" },
+        { keys: "RMB", label: "Heavy / bash" },
+        { keys: "Space", label: "Jump" },
+        { keys: "Shift", label: "Dash / dodge" },
+        { keys: "Ctrl", label: "Block" },
+        { keys: "1–4 / Q E R F", label: "Weapon skills" },
+      ],
+      camera: { mode: "FOLLOW", distance: 7.5, height: 3.8 },
+      characterStack: [
+        "loadRaceWithEquipment",
+        "RoleControls",
+        "GameCamera.FOLLOW",
+        "weaponPack FBX",
+        "CharacterFSM",
+      ],
+      rest: {
+        config: "/api/avernus/config",
+        session: "POST /api/avernus/session",
+        score: "POST /api/scores",
+        leaderboard: "GET /api/leaderboards/avernus-arena",
+      },
+    };
+    const avernusSessions = new Map<string, Record<string, unknown>>();
+
+    app.get("/api/avernus/config", (_req, res) => {
+      res.setHeader("Cache-Control", "public, max-age=60");
+      return res.json(avernusConfig);
+    });
+    app.get("/api/avernus", (_req, res) => res.redirect(302, "/api/avernus/config"));
+
+    app.post("/api/avernus/session", (req, res) => {
+      const id = crypto.randomUUID();
+      const session = {
+        id,
+        gameId: "avernus-arena",
+        mode: String(req.body?.mode || "survival"),
+        race: String(req.body?.race || "human"),
+        weapon: String(req.body?.weapon || "sword_shield"),
+        heroId: req.body?.heroId ? String(req.body.heroId) : undefined,
+        createdAt: Date.now(),
+        status: "active" as const,
+      };
+      avernusSessions.set(id, session);
+      if (avernusSessions.size > 500) {
+        const first = avernusSessions.keys().next().value;
+        if (first) avernusSessions.delete(first);
+      }
+      return res.status(201).json(session);
+    });
+
+    app.get("/api/avernus/session", (req, res) => {
+      const id = String(req.query.id || "");
+      if (!id) return res.status(400).json({ error: "id required" });
+      const s = avernusSessions.get(id);
+      if (!s) return res.status(404).json({ error: "session not found" });
+      return res.json(s);
+    });
+  }
+
   app.get("/api/games/top", async (req, res) => {
     try {
       const limit = Math.min(parseInt(req.query.limit as string) || 12, 50);

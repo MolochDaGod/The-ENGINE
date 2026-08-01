@@ -1,1043 +1,876 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { Button } from "@/components/ui/button";
-import { ArrowLeft } from "lucide-react";
-import { Link } from "wouter";
+/**
+ * AVERNUS ARENA — grudge6 / Toon RTS combat pit
+ *
+ * Opening page → REST session → Danger Room controls + GameCamera FOLLOW
+ * Characters: loadRaceWithEquipment · weapon packs · RoleControls · FSM skills
+ *
+ * Live: https://grudge-studio.com/avernus-arena
+ * Stack: docs/ANNIHILATE_GRUDGE6_STACK.md + avernus/*
+ */
+
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { Link, useLocation } from 'wouter';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import {
+  ArrowLeft,
+  Swords,
+  Skull,
+  Crown,
+  Shield,
+  Users,
+  Play,
+  Loader2,
+  Trophy,
+} from 'lucide-react';
 import * as THREE from 'three';
 
-// Combat constants (from @grudge/combat)
-const GROUP_SCENE = 2;
-const GROUP_ROLE = 4;
-const GROUP_ENEMY = 8;
-const MAX_DT = 1 / 60;
+import {
+  GrudgeEngine,
+  RoleControls,
+  ROLE_HOTKEYS,
+  BaseAi,
+  CombatVfx,
+  GameCamera,
+  RACE_CONFIGS,
+  type CharacterRace,
+} from '@/engine';
+import { isPortalEmbedMode } from '@/lib/embed-mode';
 
-// ─── Constants ──────────────────────────────────────────
-const ARENA_RADIUS = 40;
-const WALL_HEIGHT = 8;
-const PILLAR_COUNT = 12;
-const PILLAR_RADIUS = 1.2;
-const PILLAR_HEIGHT = 10;
-const TORCH_HEIGHT = 6;
-const PLAYER_SPEED = 8;
-const CAMERA_DISTANCE = 6;
-const CAMERA_HEIGHT = 3.5;
-const CAMERA_LERP = 0.08;
-const MOUSE_SENSITIVITY = 0.003;
+import {
+  AVERNUS_HEROES,
+  RACE_DEFAULTS,
+  resolveHero,
+  type AvernusHeroPreset,
+} from './avernus/characters';
+import { WEAPONS, type WeaponType } from './avernus/weapons';
+import { WEAPON_PACKS, type WeaponPackId } from './avernus/weaponPacks';
+import { packForWeapon } from './avernus/weapons';
+import { GAME_MODES, MODE_LIST, type GameMode, generateInfiniteWave } from './avernus/modes';
+import { NPC_PROFILES } from './avernus/ai';
+import {
+  fetchAvernusConfig,
+  createAvernusSession,
+  submitAvernusScore,
+  fetchAvernusLeaderboard,
+  type AvernusConfig,
+  type LeaderboardEntry,
+} from './avernus/api';
+import { AvernusHero, AvernusEnemy, buildAvernusArena } from './avernus/combat';
+import { AVERNUS_ART, ARENA_RADIUS_M } from './avernus/assets';
 
-// ─── Textures (procedural) ──────────────────────────────
-function createStoneTexture(): THREE.CanvasTexture {
-  const size = 256;
-  const canvas = document.createElement('canvas');
-  canvas.width = size;
-  canvas.height = size;
-  const ctx = canvas.getContext('2d')!;
+type Phase = 'opening' | 'loading' | 'playing' | 'results';
 
-  // Base stone color
-  ctx.fillStyle = '#3a3632';
-  ctx.fillRect(0, 0, size, size);
-
-  // Random noise for stone grain
-  for (let i = 0; i < 4000; i++) {
-    const x = Math.random() * size;
-    const y = Math.random() * size;
-    const brightness = 40 + Math.random() * 30;
-    ctx.fillStyle = `rgb(${brightness}, ${brightness - 5}, ${brightness - 10})`;
-    ctx.fillRect(x, y, 2, 2);
-  }
-
-  // Mortar lines (grid)
-  ctx.strokeStyle = '#2a2622';
-  ctx.lineWidth = 2;
-  for (let y = 0; y < size; y += 32) {
-    ctx.beginPath();
-    ctx.moveTo(0, y);
-    ctx.lineTo(size, y);
-    ctx.stroke();
-  }
-  for (let x = 0; x < size; x += 64) {
-    ctx.beginPath();
-    ctx.moveTo(x, 0);
-    ctx.lineTo(x, size);
-    ctx.stroke();
-  }
-
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-  tex.repeat.set(4, 4);
-  return tex;
+interface EnemyInstance {
+  character: AvernusEnemy;
+  ai: BaseAi;
 }
 
-function createGroundTexture(): THREE.CanvasTexture {
-  const size = 512;
-  const canvas = document.createElement('canvas');
-  canvas.width = size;
-  canvas.height = size;
-  const ctx = canvas.getContext('2d')!;
+const MODE_ICONS: Record<GameMode, ReactNode> = {
+  survival: <Skull className="w-5 h-5" />,
+  team_deathmatch: <Users className="w-5 h-5" />,
+  boss_rush: <Crown className="w-5 h-5" />,
+  escort: <Shield className="w-5 h-5" />,
+};
 
-  // Packed dirt base
-  ctx.fillStyle = '#4a3f35';
-  ctx.fillRect(0, 0, size, size);
-
-  // Sand/dirt variation
-  for (let i = 0; i < 8000; i++) {
-    const x = Math.random() * size;
-    const y = Math.random() * size;
-    const r = Math.random();
-    if (r < 0.3) {
-      ctx.fillStyle = `rgba(90, 75, 55, ${0.3 + Math.random() * 0.4})`;
-    } else if (r < 0.6) {
-      ctx.fillStyle = `rgba(60, 50, 40, ${0.3 + Math.random() * 0.4})`;
-    } else {
-      ctx.fillStyle = `rgba(100, 85, 65, ${0.2 + Math.random() * 0.3})`;
-    }
-    ctx.fillRect(x, y, 1 + Math.random() * 3, 1 + Math.random() * 3);
-  }
-
-  // Arena circle marking
-  ctx.strokeStyle = 'rgba(180, 160, 100, 0.15)';
-  ctx.lineWidth = 4;
-  ctx.beginPath();
-  ctx.arc(size / 2, size / 2, size * 0.35, 0, Math.PI * 2);
-  ctx.stroke();
-
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-  tex.repeat.set(8, 8);
-  return tex;
-}
-
-// ─── Scene builder functions ────────────────────────────
-function buildGround(scene: THREE.Scene): THREE.Mesh {
-  const groundTex = createGroundTexture();
-  const geo = new THREE.CircleGeometry(ARENA_RADIUS, 64);
-  const mat = new THREE.MeshStandardMaterial({
-    map: groundTex,
-    roughness: 0.9,
-    metalness: 0.05,
-  });
-  const mesh = new THREE.Mesh(geo, mat);
-  mesh.rotation.x = -Math.PI / 2;
-  mesh.receiveShadow = true;
-  mesh.userData.collisionGroup = GROUP_SCENE;
-  scene.add(mesh);
-  return mesh;
-}
-
-function buildWalls(scene: THREE.Scene): void {
-  const stoneTex = createStoneTexture();
-  const wallGeo = new THREE.CylinderGeometry(
-    ARENA_RADIUS + 0.5,
-    ARENA_RADIUS + 0.5,
-    WALL_HEIGHT,
-    64,
-    1,
-    true
-  );
-  const wallMat = new THREE.MeshStandardMaterial({
-    map: stoneTex,
-    roughness: 0.85,
-    metalness: 0.1,
-    side: THREE.BackSide,
-  });
-  const wall = new THREE.Mesh(wallGeo, wallMat);
-  wall.position.y = WALL_HEIGHT / 2;
-  wall.receiveShadow = true;
-  wall.castShadow = true;
-  wall.userData.collisionGroup = GROUP_SCENE;
-  scene.add(wall);
-
-  // Wall cap (top rim)
-  const rimGeo = new THREE.TorusGeometry(ARENA_RADIUS + 0.5, 0.4, 8, 64);
-  const rimMat = new THREE.MeshStandardMaterial({
-    color: 0x5a4e42,
-    roughness: 0.7,
-    metalness: 0.2,
-  });
-  const rim = new THREE.Mesh(rimGeo, rimMat);
-  rim.rotation.x = Math.PI / 2;
-  rim.position.y = WALL_HEIGHT;
-  rim.castShadow = true;
-  scene.add(rim);
-}
-
-function buildPillars(scene: THREE.Scene): void {
-  const stoneTex = createStoneTexture();
-  stoneTex.repeat.set(1, 2);
-
-  for (let i = 0; i < PILLAR_COUNT; i++) {
-    const angle = (i / PILLAR_COUNT) * Math.PI * 2;
-    const x = Math.cos(angle) * (ARENA_RADIUS - 2);
-    const z = Math.sin(angle) * (ARENA_RADIUS - 2);
-
-    // Pillar column
-    const pillarGeo = new THREE.CylinderGeometry(
-      PILLAR_RADIUS,
-      PILLAR_RADIUS * 1.15,
-      PILLAR_HEIGHT,
-      12
-    );
-    const pillarMat = new THREE.MeshStandardMaterial({
-      map: stoneTex.clone(),
-      roughness: 0.75,
-      metalness: 0.15,
-    });
-    const pillar = new THREE.Mesh(pillarGeo, pillarMat);
-    pillar.position.set(x, PILLAR_HEIGHT / 2, z);
-    pillar.castShadow = true;
-    pillar.receiveShadow = true;
-    pillar.userData.collisionGroup = GROUP_SCENE;
-    scene.add(pillar);
-
-    // Pillar capital (decorative top)
-    const capGeo = new THREE.BoxGeometry(
-      PILLAR_RADIUS * 2.5,
-      0.6,
-      PILLAR_RADIUS * 2.5
-    );
-    const cap = new THREE.Mesh(capGeo, pillarMat);
-    cap.position.set(x, PILLAR_HEIGHT + 0.3, z);
-    cap.castShadow = true;
-    scene.add(cap);
-  }
-}
-
-function buildTorches(scene: THREE.Scene): THREE.PointLight[] {
-  const lights: THREE.PointLight[] = [];
-  const torchCount = 8;
-
-  for (let i = 0; i < torchCount; i++) {
-    const angle = (i / torchCount) * Math.PI * 2 + Math.PI / torchCount;
-    const x = Math.cos(angle) * (ARENA_RADIUS - 3);
-    const z = Math.sin(angle) * (ARENA_RADIUS - 3);
-
-    // Torch bracket
-    const bracketGeo = new THREE.CylinderGeometry(0.08, 0.08, 1.5, 6);
-    const bracketMat = new THREE.MeshStandardMaterial({
-      color: 0x3d3530,
-      roughness: 0.6,
-      metalness: 0.4,
-    });
-    const bracket = new THREE.Mesh(bracketGeo, bracketMat);
-    bracket.position.set(x, TORCH_HEIGHT - 0.75, z);
-    scene.add(bracket);
-
-    // Flame glow
-    const flameMat = new THREE.MeshBasicMaterial({
-      color: 0xff8820,
-      transparent: true,
-      opacity: 0.9,
-    });
-    const flameGeo = new THREE.SphereGeometry(0.25, 8, 8);
-    const flame = new THREE.Mesh(flameGeo, flameMat);
-    flame.position.set(x, TORCH_HEIGHT, z);
-    scene.add(flame);
-
-    // Point light
-    const light = new THREE.PointLight(0xff6600, 2.5, 18, 1.5);
-    light.position.set(x, TORCH_HEIGHT + 0.3, z);
-    light.castShadow = false; // too many shadow-casting lights is expensive
-    scene.add(light);
-    lights.push(light);
-  }
-
-  return lights;
-}
-
-function buildPlayer(scene: THREE.Scene): THREE.Group {
-  const group = new THREE.Group();
-
-  // Body (capsule = cylinder + 2 hemispheres)
-  const bodyGeo = new THREE.CylinderGeometry(0.35, 0.35, 1.0, 12);
-  const bodyMat = new THREE.MeshStandardMaterial({
-    color: 0x3388cc,
-    roughness: 0.4,
-    metalness: 0.3,
-  });
-  const body = new THREE.Mesh(bodyGeo, bodyMat);
-  body.position.y = 1.0;
-  body.castShadow = true;
-  group.add(body);
-
-  // Head
-  const headGeo = new THREE.SphereGeometry(0.3, 12, 12);
-  const headMat = new THREE.MeshStandardMaterial({
-    color: 0xddaa77,
-    roughness: 0.5,
-    metalness: 0.1,
-  });
-  const head = new THREE.Mesh(headGeo, headMat);
-  head.position.y = 1.8;
-  head.castShadow = true;
-  group.add(head);
-
-  // Shoulder pads (WoW-style flair)
-  const padGeo = new THREE.SphereGeometry(0.22, 8, 8);
-  const padMat = new THREE.MeshStandardMaterial({
-    color: 0x886633,
-    roughness: 0.6,
-    metalness: 0.3,
-  });
-  const leftPad = new THREE.Mesh(padGeo, padMat);
-  leftPad.position.set(-0.45, 1.4, 0);
-  leftPad.scale.set(1, 0.7, 1.2);
-  leftPad.castShadow = true;
-  group.add(leftPad);
-
-  const rightPad = new THREE.Mesh(padGeo.clone(), padMat);
-  rightPad.position.set(0.45, 1.4, 0);
-  rightPad.scale.set(1, 0.7, 1.2);
-  rightPad.castShadow = true;
-  group.add(rightPad);
-
-  group.userData.collisionGroup = GROUP_ROLE;
-  scene.add(group);
-  return group;
-}
-
-interface EnemyData {
-  group: THREE.Group;
+function HealthBar({
+  current,
+  max,
+  name,
+}: {
+  current: number;
+  max: number;
   name: string;
-  hp: number;
-  maxHp: number;
-  ring: THREE.Mesh;
-}
-
-function buildEnemyDummy(
-  scene: THREE.Scene,
-  x: number,
-  z: number,
-  name: string
-): EnemyData {
-  const group = new THREE.Group();
-
-  const bodyGeo = new THREE.CylinderGeometry(0.4, 0.4, 1.2, 8);
-  const bodyMat = new THREE.MeshStandardMaterial({
-    color: 0xcc3333,
-    roughness: 0.5,
-    metalness: 0.2,
-  });
-  const body = new THREE.Mesh(bodyGeo, bodyMat);
-  body.position.y = 0.9;
-  body.castShadow = true;
-  group.add(body);
-
-  const headGeo = new THREE.SphereGeometry(0.28, 8, 8);
-  const head = new THREE.Mesh(
-    headGeo,
-    new THREE.MeshStandardMaterial({ color: 0x994444, roughness: 0.5 })
-  );
-  head.position.y = 1.75;
-  head.castShadow = true;
-  group.add(head);
-
-  // Target selection ring (hidden by default)
-  const ringGeo = new THREE.RingGeometry(0.7, 0.9, 32);
-  const ringMat = new THREE.MeshBasicMaterial({
-    color: 0xff4444,
-    transparent: true,
-    opacity: 0.6,
-    side: THREE.DoubleSide,
-  });
-  const ring = new THREE.Mesh(ringGeo, ringMat);
-  ring.rotation.x = -Math.PI / 2;
-  ring.position.y = 0.02;
-  ring.visible = false;
-  group.add(ring);
-
-  group.position.set(x, 0, z);
-  group.userData.collisionGroup = GROUP_ENEMY;
-  group.userData.enemyName = name;
-  scene.add(group);
-  return { group, name, hp: 800, maxHp: 800, ring };
-}
-
-// ─── Center arena brazier ───────────────────────────────
-function buildCenterBrazier(scene: THREE.Scene): THREE.PointLight {
-  // Stone base
-  const baseGeo = new THREE.CylinderGeometry(1.5, 2.0, 0.8, 8);
-  const baseMat = new THREE.MeshStandardMaterial({
-    color: 0x4a4035,
-    roughness: 0.8,
-    metalness: 0.15,
-  });
-  const base = new THREE.Mesh(baseGeo, baseMat);
-  base.position.y = 0.4;
-  base.castShadow = true;
-  base.receiveShadow = true;
-  scene.add(base);
-
-  // Bowl
-  const bowlGeo = new THREE.CylinderGeometry(1.2, 0.8, 0.5, 8, 1, true);
-  const bowlMat = new THREE.MeshStandardMaterial({
-    color: 0x3a3025,
-    roughness: 0.7,
-    metalness: 0.3,
-    side: THREE.DoubleSide,
-  });
-  const bowl = new THREE.Mesh(bowlGeo, bowlMat);
-  bowl.position.y = 1.05;
-  scene.add(bowl);
-
-  // Glowing embers inside
-  const emberGeo = new THREE.CircleGeometry(1.0, 16);
-  const emberMat = new THREE.MeshBasicMaterial({
-    color: 0xff4400,
-    transparent: true,
-    opacity: 0.7,
-  });
-  const embers = new THREE.Mesh(emberGeo, emberMat);
-  embers.rotation.x = -Math.PI / 2;
-  embers.position.y = 0.85;
-  scene.add(embers);
-
-  // Central fire light
-  const fireLight = new THREE.PointLight(0xff6622, 4, 25, 1.2);
-  fireLight.position.set(0, 2.5, 0);
-  fireLight.castShadow = true;
-  fireLight.shadow.mapSize.width = 512;
-  fireLight.shadow.mapSize.height = 512;
-  scene.add(fireLight);
-
-  // Rune circle on ground around brazier
-  const runeGeo = new THREE.RingGeometry(3.5, 4.0, 64);
-  const runeMat = new THREE.MeshBasicMaterial({
-    color: 0xc8a040,
-    transparent: true,
-    opacity: 0.12,
-    side: THREE.DoubleSide,
-  });
-  const runes = new THREE.Mesh(runeGeo, runeMat);
-  runes.rotation.x = -Math.PI / 2;
-  runes.position.y = 0.01;
-  scene.add(runes);
-
-  // Inner rune ring
-  const innerRuneGeo = new THREE.RingGeometry(2.0, 2.2, 64);
-  const innerRunes = new THREE.Mesh(innerRuneGeo, runeMat.clone());
-  innerRunes.rotation.x = -Math.PI / 2;
-  innerRunes.position.y = 0.01;
-  scene.add(innerRunes);
-
-  return fireLight;
-}
-
-// ─── Fire particle system ───────────────────────────────
-function buildFireParticles(
-  scene: THREE.Scene,
-  origin: THREE.Vector3,
-  count: number = 60
-): { points: THREE.Points; update: (dt: number) => void } {
-  const positions = new Float32Array(count * 3);
-  const velocities = new Float32Array(count * 3);
-  const lifetimes = new Float32Array(count);
-  const ages = new Float32Array(count);
-
-  for (let i = 0; i < count; i++) {
-    resetParticle(i);
-  }
-
-  function resetParticle(i: number) {
-    positions[i * 3] = origin.x + (Math.random() - 0.5) * 0.8;
-    positions[i * 3 + 1] = origin.y + Math.random() * 0.3;
-    positions[i * 3 + 2] = origin.z + (Math.random() - 0.5) * 0.8;
-    velocities[i * 3] = (Math.random() - 0.5) * 0.3;
-    velocities[i * 3 + 1] = 1.5 + Math.random() * 2.0;
-    velocities[i * 3 + 2] = (Math.random() - 0.5) * 0.3;
-    lifetimes[i] = 0.5 + Math.random() * 1.0;
-    ages[i] = Math.random() * lifetimes[i]; // stagger initial ages
-  }
-
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-
-  const mat = new THREE.PointsMaterial({
-    color: 0xff6622,
-    size: 0.25,
-    transparent: true,
-    opacity: 0.7,
-    blending: THREE.AdditiveBlending,
-    depthWrite: false,
-  });
-
-  const points = new THREE.Points(geo, mat);
-  scene.add(points);
-
-  function update(dt: number) {
-    for (let i = 0; i < count; i++) {
-      ages[i] += dt;
-      if (ages[i] >= lifetimes[i]) {
-        resetParticle(i);
-        ages[i] = 0;
-      }
-      positions[i * 3] += velocities[i * 3] * dt;
-      positions[i * 3 + 1] += velocities[i * 3 + 1] * dt;
-      positions[i * 3 + 2] += velocities[i * 3 + 2] * dt;
-    }
-    geo.attributes.position.needsUpdate = true;
-  }
-
-  return { points, update };
-}
-
-// ─── Hotbar skill definitions ───────────────────────────
-const HOTBAR_SLOTS = [
-  { key: '1', label: 'Strike', icon: '⚔️', color: '#cc4444' },
-  { key: '2', label: 'Shield', icon: '🛡️', color: '#4488cc' },
-  { key: '3', label: 'Dash', icon: '💨', color: '#44cc88' },
-  { key: '4', label: 'Hadouken', icon: '🔥', color: '#ff8800' },
-  { key: '5', label: '', icon: '', color: '#333' },           // empty per user pref
-  { key: '6', label: 'Food', icon: '🍖', color: '#88cc44' },
-  { key: '7', label: 'Potion', icon: '🧪', color: '#cc44cc' },
-  { key: '8', label: 'Relic', icon: '💎', color: '#44cccc' },
-];
-
-// ─── HUD overlay ────────────────────────────────────────
-function HUD({ targetInfo }: { targetInfo: { name: string; hp: number; maxHp: number } | null }) {
+}) {
+  const pct = Math.max(0, Math.min(100, (current / max) * 100));
   return (
-    <div
-      style={{
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        width: '100%',
-        height: '100%',
-        pointerEvents: 'none',
-        zIndex: 10,
-      }}
-    >
-      {/* Title */}
-      <div
-        style={{
-          position: 'absolute',
-          top: 16,
-          left: '50%',
-          transform: 'translateX(-50%)',
-          color: '#e8d5a3',
-          fontFamily: '"Cinzel", "Times New Roman", serif',
-          fontSize: 28,
-          fontWeight: 700,
-          textShadow: '0 0 12px rgba(200,150,50,0.6), 0 2px 4px rgba(0,0,0,0.8)',
-          letterSpacing: 4,
-          userSelect: 'none',
-        }}
-      >
-        AVERNUS ARENA
+    <div className="min-w-[220px] rounded-lg border border-amber-500/30 bg-black/75 px-3 py-2 backdrop-blur">
+      <div className="mb-1 flex justify-between text-[10px] uppercase tracking-wider text-amber-200/80">
+        <span>{name}</span>
+        <span>
+          {Math.ceil(current)} / {max}
+        </span>
       </div>
-
-      {/* Target frame (WoW-style) */}
-      {targetInfo && (
+      <div className="h-2 overflow-hidden rounded-full bg-gray-800">
         <div
-          style={{
-            position: 'absolute',
-            top: 60,
-            left: '50%',
-            transform: 'translateX(-50%)',
-            width: 240,
-            background: 'rgba(0,0,0,0.7)',
-            border: '2px solid #8b0000',
-            borderRadius: 6,
-            padding: '6px 10px',
-          }}
-        >
-          <div
-            style={{
-              color: '#ff6666',
-              fontSize: 13,
-              fontWeight: 600,
-              marginBottom: 4,
-              fontFamily: 'sans-serif',
-              textShadow: '0 1px 2px rgba(0,0,0,0.8)',
-            }}
-          >
-            {targetInfo.name}
-          </div>
-          <div
-            style={{
-              background: 'rgba(40,0,0,0.5)',
-              border: '1px solid #5a2020',
-              borderRadius: 3,
-              padding: 2,
-            }}
-          >
-            <div
-              style={{
-                background: 'linear-gradient(to right, #cc2222, #ee4444)',
-                height: 14,
-                borderRadius: 2,
-                width: `${(targetInfo.hp / targetInfo.maxHp) * 100}%`,
-                transition: 'width 0.3s',
-                boxShadow: '0 0 6px rgba(200,50,50,0.4)',
-              }}
-            />
-          </div>
-          <div
-            style={{
-              textAlign: 'center',
-              color: '#aaa',
-              fontSize: 10,
-              marginTop: 2,
-              userSelect: 'none',
-            }}
-          >
-            {targetInfo.hp} / {targetInfo.maxHp}
-          </div>
-        </div>
-      )}
-
-      {/* Player health bar */}
-      <div
-        style={{
-          position: 'absolute',
-          bottom: 90,
-          left: '50%',
-          transform: 'translateX(-50%)',
-          width: 280,
-        }}
-      >
-        <div
-          style={{
-            background: 'rgba(0,0,0,0.6)',
-            border: '2px solid #5a4a30',
-            borderRadius: 4,
-            padding: 3,
-          }}
-        >
-          <div
-            style={{
-              background: 'linear-gradient(to right, #22aa44, #44cc66)',
-              height: 18,
-              borderRadius: 2,
-              width: '100%',
-              boxShadow: '0 0 8px rgba(50,200,80,0.4)',
-            }}
-          />
-        </div>
-        <div
-          style={{
-            textAlign: 'center',
-            color: '#ccc',
-            fontSize: 11,
-            marginTop: 2,
-            userSelect: 'none',
-          }}
-        >
-          1000 / 1000
-        </div>
-      </div>
-
-      {/* Combat hotbar */}
-      <div
-        style={{
-          position: 'absolute',
-          bottom: 16,
-          left: '50%',
-          transform: 'translateX(-50%)',
-          display: 'flex',
-          gap: 4,
-        }}
-      >
-        {HOTBAR_SLOTS.map((slot) => (
-          <div
-            key={slot.key}
-            style={{
-              width: 48,
-              height: 48,
-              background: slot.icon
-                ? `linear-gradient(135deg, rgba(0,0,0,0.7), ${slot.color}33)`
-                : 'rgba(0,0,0,0.4)',
-              border: `2px solid ${slot.icon ? slot.color + '66' : '#333'}`,
-              borderRadius: 6,
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              position: 'relative',
-            }}
-          >
-            {slot.icon && (
-              <span style={{ fontSize: 18, lineHeight: 1 }}>{slot.icon}</span>
-            )}
-            <span
-              style={{
-                position: 'absolute',
-                bottom: 1,
-                right: 3,
-                fontSize: 9,
-                color: 'rgba(200,180,120,0.5)',
-                fontFamily: 'monospace',
-              }}
-            >
-              {slot.key}
-            </span>
-            {slot.label && (
-              <span
-                style={{
-                  position: 'absolute',
-                  top: -14,
-                  fontSize: 8,
-                  color: 'rgba(200,190,170,0.5)',
-                  whiteSpace: 'nowrap',
-                  userSelect: 'none',
-                }}
-              >
-                {slot.label}
-              </span>
-            )}
-          </div>
-        ))}
-      </div>
-
-      {/* Controls hint */}
-      <div
-        style={{
-          position: 'absolute',
-          bottom: 16,
-          left: 16,
-          color: 'rgba(200,190,170,0.6)',
-          fontSize: 11,
-          lineHeight: 1.6,
-          userSelect: 'none',
-        }}
-      >
-        <div>WASD — Move · Q/E — Strafe</div>
-        <div>Mouse — Look · Tab — Target</div>
-        <div>Click — Lock cursor</div>
-      </div>
-
-      {/* Minimap placeholder */}
-      <div
-        style={{
-          position: 'absolute',
-          bottom: 16,
-          right: 16,
-          width: 120,
-          height: 120,
-          border: '2px solid rgba(200,180,120,0.3)',
-          borderRadius: '50%',
-          background: 'rgba(0,0,0,0.4)',
-        }}
-      >
-        <div
-          style={{
-            position: 'absolute',
-            top: '50%',
-            left: '50%',
-            width: 6,
-            height: 6,
-            background: '#3388cc',
-            borderRadius: '50%',
-            transform: 'translate(-50%, -50%)',
-            boxShadow: '0 0 6px #3388cc',
-          }}
+          className="h-full rounded-full bg-gradient-to-r from-red-700 via-amber-600 to-amber-400 transition-all duration-200"
+          style={{ width: `${pct}%` }}
         />
       </div>
     </div>
   );
 }
 
-// ─── Main component ─────────────────────────────────────
+function SkillBar({
+  packId,
+  cooldowns,
+}: {
+  packId: WeaponPackId;
+  cooldowns: Record<string, number>;
+}) {
+  const skills = WEAPON_PACKS[packId]?.skills ?? [];
+  return (
+    <div className="flex gap-2">
+      {skills.map((s) => {
+        const cd = cooldowns[s.key] ?? 0;
+        const ready = cd <= 0;
+        return (
+          <div
+            key={s.key}
+            className={`relative flex h-14 w-14 flex-col items-center justify-center rounded-lg border text-center ${
+              ready
+                ? 'border-amber-500/50 bg-black/70 text-amber-100'
+                : 'border-gray-700 bg-black/50 text-gray-500'
+            }`}
+            title={`${s.name}: ${s.description}`}
+          >
+            <span className="text-[10px] font-bold text-amber-400">{s.key}</span>
+            <span className="px-0.5 text-[9px] leading-tight">{s.name.split(' ')[0]}</span>
+            {!ready && (
+              <span className="absolute inset-0 flex items-center justify-center rounded-lg bg-black/60 text-sm font-mono text-white">
+                {cd.toFixed(1)}
+              </span>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function AvernusArena() {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const cleanupRef = useRef<(() => void) | null>(null);
-  const [targetInfo, setTargetInfo] = useState<{
-    name: string;
-    hp: number;
-    maxHp: number;
-  } | null>(null);
+  const [location] = useLocation();
+  const embedMode = isPortalEmbedMode();
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  const init = useCallback(() => {
-    const container = containerRef.current;
-    if (!container) return;
+  const engineRef = useRef<GrudgeEngine | null>(null);
+  const roleRef = useRef<AvernusHero | null>(null);
+  const controlsRef = useRef<RoleControls | null>(null);
+  const enemiesRef = useRef<EnemyInstance[]>([]);
+  const vfxRef = useRef<CombatVfx | null>(null);
+  const camRef = useRef<GameCamera | null>(null);
+  const sessionIdRef = useRef<string | null>(null);
+  const startedAtRef = useRef(0);
+  const skillCdRef = useRef<Record<string, number>>({});
+  const killsRef = useRef(0);
+  const waveRef = useRef(0);
+  const scoreRef = useRef(0);
+  const spawningWaveRef = useRef(false);
+  const runEndedRef = useRef(false);
 
-    // ── Renderer
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setSize(container.clientWidth, container.clientHeight);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 0.9;
-    container.appendChild(renderer.domElement);
+  const [phase, setPhase] = useState<Phase>('opening');
+  const [config, setConfig] = useState<AvernusConfig | null>(null);
+  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
+  const [mode, setMode] = useState<GameMode>('survival');
+  const [race, setRace] = useState<CharacterRace>('human');
+  const [weapon, setWeapon] = useState<WeaponType>('sword_shield');
+  const [hero, setHero] = useState<AvernusHeroPreset>(() => RACE_DEFAULTS[0] ?? AVERNUS_HEROES[0]);
+  const [info, setInfo] = useState('Preparing the pit…');
+  const [fsmState, setFsmState] = useState('loading');
+  const [playerHealth, setPlayerHealth] = useState(100);
+  const [playerMaxHealth, setPlayerMaxHealth] = useState(100);
+  const [kills, setKills] = useState(0);
+  const [wave, setWave] = useState(0);
+  const [score, setScore] = useState(0);
+  const [comboHits, setComboHits] = useState(0);
+  const [activePack, setActivePack] = useState<WeaponPackId>('sword-shield');
+  const [skillCdUi, setSkillCdUi] = useState<Record<string, number>>({});
+  const [enemyCount, setEnemyCount] = useState(0);
 
-    // ── Scene
-    const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x0c0a08);
-    scene.fog = new THREE.Fog(0x0c0a08, 30, 60);
-
-    // ── Camera
-    const camera = new THREE.PerspectiveCamera(
-      55,
-      container.clientWidth / container.clientHeight,
-      0.1,
-      200
-    );
-
-    // ── Lighting
-    const ambientLight = new THREE.AmbientLight(0x222244, 0.6);
-    scene.add(ambientLight);
-
-    const dirLight = new THREE.DirectionalLight(0xffe8c0, 1.2);
-    dirLight.position.set(15, 25, 10);
-    dirLight.castShadow = true;
-    dirLight.shadow.mapSize.width = 2048;
-    dirLight.shadow.mapSize.height = 2048;
-    dirLight.shadow.camera.near = 1;
-    dirLight.shadow.camera.far = 80;
-    dirLight.shadow.camera.left = -50;
-    dirLight.shadow.camera.right = 50;
-    dirLight.shadow.camera.top = 50;
-    dirLight.shadow.camera.bottom = -50;
-    dirLight.shadow.bias = -0.001;
-    scene.add(dirLight);
-    scene.add(dirLight.target);
-
-    // Subtle hemisphere for sky/ground bounce
-    const hemiLight = new THREE.HemisphereLight(0x2233aa, 0x3a2a18, 0.35);
-    scene.add(hemiLight);
-
-    // ── Build arena
-    buildGround(scene);
-    buildWalls(scene);
-    buildPillars(scene);
-    const torchLights = buildTorches(scene);
-    const centerLight = buildCenterBrazier(scene);
-    const fireParticles = buildFireParticles(scene, new THREE.Vector3(0, 1.2, 0), 80);
-
-    // ── Player
-    const player = buildPlayer(scene);
-    player.position.set(0, 0, 5);
-
-    // ── Enemies with target data
-    const enemies: EnemyData[] = [
-      buildEnemyDummy(scene, 8, 0, 'Crimson Gladiator'),
-      buildEnemyDummy(scene, -6, 10, 'Shadow Berserker'),
-      buildEnemyDummy(scene, 4, -12, 'Ironclad Warden'),
-    ];
-    let selectedTargetIdx = -1;
-
-    // ── Input state
-    const keys: Record<string, boolean> = {};
-    let yaw = 0; // horizontal camera orbit
-    let pitch = 0.3; // vertical camera angle
-    let isPointerLocked = false;
-
-    const onKeyDown = (e: KeyboardEvent) => {
-      keys[e.code] = true;
-
-      // Tab = cycle targets (WoW-style)
-      if (e.code === 'Tab') {
-        e.preventDefault();
-        // Deselect previous
-        if (selectedTargetIdx >= 0) {
-          enemies[selectedTargetIdx].ring.visible = false;
-        }
-        selectedTargetIdx = (selectedTargetIdx + 1) % enemies.length;
-        const tgt = enemies[selectedTargetIdx];
-        tgt.ring.visible = true;
-        setTargetInfo({ name: tgt.name, hp: tgt.hp, maxHp: tgt.maxHp });
-      }
-
-      // Escape clears target (in addition to unlocking pointer)
-      if (e.code === 'Escape' && selectedTargetIdx >= 0) {
-        enemies[selectedTargetIdx].ring.visible = false;
-        selectedTargetIdx = -1;
-        setTargetInfo(null);
-      }
-    };
-    const onKeyUp = (e: KeyboardEvent) => {
-      keys[e.code] = false;
-    };
-    const onMouseMove = (e: MouseEvent) => {
-      if (!isPointerLocked) return;
-      yaw -= e.movementX * MOUSE_SENSITIVITY;
-      pitch -= e.movementY * MOUSE_SENSITIVITY;
-      pitch = Math.max(-0.5, Math.min(1.2, pitch));
-    };
-    const onClick = () => {
-      renderer.domElement.requestPointerLock();
-    };
-    const onPointerLockChange = () => {
-      isPointerLocked = document.pointerLockElement === renderer.domElement;
-    };
-
-    window.addEventListener('keydown', onKeyDown);
-    window.addEventListener('keyup', onKeyUp);
-    window.addEventListener('mousemove', onMouseMove);
-    renderer.domElement.addEventListener('click', onClick);
-    document.addEventListener('pointerlockchange', onPointerLockChange);
-
-    // ── Animation loop
-    const clock = new THREE.Clock();
-    let animFrameId = 0;
-
-    // Camera target position (lerped)
-    const camTarget = new THREE.Vector3();
-    const camPos = new THREE.Vector3();
-
-    function animate() {
-      animFrameId = requestAnimationFrame(animate);
-      const rawDt = clock.getDelta();
-      const dt = Math.min(rawDt, MAX_DT * 3); // clamp to prevent physics explosions
-
-      // ── Player movement (W = forward away from camera, as per user preference)
-      const moveDir = new THREE.Vector3();
-      const forward = new THREE.Vector3(
-        -Math.sin(yaw),
-        0,
-        -Math.cos(yaw)
-      );
-      const right = new THREE.Vector3(
-        Math.cos(yaw),
-        0,
-        -Math.sin(yaw)
-      );
-
-      // W/S = forward/back relative to camera yaw
-      if (keys['KeyW']) moveDir.add(forward);
-      if (keys['KeyS']) moveDir.sub(forward);
-      // A/D = turn character with camera (user pref: a/d turn, q/e strafe)
-      if (keys['KeyA']) yaw += 2.0 * dt;
-      if (keys['KeyD']) yaw -= 2.0 * dt;
-      // Q/E = strafe
-      if (keys['KeyQ']) moveDir.sub(right);
-      if (keys['KeyE']) moveDir.add(right);
-
-      if (moveDir.lengthSq() > 0) {
-        moveDir.normalize().multiplyScalar(PLAYER_SPEED * dt);
-
-        // Move player
-        const newX = player.position.x + moveDir.x;
-        const newZ = player.position.z + moveDir.z;
-
-        // Arena boundary clamp
-        const distFromCenter = Math.sqrt(newX * newX + newZ * newZ);
-        if (distFromCenter < ARENA_RADIUS - 1.5) {
-          player.position.x = newX;
-          player.position.z = newZ;
-        }
-
-        // Face movement direction (annihilate pattern: mesh.rotation.y = -facing.angle() + PI/2)
-        const facingAngle = Math.atan2(moveDir.x, moveDir.z);
-        player.rotation.y = facingAngle;
-      }
-
-      // ── Camera: over-the-shoulder follow (Fortnite-style per user pref)
-      const shoulderOffset = 0.8; // slight right offset
-      camTarget.set(
-        player.position.x,
-        player.position.y + 1.5,
-        player.position.z
-      );
-
-      const camIdealX =
-        player.position.x +
-        Math.sin(yaw) * CAMERA_DISTANCE * Math.cos(pitch) +
-        Math.cos(yaw) * shoulderOffset;
-      const camIdealY = player.position.y + CAMERA_HEIGHT + Math.sin(pitch) * CAMERA_DISTANCE;
-      const camIdealZ =
-        player.position.z +
-        Math.cos(yaw) * CAMERA_DISTANCE * Math.cos(pitch) -
-        Math.sin(yaw) * shoulderOffset;
-
-      camPos.lerp(new THREE.Vector3(camIdealX, camIdealY, camIdealZ), CAMERA_LERP);
-      camera.position.copy(camPos);
-      camera.lookAt(camTarget);
-
-      // ── Shadow light follows player
-      dirLight.position.set(
-        player.position.x + 15,
-        25,
-        player.position.z + 10
-      );
-      dirLight.target.position.copy(player.position);
-
-      // ── Torch flicker
-      for (const tl of torchLights) {
-        tl.intensity = 2.2 + Math.sin(Date.now() * 0.005 + tl.position.x) * 0.5;
-      }
-
-      // ── Center brazier flicker
-      centerLight.intensity = 3.5 + Math.sin(Date.now() * 0.008) * 1.0;
-
-      // ── Fire particles
-      fireParticles.update(dt);
-
-      // ── Target ring pulse
-      if (selectedTargetIdx >= 0) {
-        const ring = enemies[selectedTargetIdx].ring;
-        const pulse = 0.4 + Math.sin(Date.now() * 0.004) * 0.2;
-        (ring.material as THREE.MeshBasicMaterial).opacity = pulse;
-      }
-
-      renderer.render(scene, camera);
-    }
-
-    // Set initial camera position before first frame
-    camPos.set(
-      Math.sin(yaw) * CAMERA_DISTANCE,
-      CAMERA_HEIGHT,
-      Math.cos(yaw) * CAMERA_DISTANCE
-    );
-    camera.position.copy(camPos);
-    camera.lookAt(camTarget);
-
-    animate();
-
-    // ── Resize handler
-    const onResize = () => {
-      const w = container.clientWidth;
-      const h = container.clientHeight;
-      camera.aspect = w / h;
-      camera.updateProjectionMatrix();
-      renderer.setSize(w, h);
-    };
-    window.addEventListener('resize', onResize);
-
-    // ── Cleanup
-    cleanupRef.current = () => {
-      cancelAnimationFrame(animFrameId);
-      window.removeEventListener('keydown', onKeyDown);
-      window.removeEventListener('keyup', onKeyUp);
-      window.removeEventListener('mousemove', onMouseMove);
-      window.removeEventListener('resize', onResize);
-      renderer.domElement.removeEventListener('click', onClick);
-      document.removeEventListener('pointerlockchange', onPointerLockChange);
-      if (document.pointerLockElement === renderer.domElement) {
-        document.exitPointerLock();
-      }
-      renderer.dispose();
-      container.removeChild(renderer.domElement);
+  // Boot config + leaderboard
+  useEffect(() => {
+    document.title = 'Avernus Arena — Grudge Studio';
+    fetchAvernusConfig()
+      .then(setConfig)
+      .catch(() => setConfig(null));
+    fetchAvernusLeaderboard(8).then(setLeaderboard);
+    return () => {
+      document.title = 'Rec0deD:88 — Grudge Studio Gaming Portal';
     };
   }, []);
 
+  // Deep link ?hero=
   useEffect(() => {
-    init();
+    const heroParam = new URLSearchParams(location.split('?')[1] ?? '').get('hero');
+    if (heroParam) {
+      const h = resolveHero(heroParam);
+      setHero(h);
+      setRace(h.race);
+      setWeapon(h.weaponType);
+    }
+  }, [location]);
+
+  // Sync hero when race changes on opening
+  useEffect(() => {
+    if (phase !== 'opening') return;
+    const match =
+      AVERNUS_HEROES.find((h) => h.race === race && h.weaponType === weapon) ||
+      AVERNUS_HEROES.find((h) => h.race === race) ||
+      RACE_DEFAULTS.find((h) => h.race === race);
+    if (match) setHero(match);
+  }, [race, weapon, phase]);
+
+  const clearEnemies = useCallback(() => {
+    for (const e of enemiesRef.current) {
+      e.ai.destroy();
+      e.character.destroy();
+    }
+    enemiesRef.current = [];
+    setEnemyCount(0);
+  }, []);
+
+  const spawnEnemyFromProfile = useCallback(async (role: keyof typeof NPC_PROFILES) => {
+    const engine = engineRef.current;
+    const roleChar = roleRef.current;
+    const vfx = vfxRef.current;
+    if (!engine || !roleChar || !vfx) return;
+
+    const profile = NPC_PROFILES[role];
+    const angle = Math.random() * Math.PI * 2;
+    const dist = 8 + Math.random() * 6;
+    const pos = new THREE.Vector3(
+      roleChar.body.position.x + Math.cos(angle) * dist,
+      2,
+      roleChar.body.position.z + Math.sin(angle) * dist,
+    );
+
+    const enemy = new AvernusEnemy({
+      race: profile.race,
+      weaponPack: profile.weaponPack,
+      health: profile.health,
+      speed: profile.speed * 0.025,
+      attackSpeed: 1.2 + profile.aggressionBias * 0.4,
+      position: pos,
+    });
+
+    await enemy.load();
+    enemy.enableFootIK();
+    enemy.attachCombat(vfx, (target) => {
+      if (target.isRole) {
+        setPlayerHealth(target.health);
+        camRef.current?.shake(0.32);
+      }
+    });
+    const ai = new BaseAi(enemy, 1.4);
+    enemiesRef.current.push({ character: enemy, ai });
+    setEnemyCount(enemiesRef.current.length);
+    vfx.ring({ x: pos.x, y: 0.1, z: pos.z }, 'magic', 1.1);
+  }, []);
+
+  const spawnWave = useCallback(
+    async (waveNum: number) => {
+      const modeCfg = GAME_MODES[mode];
+      const def =
+        waveNum <= modeCfg.waves.length
+          ? modeCfg.waves[waveNum - 1]
+          : modeCfg.infiniteWaves
+            ? generateInfiniteWave(waveNum)
+            : null;
+      if (!def) return;
+      setWave(waveNum);
+      setInfo(def.bonus || `Wave ${waveNum}`);
+      for (const entry of def.enemies) {
+        for (let i = 0; i < entry.count; i++) {
+          await spawnEnemyFromProfile(entry.role);
+          await new Promise((r) => setTimeout(r, def.spawnDelay * 400));
+        }
+      }
+    },
+    [mode, spawnEnemyFromProfile],
+  );
+
+  const teardownEngine = useCallback(() => {
+    clearEnemies();
+    controlsRef.current?.destroy();
+    controlsRef.current = null;
+    roleRef.current?.destroy();
+    roleRef.current = null;
+    vfxRef.current?.destroy();
+    vfxRef.current = null;
+    camRef.current?.destroy();
+    camRef.current = null;
+    engineRef.current?.destroy();
+    engineRef.current = null;
+  }, [clearEnemies]);
+
+  const endRun = useCallback(
+    async (finalScore: number, finalKills: number, finalWave: number) => {
+      setPhase('results');
+      setScore(finalScore);
+      const durationSec = Math.round((Date.now() - startedAtRef.current) / 1000);
+      await submitAvernusScore({
+        sessionId: sessionIdRef.current ?? undefined,
+        mode,
+        race: hero.race,
+        weapon,
+        score: finalScore,
+        kills: finalKills,
+        wave: finalWave,
+        durationSec,
+      });
+      fetchAvernusLeaderboard(8).then(setLeaderboard);
+    },
+    [mode, hero.race, weapon],
+  );
+
+  const startMatch = useCallback(async () => {
+    setPhase('loading');
+    setInfo('Opening Avernus session…');
+    killsRef.current = 0;
+    waveRef.current = 0;
+    scoreRef.current = 0;
+    runEndedRef.current = false;
+    spawningWaveRef.current = false;
+    setKills(0);
+    setWave(0);
+    setScore(0);
+    setComboHits(0);
+    skillCdRef.current = {};
+
+    const session = await createAvernusSession({
+      mode,
+      race: hero.race,
+      weapon,
+      heroId: hero.id,
+    });
+    sessionIdRef.current = session.id;
+    startedAtRef.current = Date.now();
+
+    // Wait one frame so canvas mounts
+    setPhase('playing');
+  }, [mode, hero, weapon]);
+
+  // Engine bootstrap when entering play
+  useEffect(() => {
+    if (phase !== 'playing') return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    let cancelled = false;
+    let hpPoll = 0;
+    let skillPoll = 0;
+    let ro: ResizeObserver | null = null;
+
+    (async () => {
+      setInfo(`Loading ${hero.name} (grudge6)…`);
+      canvas.style.width = '100%';
+      canvas.style.height = '100%';
+      canvas.width = canvas.clientWidth || window.innerWidth;
+      canvas.height = canvas.clientHeight || window.innerHeight;
+
+      teardownEngine();
+
+      const engine = GrudgeEngine.getInstance();
+      engine.init(canvas);
+      engine.addGround(0x1a1210, ARENA_RADIUS_M * 2.2);
+      engineRef.current = engine;
+
+      buildAvernusArena(engine.scene, ARENA_RADIUS_M);
+
+      const vfx = new CombatVfx(engine.scene);
+      vfxRef.current = vfx;
+      engine.addToUpdate(vfx);
+
+      // Danger Room–style TPS follow camera
+      const cam = GameCamera.getInstance(engine.camera);
+      cam.setMode('FOLLOW');
+      cam.configure({
+        distance: config?.camera.distance ?? 7.5,
+        height: config?.camera.height ?? 3.8,
+        lerpAlpha: 0.12,
+        lookAhead: 1.5,
+        fov: 68,
+        fovSprint: 78,
+      });
+      camRef.current = cam;
+      engine.addToUpdate(cam);
+
+      // Atmosphere
+      const fill = new THREE.HemisphereLight(0xffccaa, 0x1a0a18, 0.55);
+      engine.scene.add(fill);
+
+      engine.start();
+
+      if (window.parent !== window) {
+        window.parent.postMessage({ type: 'grudge:game:ready', game: 'avernus-arena' }, '*');
+      }
+
+      const packId = packForWeapon(weapon) as WeaponPackId;
+      const character = new AvernusHero(hero, { position: new THREE.Vector3(0, 2, 0) });
+
+      try {
+        await character.load();
+        if (cancelled) return;
+        character.enableFootIK();
+        character.attachCombat(vfx, () => {
+          setComboHits((c) => c + 1);
+          cam.shake(0.2);
+        });
+        const controls = new RoleControls(character);
+        controlsRef.current = controls;
+        roleRef.current = character;
+        engine.setRole(character);
+        cam.setTarget(character.mesh);
+        character.service.onTransition((state: string) => setFsmState(state));
+        setPlayerHealth(character.health);
+        setPlayerMaxHealth(character.maxHealth);
+
+        setInfo(`Loading ${WEAPON_PACKS[packId].label} animations…`);
+        const clips = await character.loadWeaponPack(packId);
+        setActivePack(packId);
+        setInfo(
+          clips.length
+            ? `${hero.name} · ${character.meshSourceUrl.includes('grudge6') || character.meshSourceUrl.includes('toon-rts') ? 'grudge6 kit' : 'kit'} · ${WEAPON_PACKS[packId].label} (${clips.length} clips)`
+            : `${hero.name} · embedded anims`,
+        );
+
+        // Q/E/R/F skill hotkeys
+        const onKey = (e: KeyboardEvent) => {
+          const map: Record<string, string> = {
+            KeyQ: 'Q',
+            KeyE: 'E',
+            KeyR: 'R',
+            KeyF: 'F',
+          };
+          const key = map[e.code];
+          if (!key) return;
+          const skill = WEAPON_PACKS[packId].skills.find((s) => s.key === key);
+          if (!skill) return;
+          const now = performance.now() / 1000;
+          const readyAt = skillCdRef.current[key] ?? 0;
+          if (now < readyAt) return;
+          if (character.castSkillAnim(skill.anim)) {
+            skillCdRef.current[key] = now + skill.cooldown;
+            // Map to FSM damage window
+            character.service.send('attack');
+          }
+        };
+        window.addEventListener('keydown', onKey);
+
+        // First wave
+        spawningWaveRef.current = true;
+        waveRef.current = 1;
+        setWave(1);
+        await spawnWave(1);
+        spawningWaveRef.current = false;
+
+        hpPoll = window.setInterval(() => {
+          const role = roleRef.current;
+          if (!role || runEndedRef.current) return;
+          setPlayerHealth(role.health);
+
+          let gained = 0;
+          enemiesRef.current = enemiesRef.current.filter((e) => {
+            if (e.character.health > 0) return true;
+            e.ai.destroy();
+            e.character.destroy();
+            gained += 1;
+            return false;
+          });
+          if (gained) {
+            killsRef.current += gained;
+            scoreRef.current += gained * GAME_MODES[mode].scorePerKill;
+            setKills(killsRef.current);
+            setScore(scoreRef.current);
+          }
+          setEnemyCount(enemiesRef.current.length);
+
+          if (role.health <= 0) {
+            runEndedRef.current = true;
+            window.clearInterval(hpPoll);
+            void endRun(scoreRef.current, killsRef.current, waveRef.current);
+          }
+        }, 250);
+
+        // Wave clear watcher (single-flight)
+        const waveWatch = window.setInterval(() => {
+          if (cancelled || runEndedRef.current || !roleRef.current) return;
+          if (roleRef.current.health <= 0) return;
+          if (spawningWaveRef.current) return;
+          if (enemiesRef.current.length > 0) return;
+
+          const modeCfg = GAME_MODES[mode];
+          const next = waveRef.current + 1;
+          if (!modeCfg.infiniteWaves && next > modeCfg.waves.length) {
+            runEndedRef.current = true;
+            void endRun(
+              scoreRef.current + modeCfg.scorePerWave,
+              killsRef.current,
+              waveRef.current,
+            );
+            return;
+          }
+
+          spawningWaveRef.current = true;
+          waveRef.current = next;
+          scoreRef.current += modeCfg.scorePerWave;
+          setWave(next);
+          setScore(scoreRef.current);
+          void spawnWave(next).finally(() => {
+            spawningWaveRef.current = false;
+          });
+        }, 1800);
+
+        skillPoll = window.setInterval(() => {
+          const now = performance.now() / 1000;
+          const next: Record<string, number> = {};
+          for (const [k, readyAt] of Object.entries(skillCdRef.current)) {
+            next[k] = Math.max(0, readyAt - now);
+          }
+          setSkillCdUi(next);
+        }, 100);
+
+        ro = new ResizeObserver(() => {
+          const c = canvasRef.current;
+          if (!c || !engineRef.current) return;
+          c.width = c.clientWidth || window.innerWidth;
+          c.height = c.clientHeight || window.innerHeight;
+          engine.renderer.setSize(c.width, c.height);
+          engine.camera.aspect = c.width / c.height;
+          engine.camera.updateProjectionMatrix();
+        });
+        ro.observe(canvas);
+
+        // Cleanup extras on unmount
+        (canvas as HTMLCanvasElement & { __avernusCleanup?: () => void }).__avernusCleanup = () => {
+          window.removeEventListener('keydown', onKey);
+          window.clearInterval(waveWatch);
+        };
+      } catch (err) {
+        console.error('[Avernus] boot failed', err);
+        setInfo(`Failed to load hero: ${err instanceof Error ? err.message : String(err)}`);
+        setPhase('opening');
+      }
+    })();
+
     return () => {
-      cleanupRef.current?.();
+      cancelled = true;
+      window.clearInterval(hpPoll);
+      window.clearInterval(skillPoll);
+      ro?.disconnect();
+      const c = canvas as HTMLCanvasElement & { __avernusCleanup?: () => void };
+      c.__avernusCleanup?.();
+      teardownEngine();
     };
-  }, [init]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase === 'playing' ? 'play' : 'idle']);
 
+  const raceHeroes = AVERNUS_HEROES.filter((h) => h.race === race);
+
+  // ─── OPENING PAGE ────────────────────────────────────────────────────────
+  if (phase === 'opening' || phase === 'loading') {
+    return (
+      <div className="relative min-h-screen overflow-hidden bg-[#0a0608] text-amber-50">
+        {/* Backdrop */}
+        <div
+          className="pointer-events-none absolute inset-0 opacity-40"
+          style={{
+            backgroundImage: `radial-gradient(ellipse at 50% 20%, rgba(180,40,30,0.35), transparent 55%),
+              radial-gradient(ellipse at 80% 80%, rgba(80,20,100,0.25), transparent 50%),
+              url(${AVERNUS_ART.card})`,
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            filter: 'saturate(0.7) brightness(0.35)',
+          }}
+        />
+        <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-[#0a0608]/85 to-black" />
+
+        <div className="relative z-10 mx-auto flex max-w-6xl flex-col gap-6 px-4 py-6 md:py-10">
+          <header className="flex flex-wrap items-center gap-3">
+            {!embedMode && (
+              <Link href="/">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="border-amber-500/40 bg-black/50 text-amber-200 hover:bg-amber-950/40"
+                >
+                  <ArrowLeft className="mr-1 h-4 w-4" /> Portal
+                </Button>
+              </Link>
+            )}
+            <Badge className="bg-red-900/60 text-amber-100">BETA · grudge6</Badge>
+            <div className="flex-1" />
+            <span className="text-xs text-amber-200/50">
+              REST {config?.version ? `v${config.version}` : 'local'} ·{' '}
+              {config?.camera.mode ?? 'FOLLOW'} cam
+            </span>
+          </header>
+
+          <div className="text-center">
+            <h1 className="font-heading text-4xl font-black tracking-[0.2em] text-transparent bg-clip-text bg-gradient-to-b from-amber-200 via-amber-500 to-red-800 md:text-6xl">
+              AVERNUS ARENA
+            </h1>
+            <p className="mt-2 text-sm text-amber-100/70 md:text-base">
+              Dark-fantasy pit combat · Toon RTS grudge6 heroes · Danger Room controls & weapon skills
+            </p>
+          </div>
+
+          <div className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
+            {/* Left: loadout */}
+            <section className="rounded-2xl border border-amber-500/25 bg-black/60 p-5 shadow-2xl shadow-red-950/40 backdrop-blur">
+              <h2 className="mb-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-widest text-amber-400">
+                <Swords className="h-4 w-4" /> Enter the Pit
+              </h2>
+
+              {/* Mode */}
+              <div className="mb-5">
+                <div className="mb-2 text-[11px] uppercase text-amber-200/50">Game Mode</div>
+                <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+                  {MODE_LIST.map((m) => (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => setMode(m.id)}
+                      className={`rounded-xl border p-3 text-left transition ${
+                        mode === m.id
+                          ? 'border-amber-400 bg-amber-500/15 text-amber-50'
+                          : 'border-white/10 bg-white/5 text-amber-100/70 hover:border-amber-500/30'
+                      }`}
+                    >
+                      <div className="mb-1 text-amber-400">{MODE_ICONS[m.id]}</div>
+                      <div className="text-xs font-bold">{m.name}</div>
+                      <div className="mt-1 line-clamp-2 text-[10px] opacity-60">{m.description}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Race */}
+              <div className="mb-5">
+                <div className="mb-2 text-[11px] uppercase text-amber-200/50">Race (grudge6)</div>
+                <div className="flex flex-wrap gap-2">
+                  {(
+                    ['human', 'barbarian', 'elf', 'dwarf', 'orc', 'undead'] as CharacterRace[]
+                  ).map((r) => (
+                    <button
+                      key={r}
+                      type="button"
+                      onClick={() => setRace(r)}
+                      className={`rounded-full border px-3 py-1.5 text-xs capitalize ${
+                        race === r
+                          ? 'border-amber-400 bg-amber-500/20 text-amber-50'
+                          : 'border-white/10 text-amber-100/60 hover:border-amber-500/40'
+                      }`}
+                    >
+                      {RACE_CONFIGS[r]?.name ?? r}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Class / hero */}
+              <div className="mb-5">
+                <div className="mb-2 text-[11px] uppercase text-amber-200/50">Champion</div>
+                <div className="grid max-h-40 grid-cols-1 gap-1 overflow-y-auto sm:grid-cols-2">
+                  {raceHeroes.map((h) => (
+                    <button
+                      key={h.id}
+                      type="button"
+                      onClick={() => {
+                        setHero(h);
+                        setWeapon(h.weaponType);
+                      }}
+                      className={`rounded-lg border px-3 py-2 text-left text-xs ${
+                        hero.id === h.id
+                          ? 'border-amber-400 bg-amber-500/10'
+                          : 'border-white/10 hover:border-amber-500/30'
+                      }`}
+                    >
+                      <div className="font-semibold" style={{ color: h.classColor }}>
+                        {h.name}
+                      </div>
+                      <div className="text-[10px] text-amber-100/50">{h.description}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Weapon */}
+              <div className="mb-6">
+                <div className="mb-2 text-[11px] uppercase text-amber-200/50">Weapon skills</div>
+                <div className="flex flex-wrap gap-2">
+                  {WEAPONS.map((w) => (
+                    <button
+                      key={w.type}
+                      type="button"
+                      onClick={() => setWeapon(w.type)}
+                      className={`rounded-lg border px-3 py-2 text-xs ${
+                        weapon === w.type
+                          ? 'border-amber-400 bg-black text-amber-50'
+                          : 'border-white/10 text-amber-100/60'
+                      }`}
+                      style={weapon === w.type ? { boxShadow: `0 0 12px ${w.color}44` } : undefined}
+                    >
+                      <span className="mr-1">{w.icon}</span>
+                      {w.name}
+                    </button>
+                  ))}
+                </div>
+                <div className="mt-2 text-[10px] text-amber-100/40">
+                  Pack: {WEAPON_PACKS[packForWeapon(weapon)].label} · Q/E/R/F + LMB combo · range gate
+                  in combat
+                </div>
+              </div>
+
+              <Button
+                size="lg"
+                disabled={phase === 'loading'}
+                onClick={() => void startMatch()}
+                className="w-full bg-gradient-to-r from-red-800 via-amber-700 to-amber-500 text-base font-bold text-black hover:from-red-700 hover:to-amber-400"
+              >
+                {phase === 'loading' ? (
+                  <>
+                    <Loader2 className="mr-2 h-5 w-5 animate-spin" /> {info}
+                  </>
+                ) : (
+                  <>
+                    <Play className="mr-2 h-5 w-5" /> Enter Avernus
+                  </>
+                )}
+              </Button>
+            </section>
+
+            {/* Right: controls + board */}
+            <aside className="flex flex-col gap-4">
+              <div className="rounded-2xl border border-purple-500/25 bg-black/60 p-4 backdrop-blur">
+                <h3 className="mb-2 text-xs font-semibold uppercase tracking-widest text-purple-300">
+                  Danger Room Controls
+                </h3>
+                <div className="space-y-1 font-mono text-[11px] text-purple-100/80">
+                  {(config?.controls ?? ROLE_HOTKEYS.map((h) => ({ keys: h.keys, label: h.label })))
+                    .slice(0, 10)
+                    .map((row) => (
+                      <div key={row.keys} className="flex gap-2">
+                        <span className="w-28 shrink-0 text-amber-300">{row.keys}</span>
+                        <span>{row.label}</span>
+                      </div>
+                    ))}
+                </div>
+                <p className="mt-3 text-[10px] text-purple-200/40">
+                  Stack: RoleControls · GameCamera FOLLOW · loadRaceWithEquipment · weapon FBX packs
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-amber-500/20 bg-black/60 p-4 backdrop-blur">
+                <h3 className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-amber-400">
+                  <Trophy className="h-3.5 w-3.5" /> Leaderboard
+                </h3>
+                {leaderboard.length === 0 ? (
+                  <p className="text-xs text-amber-100/40">No scores yet — be the first blood.</p>
+                ) : (
+                  <ul className="space-y-1.5">
+                    {leaderboard.slice(0, 8).map((e, i) => (
+                      <li
+                        key={`${e.playerName}-${i}`}
+                        className="flex justify-between text-xs text-amber-100/70"
+                      >
+                        <span>
+                          #{i + 1} {e.playerName || 'Warlord'}
+                        </span>
+                        <span className="font-mono text-amber-300">{e.score}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
+              <div className="rounded-2xl border border-white/10 bg-black/50 p-4 text-[11px] text-amber-100/50">
+                <div className="mb-1 font-semibold text-amber-200/70">REST</div>
+                <code className="block text-[10px] text-green-400/80">GET /api/avernus/config</code>
+                <code className="block text-[10px] text-green-400/80">POST /api/avernus/session</code>
+                <code className="block text-[10px] text-green-400/80">POST /api/scores</code>
+                <code className="block text-[10px] text-green-400/80">
+                  GET /api/leaderboards/avernus-arena
+                </code>
+              </div>
+            </aside>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ─── RESULTS ─────────────────────────────────────────────────────────────
+  if (phase === 'results') {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center bg-[#0a0608] px-4 text-center text-amber-50">
+        <h1 className="mb-2 text-4xl font-black tracking-widest text-amber-400">RUN ENDED</h1>
+        <p className="mb-6 text-amber-100/60">
+          Score <span className="font-mono text-amber-200">{score}</span> · Kills {kills} · Wave{' '}
+          {wave}
+        </p>
+        <div className="flex gap-3">
+          <Button
+            onClick={() => {
+              setPhase('opening');
+              teardownEngine();
+            }}
+            className="bg-amber-600 text-black hover:bg-amber-500"
+          >
+            Return to Opening
+          </Button>
+          <Button
+            variant="outline"
+            className="border-amber-500/40 text-amber-200"
+            onClick={() => void startMatch()}
+          >
+            Fight Again
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // ─── PLAYING ─────────────────────────────────────────────────────────────
   return (
-    <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: '#0c0a08',
-        overflow: 'hidden',
-        zIndex: 50,
-      }}
-    >
-      {/* Three.js canvas container */}
-      <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
+    <div className="relative h-screen w-full overflow-hidden bg-black">
+      <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" />
 
-      {/* HUD overlay */}
-      <HUD targetInfo={targetInfo} />
-
-      {/* Back button */}
-      <Link href="/super-engine">
-        <Button variant="outline" className="absolute top-4 left-4 z-20 border-amber-400/30 text-amber-300/80 bg-black/50 hover:bg-black/70" data-testid="button-back">
-          <ArrowLeft className="w-4 h-4 mr-1" /> Back
+      {/* Top bar */}
+      <div className="absolute left-0 right-0 top-0 z-20 flex flex-wrap items-center gap-2 p-3">
+        <Button
+          size="sm"
+          variant="outline"
+          className="border-amber-500/40 bg-black/60 text-amber-200"
+          onClick={() => {
+            teardownEngine();
+            setPhase('opening');
+          }}
+        >
+          <ArrowLeft className="mr-1 h-3.5 w-3.5" /> Leave
         </Button>
-      </Link>
+        <Badge className="bg-black/70 text-amber-200">{GAME_MODES[mode].name}</Badge>
+        <Badge variant="outline" className="border-purple-500/40 text-purple-200">
+          Wave {wave}
+        </Badge>
+        <Badge variant="outline" className="border-red-500/40 text-red-200">
+          Kills {kills}
+        </Badge>
+        <Badge variant="outline" className="border-amber-500/40 text-amber-200">
+          Score {score}
+        </Badge>
+        <div className="flex-1" />
+        <div className="rounded bg-black/70 px-2 py-1 font-mono text-[10px] text-green-400">
+          {fsmState}
+          {comboHits > 0 && <span className="ml-2 text-amber-300">Hits {comboHits}</span>}
+        </div>
+      </div>
+
+      <div className="absolute left-1/2 top-14 z-20 -translate-x-1/2">
+        <HealthBar current={playerHealth} max={playerMaxHealth} name={hero.name} />
+      </div>
+
+      <div className="absolute bottom-6 left-1/2 z-20 flex -translate-x-1/2 flex-col items-center gap-2">
+        <SkillBar packId={activePack} cooldowns={skillCdUi} />
+        <div className="max-w-md truncate rounded bg-black/60 px-3 py-1 text-[10px] text-amber-100/50">
+          {info} · enemies {enemyCount}
+        </div>
+      </div>
+
+      {/* Mini help */}
+      <div className="absolute bottom-4 left-3 z-20 hidden rounded border border-white/10 bg-black/50 p-2 font-mono text-[9px] text-white/40 md:block">
+        LMB combo · RMB heavy · Shift dash · Ctrl block · Q/E/R/F skills
+      </div>
     </div>
   );
 }

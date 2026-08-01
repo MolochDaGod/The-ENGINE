@@ -393,10 +393,13 @@ export const FLEET_REGISTRY: FleetRegistryEntry[] = [
   {
     id: "avernus-arena",
     name: "Avernus Arena",
-    description: "Dark-fantasy arena combat with PvP and PvPvE rotations.",
+    description:
+      "Dark-fantasy pit combat — grudge6 Toon RTS kits, RoleControls + GameCamera FOLLOW, weapon packs, REST /api/avernus.",
     canonicalUrl: "/avernus-arena",
     status: "beta",
     tags: ["pvp", "pvpve", "arena"],
+    forge: true,
+    repo: "The-ENGINE",
   },
   {
     id: "multiplayer-racing",

@@ -1,73 +1,74 @@
-/** CDN base for Toon Shooter Kit assets on R2 */
-export const CDN = 'https://assets.grudge-studio.com/toon-shooter';
+/**
+ * Avernus Arena — grudge6 / Toon RTS asset SSOT
+ *
+ * HARD RULE: race kits load via `@/engine` RaceEquipment (production GLB → FBX).
+ * Do not point heroes at toon-shooter soldiers or capsule proxies.
+ */
 
-export const ASSET_URLS = {
-  characters: {
-    soldier: `${CDN}/characters/Character_Soldier.glb`,
-    enemy:   `${CDN}/characters/Character_Enemy.glb`,
-    hazmat:  `${CDN}/characters/Character_Hazmat.glb`,
-  },
-  guns: {
-    AK: `${CDN}/guns/AK.glb`,
-    Pistol: `${CDN}/guns/Pistol.glb`,
-    Revolver: `${CDN}/guns/Revolver.glb`,
-    Revolver_Small: `${CDN}/guns/Revolver_Small.glb`,
-    SMG: `${CDN}/guns/SMG.glb`,
-    Shotgun: `${CDN}/guns/Shotgun.glb`,
-    Sniper: `${CDN}/guns/Sniper.glb`,
-    Sniper_2: `${CDN}/guns/Sniper_2.glb`,
-    RocketLauncher: `${CDN}/guns/RocketLauncher.glb`,
-    GrenadeLauncher: `${CDN}/guns/GrenadeLauncher.glb`,
-    ShortCannon: `${CDN}/guns/ShortCannon.glb`,
-    Knife_1: `${CDN}/guns/Knife_1.glb`,
-    Knife_2: `${CDN}/guns/Knife_2.glb`,
-    Shovel: `${CDN}/guns/Shovel.glb`,
-    Grenade: `${CDN}/guns/Grenade.glb`,
-    FireGrenade: `${CDN}/guns/FireGrenade.glb`,
-  },
-  environment: {
-    Barrier_Fixed: `${CDN}/environment/Barrier_Fixed.glb`,
-    Barrier_Large: `${CDN}/environment/Barrier_Large.glb`,
-    Barrier_Single: `${CDN}/environment/Barrier_Single.glb`,
-    Barrier_Trash: `${CDN}/environment/Barrier_Trash.glb`,
-    BearTrap_Open: `${CDN}/environment/BearTrap_Open.glb`,
-    BrickWall_1: `${CDN}/environment/BrickWall_1.glb`,
-    BrickWall_2: `${CDN}/environment/BrickWall_2.glb`,
-    CardboardBoxes_1: `${CDN}/environment/CardboardBoxes_1.glb`,
-    CardboardBoxes_2: `${CDN}/environment/CardboardBoxes_2.glb`,
-    Container_Long: `${CDN}/environment/Container_Long.glb`,
-    Container_Small: `${CDN}/environment/Container_Small.glb`,
-    Crate: `${CDN}/environment/Crate.glb`,
-    Debris_BrokenCar: `${CDN}/environment/Debris_BrokenCar.glb`,
-    Debris_Tires: `${CDN}/environment/Debris_Tires.glb`,
-    ExplodingBarrel: `${CDN}/environment/ExplodingBarrel.glb`,
-    Fence: `${CDN}/environment/Fence.glb`,
-    Fence_Long: `${CDN}/environment/Fence_Long.glb`,
-    GasCan: `${CDN}/environment/GasCan.glb`,
-    GasTank: `${CDN}/environment/GasTank.glb`,
-    Health: `${CDN}/environment/Health.glb`,
-    Landmine: `${CDN}/environment/Landmine.glb`,
-    MetalFence: `${CDN}/environment/MetalFence.glb`,
-    SackTrench: `${CDN}/environment/SackTrench.glb`,
-    SackTrench_Small: `${CDN}/environment/SackTrench_Small.glb`,
-    Sign: `${CDN}/environment/Sign.glb`,
-    StreetLight: `${CDN}/environment/StreetLight.glb`,
-    Structure_1: `${CDN}/environment/Structure_1.glb`,
-    Structure_2: `${CDN}/environment/Structure_2.glb`,
-    Structure_3: `${CDN}/environment/Structure_3.glb`,
-    Structure_4: `${CDN}/environment/Structure_4.glb`,
-    Tank: `${CDN}/environment/Tank.glb`,
-    TrafficCone: `${CDN}/environment/TrafficCone.glb`,
-    TrashContainer: `${CDN}/environment/TrashContainer.glb`,
-    Tree_1: `${CDN}/environment/Tree_1.glb`,
-    Tree_2: `${CDN}/environment/Tree_2.glb`,
-    Tree_3: `${CDN}/environment/Tree_3.glb`,
-    Tree_4: `${CDN}/environment/Tree_4.glb`,
-    WaterTank_Floor: `${CDN}/environment/WaterTank_Floor.glb`,
-    WoodPlanks: `${CDN}/environment/WoodPlanks.glb`,
-  },
+import { ASSETS_ORIGIN, assetUrl } from '@/lib/api-config';
+import { GRUDGE_CDN, GRUDGE_CHARACTERS, type AnimPack } from '@/engine';
+
+export const AVERNUS_CDN = ASSETS_ORIGIN || GRUDGE_CDN || 'https://assets.grudge-studio.com';
+
+/** Race kit file stems (Bip001 modular packs on R2). */
+export const GRUDGE6_RACE_FILE = {
+  human: 'WK_Characters',
+  barbarian: 'BRB_Characters',
+  elf: 'ELF_Characters',
+  dwarf: 'DWF_Characters',
+  orc: 'ORC_Characters',
+  undead: 'UD_Characters',
 } as const;
 
-export type GunKey = keyof typeof ASSET_URLS.guns;
-export type EnvKey = keyof typeof ASSET_URLS.environment;
-export type CharKey = keyof typeof ASSET_URLS.characters;
+export type Grudge6RaceId = keyof typeof GRUDGE6_RACE_FILE;
+
+/** Production race GLB/FBX roots (secondary to RaceEquipment candidates). */
+export const RACE_URLS: Record<Grudge6RaceId, { glb: string; fbx: string }> = {
+  human: {
+    glb: `${AVERNUS_CDN}/models/grudge6/races/WK_Characters.glb`,
+    fbx: `${AVERNUS_CDN}/models/grudge6/races/WK_Characters.fbx`,
+  },
+  barbarian: {
+    glb: `${AVERNUS_CDN}/models/grudge6/races/BRB_Characters.glb`,
+    fbx: `${AVERNUS_CDN}/models/grudge6/races/BRB_Characters.fbx`,
+  },
+  elf: {
+    glb: `${AVERNUS_CDN}/models/grudge6/races/ELF_Characters.glb`,
+    fbx: `${AVERNUS_CDN}/models/grudge6/races/ELF_Characters.fbx`,
+  },
+  dwarf: {
+    glb: `${AVERNUS_CDN}/models/grudge6/races/DWF_Characters.glb`,
+    fbx: `${AVERNUS_CDN}/models/grudge6/races/DWF_Characters.fbx`,
+  },
+  orc: {
+    glb: `${AVERNUS_CDN}/models/grudge6/races/ORC_Characters.glb`,
+    fbx: `${AVERNUS_CDN}/models/grudge6/races/ORC_Characters.fbx`,
+  },
+  undead: {
+    glb: `${AVERNUS_CDN}/models/grudge6/races/UD_Characters.glb`,
+    fbx: `${AVERNUS_CDN}/models/grudge6/races/UD_Characters.fbx`,
+  },
+};
+
+/** Baked Bip001 weapon packs (prefer portal /models then arena CDN). */
+export const BAKED_ANIM_BASE = {
+  portal: '/models/animations',
+  arenaCdn: 'https://grudge-arena.grudge-studio.com/anims/baked',
+  assetsCdn: `${AVERNUS_CDN}/models/animations`,
+} as const;
+
+/** Opening / lobby art */
+export const AVERNUS_ART = {
+  card: assetUrl('/assets/games/game_avernus_arena.png'),
+  emblem: assetUrl('/grudge-logo.png'),
+};
+
+/** Fleet roster entries (controller / API config). */
+export const AVERNUS_ROSTER = GRUDGE_CHARACTERS;
+
+export type { AnimPack };
+
+/** SI human yardstick for Avernus spawns. */
+export const HUMAN_HEIGHT_M = 1.8;
+export const ARENA_RADIUS_M = 28;
+export const PLAYER_CAPSULE = { radius: 0.35, halfHeight: 0.55 } as const;

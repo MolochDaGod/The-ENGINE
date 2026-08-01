@@ -308,7 +308,11 @@
       "destination": "https://assets.grudge-studio.com/:path*"
     },
     {
-      "source": "/api/:path((?!games$|games/|platforms$|rom-proxy$|health$|admin/|portal-admin/).*)",
+      "source": "/api/avernus",
+      "destination": "/api/avernus/config"
+    },
+    {
+      "source": "/api/:path((?!games$|games/|platforms$|rom-proxy$|health$|admin/|portal-admin/|avernus$|avernus/).*)",
       "destination": "https://the-engine.up.railway.app/api/:path"
     },
     {
