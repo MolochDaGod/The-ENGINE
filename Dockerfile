@@ -9,6 +9,8 @@ RUN npm ci --legacy-peer-deps --ignore-scripts || npm install --legacy-peer-deps
 COPY tsconfig.json drizzle.config.ts vite.config.ts ./
 COPY server ./server
 COPY shared ./shared
+# storage.ts imports catalog JSON via ../api/_games.json
+COPY api ./api
 
 # API-only Railway image — Vercel serves the Vite client
 RUN npm run build:server
