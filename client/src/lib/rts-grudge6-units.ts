@@ -329,37 +329,36 @@ export class Grudge6RtsUnit {
     if (this._dead && s !== "death") return;
     if (s === this._currentState && this._currentAction?.isRunning()) return;
     // normalize legacy clip names from wargus
-    const mapped: RtsAnimState =
+    const animState: RtsAnimState =
       s === ("attack2" as RtsAnimState)
         ? "attack2"
         : (s as RtsAnimState);
 
-    const state = mapped;
     // Rate-limit one-shots so RTS tick spam doesn't restart clips every frame
-    if (state === "attack" || state === "attack2") {
-      if (this._attackCooldown > 0 && this._currentState === state) return;
+    if (animState === "attack" || animState === "attack2") {
+      if (this._attackCooldown > 0 && this._currentState === animState) return;
       this._attackCooldown = 0.55;
     }
-    if (state === "gather") {
-      if (this._gatherCooldown > 0 && this._currentState === state) return;
+    if (animState === "gather") {
+      if (this._gatherCooldown > 0 && this._currentState === animState) return;
       this._gatherCooldown = 0.7;
     }
 
-    let newAction = this._actions[state];
-    if (!newAction && state === "run") newAction = this._actions.walk ?? this._actions.idle ?? null;
-    if (!newAction && state === "walk") newAction = this._actions.run ?? this._actions.idle ?? null;
-    if (!newAction && (state === "attack" || state === "attack2" || state === "gather")) {
+    let newAction = this._actions[animState];
+    if (!newAction && animState === "run") newAction = this._actions.walk ?? this._actions.idle ?? null;
+    if (!newAction && animState === "walk") newAction = this._actions.run ?? this._actions.idle ?? null;
+    if (!newAction && (animState === "attack" || animState === "attack2" || animState === "gather")) {
       newAction = this._actions.attack ?? this._actions.idle ?? null;
     }
     if (!newAction) return;
 
-    if (state === "death") this._dead = true;
+    if (animState === "death") this._dead = true;
 
     if (this._currentAction && this._currentAction !== newAction) {
       newAction.reset();
       newAction.setEffectiveWeight(1);
       // RTS gather/attack slightly faster for snappy response
-      if (state === "gather" || state === "attack" || state === "attack2") {
+      if (animState === "gather" || animState === "attack" || animState === "attack2") {
         newAction.timeScale = 1.25;
       } else {
         newAction.timeScale = 1;
@@ -371,7 +370,7 @@ export class Grudge6RtsUnit {
     }
 
     this._currentAction = newAction;
-    this._currentState = state;
+    this._currentState = animState;
   }
 
   update(dt: number): void {

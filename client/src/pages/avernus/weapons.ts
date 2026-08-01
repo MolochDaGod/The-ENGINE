@@ -33,6 +33,9 @@ export interface WeaponData {
   packId: WeaponPackId;
   attackType: AttackType;
   meleeRangeM: number;
+  /** @deprecated Legacy avernus-3d gun GLB key */
+  gunModel?: string;
+  gunModelAlt?: string;
 }
 
 function skillsFromPack(packId: WeaponPackId, resource: Ability['costType']): Ability[] {
@@ -63,6 +66,7 @@ export const WEAPONS: WeaponData[] = [
     packId: 'sword-shield',
     attackType: 'melee',
     meleeRangeM: 2.4,
+    gunModel: 'Shovel',
     abilities: skillsFromPack('sword-shield', 'rage'),
   },
   {
@@ -75,6 +79,7 @@ export const WEAPONS: WeaponData[] = [
     packId: 'great-sword',
     attackType: 'melee',
     meleeRangeM: 2.8,
+    gunModel: 'Shovel',
     abilities: skillsFromPack('great-sword', 'rage'),
   },
   {
@@ -87,6 +92,7 @@ export const WEAPONS: WeaponData[] = [
     packId: 'longbow',
     attackType: 'ranged',
     meleeRangeM: 18,
+    gunModel: 'Sniper',
     abilities: skillsFromPack('longbow', 'energy'),
   },
   {
@@ -99,6 +105,8 @@ export const WEAPONS: WeaponData[] = [
     packId: 'unarmed',
     attackType: 'melee',
     meleeRangeM: 2.2,
+    gunModel: 'Knife_1',
+    gunModelAlt: 'Knife_2',
     abilities: skillsFromPack('unarmed', 'energy'),
   },
   {
@@ -111,6 +119,7 @@ export const WEAPONS: WeaponData[] = [
     packId: 'great-sword',
     attackType: 'magic',
     meleeRangeM: 2.6,
+    gunModel: 'RocketLauncher',
     abilities: skillsFromPack('great-sword', 'mana'),
   },
   {
@@ -123,6 +132,7 @@ export const WEAPONS: WeaponData[] = [
     packId: 'magic-caster',
     attackType: 'ranged',
     meleeRangeM: 14,
+    gunModel: 'AK',
     abilities: skillsFromPack('magic-caster', 'mana'),
   },
 ];
@@ -135,35 +145,44 @@ export function packForWeapon(type: WeaponType): WeaponPackId {
   return weaponByType(type)?.packId ?? 'sword-shield';
 }
 
-/** Cover layout for arena props (simple geometric — no shooter kit). */
+/** Cover layout for arena props. */
 export type CoverType = 'solid' | 'breakable' | 'explosive' | 'hazard' | 'pickup';
 
 export interface MapPlacement {
-  kind: 'pillar' | 'crate' | 'wall' | 'pickup' | 'torch';
+  /** Legacy avernus-3d env asset key */
+  asset: string;
   pos: [number, number, number];
   rot?: number;
   scale?: number;
   coverType?: CoverType;
   health?: number;
-  color?: number;
 }
 
-/** Dark-fantasy Avernus pit layout (metres, SI). */
+/**
+ * Arena cover layout for legacy `/avernus-3d`.
+ * Canonical grudge6 pit uses `buildAvernusArena()` in combat.ts instead.
+ */
 export const ARENA_LAYOUT: MapPlacement[] = [
-  { kind: 'pillar', pos: [-10, 0, -10], scale: 1, coverType: 'solid', health: 9999, color: 0x3a322c },
-  { kind: 'pillar', pos: [10, 0, -10], scale: 1, coverType: 'solid', health: 9999, color: 0x3a322c },
-  { kind: 'pillar', pos: [-10, 0, 10], scale: 1, coverType: 'solid', health: 9999, color: 0x3a322c },
-  { kind: 'pillar', pos: [10, 0, 10], scale: 1, coverType: 'solid', health: 9999, color: 0x3a322c },
-  { kind: 'crate', pos: [-4, 0, 0], scale: 1.2, coverType: 'breakable', health: 120, color: 0x5a4030 },
-  { kind: 'crate', pos: [4, 0, 0], scale: 1.2, coverType: 'breakable', health: 120, color: 0x5a4030 },
-  { kind: 'crate', pos: [0, 0, -6], scale: 1, coverType: 'breakable', health: 100, color: 0x4a3828 },
-  { kind: 'crate', pos: [0, 0, 6], scale: 1, coverType: 'breakable', health: 100, color: 0x4a3828 },
-  { kind: 'wall', pos: [-14, 0, 0], rot: Math.PI / 2, scale: 1, coverType: 'solid', health: 600, color: 0x2a2420 },
-  { kind: 'wall', pos: [14, 0, 0], rot: Math.PI / 2, scale: 1, coverType: 'solid', health: 600, color: 0x2a2420 },
-  { kind: 'pickup', pos: [0, 0.5, 12], coverType: 'pickup', health: 1, color: 0x44ff66 },
-  { kind: 'pickup', pos: [0, 0.5, -12], coverType: 'pickup', health: 1, color: 0x44ff66 },
-  { kind: 'torch', pos: [-8, 0, 8], color: 0xff6622 },
-  { kind: 'torch', pos: [8, 0, -8], color: 0xff6622 },
-  { kind: 'torch', pos: [8, 0, 8], color: 0x6644ff },
-  { kind: 'torch', pos: [-8, 0, -8], color: 0x6644ff },
+  { asset: 'Structure_1', pos: [-22, 0, -22], scale: 2, coverType: 'solid', health: 9999 },
+  { asset: 'Structure_2', pos: [22, 0, -22], rot: Math.PI / 2, scale: 2, coverType: 'solid', health: 9999 },
+  { asset: 'Structure_3', pos: [-22, 0, 22], rot: -Math.PI / 2, scale: 2, coverType: 'solid', health: 9999 },
+  { asset: 'Structure_4', pos: [22, 0, 22], rot: Math.PI, scale: 2, coverType: 'solid', health: 9999 },
+  { asset: 'Container_Small', pos: [-3, 0, 0], scale: 1.5, coverType: 'solid', health: 500 },
+  { asset: 'Container_Small', pos: [3, 0, 0], rot: Math.PI, scale: 1.5, coverType: 'solid', health: 500 },
+  { asset: 'SackTrench', pos: [0, 0, 4], scale: 2, coverType: 'solid', health: 300 },
+  { asset: 'SackTrench', pos: [0, 0, -4], rot: Math.PI, scale: 2, coverType: 'solid', health: 300 },
+  { asset: 'Barrier_Large', pos: [-12, 0, 0], rot: Math.PI / 4, scale: 2, coverType: 'solid', health: 400 },
+  { asset: 'Barrier_Large', pos: [12, 0, 0], rot: -Math.PI / 4, scale: 2, coverType: 'solid', health: 400 },
+  { asset: 'BrickWall_1', pos: [0, 0, -12], scale: 2, coverType: 'solid', health: 600 },
+  { asset: 'BrickWall_2', pos: [0, 0, 12], scale: 2, coverType: 'solid', health: 600 },
+  { asset: 'Crate', pos: [-8, 0, -8], scale: 2, coverType: 'breakable', health: 100 },
+  { asset: 'Crate', pos: [8, 0, 8], scale: 2, coverType: 'breakable', health: 100 },
+  { asset: 'Crate', pos: [-8, 0, 8], scale: 2, coverType: 'breakable', health: 100 },
+  { asset: 'Crate', pos: [8, 0, -8], scale: 2, coverType: 'breakable', health: 100 },
+  { asset: 'ExplodingBarrel', pos: [-6, 0, -10], scale: 2, coverType: 'explosive', health: 30 },
+  { asset: 'ExplodingBarrel', pos: [6, 0, 10], scale: 2, coverType: 'explosive', health: 30 },
+  { asset: 'Health', pos: [0, 0.5, 18], scale: 2, coverType: 'pickup', health: 1 },
+  { asset: 'Health', pos: [0, 0.5, -18], scale: 2, coverType: 'pickup', health: 1 },
+  { asset: 'StreetLight', pos: [-16, 0, 0], scale: 2 },
+  { asset: 'StreetLight', pos: [16, 0, 0], scale: 2 },
 ];
