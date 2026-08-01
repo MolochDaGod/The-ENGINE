@@ -82,7 +82,6 @@ export async function fetchAvernusConfig(): Promise<AvernusConfig> {
     // Offline / cold start fallback — client SSOT
     const { MODE_LIST } = await import('./modes');
     const { WEAPONS } = await import('./weapons');
-    const { ROLE_HOTKEYS } = await import('@/engine');
     return {
       gameId: AVERNUS_GAME_ID,
       name: 'Avernus Arena',
@@ -102,7 +101,10 @@ export async function fetchAvernusConfig(): Promise<AvernusConfig> {
         { id: 'undead', name: 'Undead', prefix: 'UD_' },
       ],
       weapons: WEAPONS.map((w) => ({ type: w.type, name: w.name, packId: w.packId })),
-      controls: ROLE_HOTKEYS.map((h) => ({ keys: h.keys, label: h.label })),
+      controls: (await import('./dangerInputMap')).DANGER_INPUT_LEGEND.map((h) => ({
+        keys: h.keys,
+        label: h.label,
+      })),
       camera: { mode: 'FOLLOW', distance: 7.5, height: 3.8 },
       characterStack: [
         'loadRaceWithEquipment',

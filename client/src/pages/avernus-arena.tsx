@@ -28,7 +28,6 @@ import * as THREE from 'three';
 import {
   GrudgeEngine,
   RoleControls,
-  ROLE_HOTKEYS,
   BaseAi,
   CombatVfx,
   GameCamera,
@@ -58,6 +57,12 @@ import {
 import { AvernusHero, AvernusEnemy, buildAvernusArena } from './avernus/combat';
 import { AVERNUS_ART, ARENA_RADIUS_M } from './avernus/assets';
 import { preloadAvernusAnims, bakedCacheStats } from './avernus/bakedAnimSystem';
+import {
+  DANGER_HOLD_TAP_SEC,
+  DANGER_INPUT_LEGEND,
+  DANGER_KEY_CHIPS,
+} from './avernus/dangerInputMap';
+import type { SkillBindKey } from './avernus/weaponPacks';
 
 type Phase = 'opening' | 'loading' | 'playing' | 'results';
 
@@ -101,6 +106,7 @@ function HealthBar({
   );
 }
 
+/** Danger Room skill strip: F class · R ultimate · 1–4 signatures (not Q/E). */
 function SkillBar({
   packId,
   cooldowns,
@@ -109,31 +115,94 @@ function SkillBar({
   cooldowns: Record<string, number>;
 }) {
   const skills = WEAPON_PACKS[packId]?.skills ?? [];
+  const order: SkillBindKey[] = ['F', 'R', '1', '2', '3', '4'];
+  const sorted = order
+    .map((k) => skills.find((s) => s.key === k))
+    .filter(Boolean) as typeof skills;
   return (
-    <div className="flex gap-2">
-      {skills.map((s) => {
-        const cd = cooldowns[s.key] ?? 0;
-        const ready = cd <= 0;
-        return (
-          <div
-            key={s.key}
-            className={`relative flex h-14 w-14 flex-col items-center justify-center rounded-lg border text-center ${
-              ready
-                ? 'border-amber-500/50 bg-black/70 text-amber-100'
-                : 'border-gray-700 bg-black/50 text-gray-500'
-            }`}
-            title={`${s.name}: ${s.description}`}
-          >
-            <span className="text-[10px] font-bold text-amber-400">{s.key}</span>
-            <span className="px-0.5 text-[9px] leading-tight">{s.name.split(' ')[0]}</span>
-            {!ready && (
-              <span className="absolute inset-0 flex items-center justify-center rounded-lg bg-black/60 text-sm font-mono text-white">
-                {cd.toFixed(1)}
-              </span>
-            )}
-          </div>
-        );
-      })}
+    <div className="flex flex-col items-center gap-1">
+      <div className="flex gap-2">
+        {sorted.map((s) => {
+          const cd = cooldowns[s.key] ?? 0;
+          const ready = cd <= 0;
+          const accent =
+            s.role === 'class'
+              ? 'border-sky-400/50 text-sky-100'
+              : s.role === 'ultimate'
+                ? 'border-violet-400/50 text-violet-100'
+                : 'border-amber-500/50 text-amber-100';
+          return (
+            <div
+              key={s.key}
+              className={`relative flex h-14 w-14 flex-col items-center justify-center rounded-lg border text-center ${
+                ready ? `bg-black/70 ${accent}` : 'border-gray-700 bg-black/50 text-gray-500'
+              }`}
+              title={`${s.key} · ${s.name} (${s.role}): ${s.description}`}
+            >
+              <span className="text-[10px] font-bold opacity-90">{s.key}</span>
+              <span className="px-0.5 text-[9px] leading-tight">{s.name.split(' ')[0]}</span>
+              {!ready && (
+                <span className="absolute inset-0 flex items-center justify-center rounded-lg bg-black/60 text-sm font-mono text-white">
+                  {cd.toFixed(1)}
+                </span>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      <div className="text-[9px] text-amber-100/40">
+        F class · R ultimate · 1–4 sig · Q swap · Hold Q radial · E interact
+      </div>
+    </div>
+  );
+}
+
+/** Hold-Q mode / weapon radial (Danger Room style). */
+function ModeRadial({
+  open,
+  weapons,
+  current,
+  onPick,
+  onClose,
+}: {
+  open: boolean;
+  weapons: { type: WeaponType; name: string; icon: string }[];
+  current: WeaponType;
+  onPick: (t: WeaponType) => void;
+  onClose: () => void;
+}) {
+  if (!open) return null;
+  return (
+    <div className="pointer-events-auto absolute inset-0 z-40 flex items-center justify-center">
+      <button
+        type="button"
+        className="absolute inset-0 bg-black/50"
+        aria-label="Close radial"
+        onClick={onClose}
+      />
+      <div className="relative z-10 flex flex-col items-center gap-3">
+        <div className="rounded-full border border-amber-500/40 bg-black/80 px-6 py-3 text-center">
+          <div className="text-xs font-bold uppercase tracking-widest text-amber-300">Mode / Weapon</div>
+          <div className="text-[10px] text-amber-100/50">Hold Q · release to equip · Danger Room</div>
+        </div>
+        <div className="flex flex-wrap justify-center gap-2" style={{ maxWidth: 360 }}>
+          {weapons.map((w) => (
+            <button
+              key={w.type}
+              type="button"
+              onClick={() => onPick(w.type)}
+              className={`rounded-xl border px-3 py-2 text-xs ${
+                current === w.type
+                  ? 'border-amber-400 bg-amber-500/20 text-amber-50'
+                  : 'border-white/15 bg-black/70 text-amber-100/80 hover:border-amber-500/40'
+              }`}
+            >
+              <span className="mr-1">{w.icon}</span>
+              {w.name}
+            </button>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
@@ -157,6 +226,15 @@ export default function AvernusArena() {
   const scoreRef = useRef(0);
   const spawningWaveRef = useRef(false);
   const runEndedRef = useRef(false);
+  /** Danger Room Q hold (Studio: radialHoldT vs 0.18s tap) */
+  const qHoldRef = useRef<{ armed: boolean; t0: number; timer: ReturnType<typeof setTimeout> | null }>({
+    armed: false,
+    t0: 0,
+    timer: null,
+  });
+  const weaponRef = useRef(weapon);
+  weaponRef.current = weapon;
+  const radialOpenRef = useRef(false);
 
   const [phase, setPhase] = useState<Phase>('opening');
   const [config, setConfig] = useState<AvernusConfig | null>(null);
@@ -176,6 +254,8 @@ export default function AvernusArena() {
   const [activePack, setActivePack] = useState<WeaponPackId>('sword-shield');
   const [skillCdUi, setSkillCdUi] = useState<Record<string, number>>({});
   const [enemyCount, setEnemyCount] = useState(0);
+  const [radialOpen, setRadialOpen] = useState(false);
+  const [flash, setFlash] = useState('');
 
   const [preloadPct, setPreloadPct] = useState(0);
   const [preloadDone, setPreloadDone] = useState(false);
@@ -452,28 +532,136 @@ export default function AvernusArena() {
             : `${hero.name} · embedded anims only`,
         );
 
-        // Q/E/R/F skill hotkeys
-        const onKey = (e: KeyboardEvent) => {
-          const map: Record<string, string> = {
-            KeyQ: 'Q',
-            KeyE: 'E',
-            KeyR: 'R',
-            KeyF: 'F',
-          };
-          const key = map[e.code];
-          if (!key) return;
-          const skill = WEAPON_PACKS[packId].skills.find((s) => s.key === key);
+        /**
+         * Danger Room input (Studio.ts + quickActions.ts) — NOT invent Q/E/R/F abilities.
+         * Q tap = swap weapon · Hold Q = mode/weapon radial
+         * E = interact · F = class skill · R = ultimate/heavy · 1–4 = signatures
+         * X roll · C parry (RoleControls also handles LMB/RMB/Space/Shift)
+         */
+        const fireSkillKey = (key: SkillBindKey) => {
+          const pack = WEAPON_PACKS[character.activePack] ?? WEAPON_PACKS[packId];
+          const skill = pack.skills.find((s) => s.key === key);
           if (!skill) return;
           const now = performance.now() / 1000;
-          const readyAt = skillCdRef.current[key] ?? 0;
-          if (now < readyAt) return;
+          if ((skillCdRef.current[key] ?? 0) > now) return;
           if (character.castSkillAnim(skill.anim)) {
             skillCdRef.current[key] = now + skill.cooldown;
-            // Map to FSM damage window
-            character.service.send('attack');
+            character.service.send(key === 'R' ? 'bash' : 'attack');
+            setFlash(`${key} · ${skill.name}`);
+            window.setTimeout(() => setFlash(''), 700);
           }
         };
-        window.addEventListener('keydown', onKey);
+
+        const cycleWeapon = () => {
+          const list = WEAPONS.map((w) => w.type);
+          const i = list.indexOf(weaponRef.current);
+          const next = list[(i + 1) % list.length];
+          weaponRef.current = next;
+          setWeapon(next);
+          const nextPack = packForWeapon(next) as WeaponPackId;
+          void character.loadWeaponPack(nextPack).then((clips) => {
+            setActivePack(nextPack);
+            setFlash(`SWAP · ${WEAPON_PACKS[nextPack].label} (${clips.length})`);
+            window.setTimeout(() => setFlash(''), 900);
+          });
+        };
+
+        const OWN = new Set([
+          'KeyQ',
+          'KeyE',
+          'KeyR',
+          'KeyF',
+          'KeyX',
+          'KeyC',
+          'Digit1',
+          'Digit2',
+          'Digit3',
+          'Digit4',
+          'Numpad1',
+          'Numpad2',
+          'Numpad3',
+          'Numpad4',
+        ]);
+
+        const onKeyDown = (e: KeyboardEvent) => {
+          if (e.repeat) return;
+          if (OWN.has(e.code)) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+          }
+          // Q: arm hold for radial; Shift+Q arsenal swap (= cycle weapon)
+          if (e.code === 'KeyQ') {
+            if (e.shiftKey) {
+              cycleWeapon();
+              return;
+            }
+            qHoldRef.current.armed = true;
+            qHoldRef.current.t0 = performance.now() / 1000;
+            if (qHoldRef.current.timer) clearTimeout(qHoldRef.current.timer);
+            qHoldRef.current.timer = setTimeout(() => {
+              if (qHoldRef.current.armed) {
+                radialOpenRef.current = true;
+                setRadialOpen(true);
+              }
+            }, DANGER_HOLD_TAP_SEC * 1000);
+            return;
+          }
+          if (e.code === 'KeyE') {
+            // Interact first · else forcefield guard (Studio KeyE)
+            setFlash('INTERACT');
+            character.service.send('block');
+            window.setTimeout(() => {
+              character.service.send('keyLUp');
+              setFlash('');
+            }, 400);
+            return;
+          }
+          if (e.code === 'KeyF') {
+            fireSkillKey('F');
+            return;
+          }
+          if (e.code === 'KeyR') {
+            fireSkillKey('R');
+            return;
+          }
+          if (e.code === 'Digit1' || e.code === 'Numpad1') fireSkillKey('1');
+          if (e.code === 'Digit2' || e.code === 'Numpad2') fireSkillKey('2');
+          if (e.code === 'Digit3' || e.code === 'Numpad3') fireSkillKey('3');
+          if (e.code === 'Digit4' || e.code === 'Numpad4') fireSkillKey('4');
+          if (e.code === 'KeyX') {
+            character.service.send('dash');
+            setFlash('ROLL');
+            window.setTimeout(() => setFlash(''), 400);
+          }
+          if (e.code === 'KeyC') {
+            character.service.send('block');
+            setFlash('PARRY');
+            window.setTimeout(() => {
+              character.service.send('keyLUp');
+              setFlash('');
+            }, 350);
+          }
+        };
+
+        const onKeyUp = (e: KeyboardEvent) => {
+          if (e.code !== 'KeyQ') return;
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          const held = performance.now() / 1000 - qHoldRef.current.t0;
+          if (qHoldRef.current.timer) {
+            clearTimeout(qHoldRef.current.timer);
+            qHoldRef.current.timer = null;
+          }
+          qHoldRef.current.armed = false;
+          // Quick tap: swap weapon (user SSOT + Studio short-hold path)
+          if (held < DANGER_HOLD_TAP_SEC && !radialOpenRef.current) {
+            cycleWeapon();
+          }
+        };
+
+        // Capture phase so we win over RoleControls Digit1–4 / annihilate remaps
+        window.addEventListener('keydown', onKeyDown, true);
+        window.addEventListener('keyup', onKeyUp, true);
 
         // First wave
         spawningWaveRef.current = true;
@@ -561,7 +749,9 @@ export default function AvernusArena() {
 
         // Cleanup extras on unmount
         (canvas as HTMLCanvasElement & { __avernusCleanup?: () => void }).__avernusCleanup = () => {
-          window.removeEventListener('keydown', onKey);
+          window.removeEventListener('keydown', onKeyDown, true);
+          window.removeEventListener('keyup', onKeyUp, true);
+          if (qHoldRef.current.timer) clearTimeout(qHoldRef.current.timer);
           window.clearInterval(waveWatch);
         };
       } catch (err) {
@@ -735,8 +925,8 @@ export default function AvernusArena() {
                   ))}
                 </div>
                 <div className="mt-2 text-[10px] text-amber-100/40">
-                  Pack: {WEAPON_PACKS[packForWeapon(weapon)].label} · Q/E/R/F + LMB combo · range gate
-                  in combat
+                  Pack: {WEAPON_PACKS[packForWeapon(weapon)].label} · F class · R ultimate · 1–4 sig · Q
+                  swap
                 </div>
               </div>
 
@@ -772,20 +962,18 @@ export default function AvernusArena() {
             <aside className="flex flex-col gap-4">
               <div className="rounded-2xl border border-purple-500/25 bg-black/60 p-4 backdrop-blur">
                 <h3 className="mb-2 text-xs font-semibold uppercase tracking-widest text-purple-300">
-                  Danger Room Controls
+                  Danger Room Controls (SSOT)
                 </h3>
                 <div className="space-y-1 font-mono text-[11px] text-purple-100/80">
-                  {(config?.controls ?? ROLE_HOTKEYS.map((h) => ({ keys: h.keys, label: h.label })))
-                    .slice(0, 10)
-                    .map((row) => (
-                      <div key={row.keys} className="flex gap-2">
-                        <span className="w-28 shrink-0 text-amber-300">{row.keys}</span>
-                        <span>{row.label}</span>
-                      </div>
-                    ))}
+                  {DANGER_INPUT_LEGEND.map((row) => (
+                    <div key={row.keys} className="flex gap-2">
+                      <span className="w-32 shrink-0 text-amber-300">{row.keys}</span>
+                      <span>{row.label}</span>
+                    </div>
+                  ))}
                 </div>
                 <p className="mt-3 text-[10px] text-purple-200/40">
-                  Stack: RoleControls · GameCamera FOLLOW · loadRaceWithEquipment · weapon FBX packs
+                  From Open Danger Room: quickActions.ts · Studio.ts · DangerStartScreen — not invent Q/E as skills
                 </p>
               </div>
 
@@ -864,6 +1052,36 @@ export default function AvernusArena() {
     <div className="relative h-screen w-full overflow-hidden bg-black">
       <canvas ref={canvasRef} className="absolute inset-0 h-full w-full" />
 
+      <ModeRadial
+        open={radialOpen}
+        weapons={WEAPONS.map((w) => ({ type: w.type, name: w.name, icon: w.icon }))}
+        current={weapon}
+        onPick={(t) => {
+          weaponRef.current = t;
+          setWeapon(t);
+          radialOpenRef.current = false;
+          setRadialOpen(false);
+          const role = roleRef.current;
+          if (!role) return;
+          const nextPack = packForWeapon(t) as WeaponPackId;
+          void role.loadWeaponPack(nextPack).then((clips) => {
+            setActivePack(nextPack);
+            setFlash(`EQUIP · ${WEAPON_PACKS[nextPack].label} (${clips.length})`);
+            window.setTimeout(() => setFlash(''), 900);
+          });
+        }}
+        onClose={() => {
+          radialOpenRef.current = false;
+          setRadialOpen(false);
+        }}
+      />
+
+      {flash && (
+        <div className="pointer-events-none absolute left-1/2 top-1/3 z-30 -translate-x-1/2 rounded bg-black/70 px-4 py-2 font-mono text-sm font-bold tracking-wider text-amber-200">
+          {flash}
+        </div>
+      )}
+
       {/* Top bar */}
       <div className="absolute left-0 right-0 top-0 z-20 flex flex-wrap items-center gap-2 p-3">
         <Button
@@ -905,9 +1123,9 @@ export default function AvernusArena() {
         </div>
       </div>
 
-      {/* Mini help */}
-      <div className="absolute bottom-4 left-3 z-20 hidden rounded border border-white/10 bg-black/50 p-2 font-mono text-[9px] text-white/40 md:block">
-        LMB combo · RMB heavy · Shift dash · Ctrl block · Q/E/R/F skills
+      {/* Mini help — Danger Room chips */}
+      <div className="absolute bottom-4 left-3 z-20 hidden max-w-xs rounded border border-white/10 bg-black/50 p-2 font-mono text-[9px] text-white/40 md:block">
+        {DANGER_KEY_CHIPS.join(' · ')}
       </div>
     </div>
   );

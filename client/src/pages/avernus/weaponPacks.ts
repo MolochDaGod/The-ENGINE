@@ -1,33 +1,55 @@
 /**
  * Avernus weapon animation packs + skill hotkeys.
- * Aligns with annihilate WEAPON_PACKS + fleet Danger Room Q/E/R/F skills.
+ *
+ * Hotkeys = Danger Room SSOT (NOT invent Q/E/R/F as four free abilities):
+ *   F   = class / weapon skill (f-skill)
+ *   R   = ultimate / heavy
+ *   1–4 = signatures
+ *   Q   = weapon swap · Hold Q = mode/state radial
+ *   E   = interact
+ *
+ * Sources: gameopen hud/quickActions.ts + three/Studio.ts
  */
-
-import type { AbilityKey } from './weapons';
 
 export type WeaponPackId = 'sword-shield' | 'great-sword' | 'longbow' | 'magic-caster' | 'unarmed';
 
+/** Danger Room combat skill keys only */
+export type SkillBindKey = 'F' | 'R' | '1' | '2' | '3' | '4';
+
+export interface WeaponSkillBind {
+  key: SkillBindKey;
+  name: string;
+  anim: string;
+  cooldown: number;
+  description: string;
+  /** F = class skill · R = ultimate · 1–4 = signatures */
+  role: 'class' | 'ultimate' | 'signature';
+}
+
 export interface WeaponAnimMap {
   id: WeaponPackId;
-  /** grudge6 anim pack alias */
   animPack: 'sword_shield' | '2h_melee' | 'longbow' | 'magic' | 'unarmed';
   label: string;
-  /** Local portal base (public/models/animations/…) — FBX fallback only */
+  /** Local portal FBX fallback only — gameplay prefers baked JSON / GLB */
   basePath: string;
-  /**
-   * Baked Bip001 JSON root (preferred).
-   * Live: grudge-arena.grudge-studio.com/anims/baked — see bakedAnimSystem.ts
-   */
   bakedBase?: string;
   clips: Record<string, string>;
-  /** Skill bar 1–4 / Q E R F */
-  skills: {
-    key: AbilityKey | '1' | '2' | '3' | '4';
-    name: string;
-    anim: string;
-    cooldown: number;
-    description: string;
-  }[];
+  skills: WeaponSkillBind[];
+}
+
+function kit(
+  classSkill: Omit<WeaponSkillBind, 'key' | 'role'>,
+  ultimate: Omit<WeaponSkillBind, 'key' | 'role'>,
+  sigs: Omit<WeaponSkillBind, 'key' | 'role'>[],
+): WeaponSkillBind[] {
+  const out: WeaponSkillBind[] = [
+    { ...classSkill, key: 'F', role: 'class' },
+    { ...ultimate, key: 'R', role: 'ultimate' },
+  ];
+  sigs.slice(0, 4).forEach((s, i) => {
+    out.push({ ...s, key: String(i + 1) as '1' | '2' | '3' | '4', role: 'signature' });
+  });
+  return out;
 }
 
 export const WEAPON_PACKS: Record<WeaponPackId, WeaponAnimMap> = {
@@ -51,12 +73,16 @@ export const WEAPON_PACKS: Record<WeaponPackId, WeaponAnimMap> = {
       dashAttack: 'sword and shield kick.fbx',
       death: 'sword and shield death.fbx',
     },
-    skills: [
-      { key: 'Q', name: 'Shield Bash', anim: 'fist', cooldown: 6, description: 'Stun bash with shield' },
-      { key: 'E', name: 'Cleave', anim: 'strike', cooldown: 5, description: 'Wide slash arc' },
-      { key: 'R', name: 'Guard Break', anim: 'dashAttack', cooldown: 10, description: 'Dash attack through guard' },
-      { key: 'F', name: 'Rally', anim: 'block', cooldown: 14, description: 'Brief damage reduction' },
-    ],
+    skills: kit(
+      { name: 'Shield Bash', anim: 'fist', cooldown: 6, description: 'Class skill — shield bash' },
+      { name: 'Divine Wind', anim: 'strike', cooldown: 18, description: 'Ultimate / heavy' },
+      [
+        { name: 'Cleave', anim: 'strike', cooldown: 5, description: 'Signature 1' },
+        { name: 'Guard Break', anim: 'dashAttack', cooldown: 10, description: 'Signature 2' },
+        { name: 'Rally', anim: 'block', cooldown: 14, description: 'Signature 3' },
+        { name: 'Slash', anim: 'punch', cooldown: 4, description: 'Signature 4' },
+      ],
+    ),
   },
   'great-sword': {
     id: 'great-sword',
@@ -78,12 +104,16 @@ export const WEAPON_PACKS: Record<WeaponPackId, WeaponAnimMap> = {
       punchStart: 'great sword power up.fbx',
       death: 'two handed sword death.fbx',
     },
-    skills: [
-      { key: 'Q', name: 'Colossus', anim: 'punch', cooldown: 7, description: 'Heavy overhead' },
-      { key: 'E', name: 'Whirlwind', anim: 'whirlwind', cooldown: 12, description: 'Spinning AoE' },
-      { key: 'R', name: 'Charge', anim: 'dashAttack', cooldown: 9, description: 'Forward lunge' },
-      { key: 'F', name: 'Power Up', anim: 'punchStart', cooldown: 16, description: 'Charge next hit' },
-    ],
+    skills: kit(
+      { name: 'Colossus', anim: 'punch', cooldown: 7, description: 'Class skill' },
+      { name: 'Whirlwind', anim: 'whirlwind', cooldown: 18, description: 'Ultimate / heavy' },
+      [
+        { name: 'Charge', anim: 'dashAttack', cooldown: 9, description: 'Signature 1' },
+        { name: 'Power Up', anim: 'punchStart', cooldown: 16, description: 'Signature 2' },
+        { name: 'Slash', anim: 'fist', cooldown: 5, description: 'Signature 3' },
+        { name: 'Strike', anim: 'strike', cooldown: 6, description: 'Signature 4' },
+      ],
+    ),
   },
   longbow: {
     id: 'longbow',
@@ -99,12 +129,16 @@ export const WEAPON_PACKS: Record<WeaponPackId, WeaponAnimMap> = {
       punch: 'standing draw arrow.fbx',
       strike: 'standing aim idle.fbx',
     },
-    skills: [
-      { key: 'Q', name: 'Quick Shot', anim: 'punch', cooldown: 2, description: 'Fast arrow' },
-      { key: 'E', name: 'Piercing', anim: 'strike', cooldown: 6, description: 'Pierce line' },
-      { key: 'R', name: 'Rain', anim: 'strike', cooldown: 14, description: 'Arrow rain' },
-      { key: 'F', name: 'Retreat Shot', anim: 'fall', cooldown: 8, description: 'Backstep fire' },
-    ],
+    skills: kit(
+      { name: 'Quick Shot', anim: 'punch', cooldown: 3, description: 'Class skill' },
+      { name: 'Rain of Arrows', anim: 'strike', cooldown: 16, description: 'Ultimate / heavy' },
+      [
+        { name: 'Piercing', anim: 'strike', cooldown: 6, description: 'Signature 1' },
+        { name: 'Retreat Shot', anim: 'fall', cooldown: 8, description: 'Signature 2' },
+        { name: 'Mark', anim: 'punch', cooldown: 10, description: 'Signature 3' },
+        { name: 'Focus', anim: 'idle', cooldown: 12, description: 'Signature 4' },
+      ],
+    ),
   },
   'magic-caster': {
     id: 'magic-caster',
@@ -122,12 +156,16 @@ export const WEAPON_PACKS: Record<WeaponPackId, WeaponAnimMap> = {
       death: 'Standing React Death Backward.fbx',
       hit: 'Standing React Large From Front.fbx',
     },
-    skills: [
-      { key: 'Q', name: 'Arc Bolt', anim: 'punch', cooldown: 3, description: 'Ranged magic bolt' },
-      { key: 'E', name: 'Nova', anim: 'strike', cooldown: 10, description: 'AoE blast' },
-      { key: 'R', name: 'Barrier', anim: 'idle', cooldown: 12, description: 'Shield bubble' },
-      { key: 'F', name: 'Cataclysm', anim: 'strike', cooldown: 20, description: 'Ultimate AoE' },
-    ],
+    skills: kit(
+      { name: 'Arc Bolt', anim: 'punch', cooldown: 3, description: 'Class skill' },
+      { name: 'Cataclysm', anim: 'strike', cooldown: 20, description: 'Ultimate / heavy' },
+      [
+        { name: 'Nova', anim: 'strike', cooldown: 10, description: 'Signature 1' },
+        { name: 'Barrier', anim: 'idle', cooldown: 12, description: 'Signature 2' },
+        { name: 'Bolt II', anim: 'punch', cooldown: 5, description: 'Signature 3' },
+        { name: 'Ward', anim: 'idle', cooldown: 14, description: 'Signature 4' },
+      ],
+    ),
   },
   unarmed: {
     id: 'unarmed',
@@ -144,12 +182,16 @@ export const WEAPON_PACKS: Record<WeaponPackId, WeaponAnimMap> = {
       hit: 'sword and shield impact.fbx',
       jump: 'sword and shield jump.fbx',
     },
-    skills: [
-      { key: 'Q', name: 'Jab', anim: 'punch', cooldown: 2, description: 'Quick punch' },
-      { key: 'E', name: 'Hook', anim: 'fist', cooldown: 4, description: 'Heavy hook' },
-      { key: 'R', name: 'Kick', anim: 'dashAttack', cooldown: 7, description: 'Forward kick' },
-      { key: 'F', name: 'Fury', anim: 'fist', cooldown: 15, description: 'Combo rush' },
-    ],
+    skills: kit(
+      { name: 'Jab', anim: 'punch', cooldown: 2, description: 'Class skill' },
+      { name: 'Fury', anim: 'fist', cooldown: 15, description: 'Ultimate / heavy' },
+      [
+        { name: 'Hook', anim: 'fist', cooldown: 4, description: 'Signature 1' },
+        { name: 'Kick', anim: 'dashAttack', cooldown: 7, description: 'Signature 2' },
+        { name: 'Combo', anim: 'punch', cooldown: 5, description: 'Signature 3' },
+        { name: 'Rush', anim: 'dashAttack', cooldown: 9, description: 'Signature 4' },
+      ],
+    ),
   },
 };
 

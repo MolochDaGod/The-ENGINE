@@ -6,7 +6,8 @@
 import { WEAPON_PACKS, type WeaponPackId } from './weaponPacks';
 
 export type WeaponType = 'greatsword' | 'bow' | 'sabres' | 'scythe' | 'runeblade' | 'sword_shield';
-export type AbilityKey = 'Q' | 'E' | 'R' | 'F';
+/** Danger Room skill binds only (Q/E are mode/interact — not skill slots). */
+export type AbilityKey = 'F' | 'R' | '1' | '2' | '3' | '4';
 export type AttackType = 'melee' | 'ranged' | 'magic';
 
 export interface Ability {
@@ -19,6 +20,7 @@ export interface Ability {
   description: string;
   unlocked: boolean;
   anim?: string;
+  role?: 'class' | 'ultimate' | 'signature';
 }
 
 export interface WeaponData {
@@ -40,19 +42,18 @@ export interface WeaponData {
 
 function skillsFromPack(packId: WeaponPackId, resource: Ability['costType']): Ability[] {
   const pack = WEAPON_PACKS[packId];
-  return pack.skills
-    .filter((s) => s.key === 'Q' || s.key === 'E' || s.key === 'R' || s.key === 'F')
-    .map((s, i) => ({
-      key: s.key as AbilityKey,
-      name: s.name,
-      cooldown: 0,
-      maxCooldown: s.cooldown,
-      cost: i === 0 ? 0 : 10 + i * 5,
-      costType: resource,
-      description: s.description,
-      unlocked: true,
-      anim: s.anim,
-    }));
+  return pack.skills.map((s, i) => ({
+    key: s.key as AbilityKey,
+    name: s.name,
+    cooldown: 0,
+    maxCooldown: s.cooldown,
+    cost: s.role === 'class' ? 0 : s.role === 'ultimate' ? 40 : 10 + i * 5,
+    costType: resource,
+    description: s.description,
+    unlocked: true,
+    anim: s.anim,
+    role: s.role,
+  }));
 }
 
 export const WEAPONS: WeaponData[] = [
