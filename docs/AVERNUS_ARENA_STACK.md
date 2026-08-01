@@ -63,6 +63,24 @@ Railway Express: same paths in `server/routes.ts`
 
 ---
 
+## Low-lag instances · baked · skeletons · weapon skills
+
+| Layer | Do | Don't |
+|-------|----|--------|
+| **Race kits** | `loadRaceWithEquipment` + **SkeletonUtils** clone cache | `scene.clone(true)` on SkinnedMesh |
+| **Anims** | Baked **JSON** Bip001 (`bakedAnimSystem.ts`), global clip cache, **parallel** `Promise.all` | Sequential FBX waterfall per skill |
+| **Root motion** | `stripPositionTracks` on grounded kits | Play full Mixamo position tracks on SI feet |
+| **Weapon skills** | Baked pack first → FBX fill missing → equip wardrobe | Load whole fireball.glb or re-fetch pack every enemy |
+| **Enemies** | Share baked cache + race GLB cache | One FBX download per grunt |
+| **Instancing** | **InstancedMesh** for VFX/props/torches only | InstancedMesh for unique skinned heroes |
+| **Preload** | Opening page warms packs before **Enter Avernus** | Start match then wait on first attack |
+
+Code: `client/src/pages/avernus/bakedAnimSystem.ts`  
+Baked host: `https://grudge-arena.grudge-studio.com/anims/baked/{pack}/{clip}.json`  
+Fleet skill: `grudge6-combat-runtime` + `three-instanced-lod` (props/VFX only).
+
+---
+
 ## Related
 
 - `docs/ANNIHILATE_GRUDGE6_STACK.md`

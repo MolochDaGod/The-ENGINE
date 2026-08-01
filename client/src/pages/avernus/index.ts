@@ -2,6 +2,7 @@
 export * from './assets';
 export * from './weapons';
 export * from './weaponPacks';
+export * from './bakedAnimSystem';
 export * from './ai';
 export * from './physics';
 export * from './modes';

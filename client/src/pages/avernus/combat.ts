@@ -30,6 +30,11 @@ import {
 import type { AvernusHeroPreset } from './characters';
 import { WEAPON_PACKS, type WeaponPackId } from './weaponPacks';
 import { HUMAN_HEIGHT_M } from './assets';
+import {
+  loadBakedPack,
+  bindClipsToMixer,
+  stripPositionTracks,
+} from './bakedAnimSystem';
 
 // ─── Melee hitbox ────────────────────────────────────────────────────────────
 
@@ -470,45 +475,67 @@ export class AvernusHero extends BaseCharacter {
     }
   }
 
-  /** Load weapon skill animation pack (FBX) and equip mesh wardrobe. */
+  /**
+   * Load weapon skill animations — baked Bip001 JSON first (parallel + cached),
+   * then FBX fill for any missing actions. Equip mesh wardrobe after clips bind.
+   */
   async loadWeaponPack(packId: WeaponPackId): Promise<string[]> {
     const pack = WEAPON_PACKS[packId];
     if (!pack || !this.mixer) return [];
     this.activePack = packId;
-    const fbxLoader = new FBXLoader();
-    const loaded: string[] = [];
-    for (const [actionName, fileName] of Object.entries(pack.clips)) {
-      try {
-        const fbx = await fbxLoader.loadAsync(pack.basePath + encodeURIComponent(fileName));
-        if (fbx.animations.length > 0) {
-          const clip = fbx.animations[0];
-          clip.name = actionName;
-          if (this.oaction[actionName]) this.oaction[actionName].stop();
-          this.oaction[actionName] = this.mixer.clipAction(clip);
-          if (
-            [
-              'punch',
-              'fist',
-              'strike',
-              'dashAttack',
-              'hit',
-              'death',
-              'jump',
-              'whirlwind',
-            ].includes(actionName)
-          ) {
-            this.oaction[actionName].loop = THREE.LoopOnce;
-            this.oaction[actionName].clampWhenFinished = true;
+
+    // 1) Baked pack (shared cache, rotation-only, parallel)
+    const baked = await loadBakedPack(packId);
+    let loaded = bindClipsToMixer(this.mixer, this.oaction, baked.clips);
+
+    // 2) Parallel FBX fill only for missing keys (legacy portal /models/animations)
+    const missing = Object.keys(pack.clips).filter((k) => !this.oaction[k]);
+    if (missing.length > 0) {
+      const fbxLoader = new FBXLoader();
+      const fbxResults = await Promise.all(
+        missing.map(async (actionName) => {
+          const fileName = pack.clips[actionName];
+          if (!fileName) return null;
+          try {
+            const fbx = await fbxLoader.loadAsync(
+              pack.basePath + encodeURIComponent(fileName),
+            );
+            if (!fbx.animations.length) return null;
+            let clip = fbx.animations[0];
+            clip = stripPositionTracks(clip);
+            clip.name = actionName;
+            return { actionName, clip };
+          } catch {
+            return null;
           }
-          loaded.push(actionName);
+        }),
+      );
+      for (const row of fbxResults) {
+        if (!row) continue;
+        if (this.oaction[row.actionName]) this.oaction[row.actionName].stop();
+        const action = this.mixer.clipAction(row.clip);
+        if (
+          ['punch', 'fist', 'strike', 'dashAttack', 'hit', 'death', 'jump', 'whirlwind'].includes(
+            row.actionName,
+          )
+        ) {
+          action.loop = THREE.LoopOnce;
+          action.clampWhenFinished = true;
         }
-      } catch {
-        /* skip missing clip */
+        this.oaction[row.actionName] = action;
+        loaded.push(row.actionName);
       }
     }
+
+    // Alias running ← walk if only one loco clip landed
+    if (!this.oaction['running'] && this.oaction['walk']) {
+      this.oaction['running'] = this.mixer.clipAction(this.oaction['walk'].getClip());
+      loaded.push('running');
+    }
+
     this.setEquipmentMode('equipped');
-    if (loaded.includes('idle') && this.oaction['idle']) this.fadeToAction('idle');
-    return loaded;
+    if (this.oaction['idle']) this.fadeToAction('idle');
+    return [...new Set(loaded)];
   }
 
   /** Cast Q/E/R/F skill by anim name from pack. */
@@ -672,26 +699,15 @@ export class AvernusEnemy extends BaseCharacter {
       this.mixer = new THREE.AnimationMixer(this.mesh);
     }
 
-    // Best-effort weapon clips
+    // Shared baked pack (parallel + cache) — same path as hero, no FBX waterfall
     try {
-      const pack = WEAPON_PACKS[this.weaponPack];
-      const fbxLoader = new FBXLoader();
-      for (const key of ['idle', 'running', 'punch', 'hit'] as const) {
-        const file = pack.clips[key];
-        if (!file) continue;
-        try {
-          const fbx = await fbxLoader.loadAsync(pack.basePath + encodeURIComponent(file));
-          if (fbx.animations[0]) {
-            const clip = fbx.animations[0];
-            clip.name = key;
-            this.oaction[key] = this.mixer.clipAction(clip);
-          }
-        } catch {
-          /* skip */
-        }
+      const baked = await loadBakedPack(this.weaponPack);
+      bindClipsToMixer(this.mixer, this.oaction, baked.clips);
+      if (!this.oaction['running'] && this.oaction['walk']) {
+        this.oaction['running'] = this.mixer.clipAction(this.oaction['walk'].getClip());
       }
     } catch {
-      /* skip */
+      /* embedded kit anims only */
     }
 
     this._onLoaded('idle');

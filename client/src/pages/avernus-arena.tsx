@@ -43,9 +43,8 @@ import {
   resolveHero,
   type AvernusHeroPreset,
 } from './avernus/characters';
-import { WEAPONS, type WeaponType } from './avernus/weapons';
+import { WEAPONS, packForWeapon, type WeaponType } from './avernus/weapons';
 import { WEAPON_PACKS, type WeaponPackId } from './avernus/weaponPacks';
-import { packForWeapon } from './avernus/weapons';
 import { GAME_MODES, MODE_LIST, type GameMode, generateInfiniteWave } from './avernus/modes';
 import { NPC_PROFILES } from './avernus/ai';
 import {
@@ -58,6 +57,7 @@ import {
 } from './avernus/api';
 import { AvernusHero, AvernusEnemy, buildAvernusArena } from './avernus/combat';
 import { AVERNUS_ART, ARENA_RADIUS_M } from './avernus/assets';
+import { preloadAvernusAnims, bakedCacheStats } from './avernus/bakedAnimSystem';
 
 type Phase = 'opening' | 'loading' | 'playing' | 'results';
 
@@ -177,14 +177,41 @@ export default function AvernusArena() {
   const [skillCdUi, setSkillCdUi] = useState<Record<string, number>>({});
   const [enemyCount, setEnemyCount] = useState(0);
 
-  // Boot config + leaderboard
+  const [preloadPct, setPreloadPct] = useState(0);
+  const [preloadDone, setPreloadDone] = useState(false);
+
+  // Boot config + leaderboard + **baked anim warmup** (parallel, low lag at match start)
   useEffect(() => {
     document.title = 'Avernus Arena — Grudge Studio';
     fetchAvernusConfig()
       .then(setConfig)
       .catch(() => setConfig(null));
     fetchAvernusLeaderboard(8).then(setLeaderboard);
+
+    let cancelled = false;
+    (async () => {
+      try {
+        await preloadAvernusAnims(
+          ['sword-shield', 'longbow', 'magic-caster', 'unarmed', 'great-sword'],
+          (done, total) => {
+            if (!cancelled) setPreloadPct(Math.round((done / Math.max(1, total)) * 100));
+          },
+        );
+        if (!cancelled) {
+          setPreloadDone(true);
+          const s = bakedCacheStats();
+          console.info(
+            `[Avernus] baked anim cache ready: ${s.clips} clips (${preloadPct || 100}%)`,
+          );
+        }
+      } catch (e) {
+        console.warn('[Avernus] anim preload partial', e);
+        if (!cancelled) setPreloadDone(true);
+      }
+    })();
+
     return () => {
+      cancelled = true;
       document.title = 'Rec0deD:88 — Grudge Studio Gaming Portal';
     };
   }, []);
@@ -415,13 +442,14 @@ export default function AvernusArena() {
         setPlayerHealth(character.health);
         setPlayerMaxHealth(character.maxHealth);
 
-        setInfo(`Loading ${WEAPON_PACKS[packId].label} animations…`);
+        setInfo(`Binding baked Bip001 · ${WEAPON_PACKS[packId].label}…`);
         const clips = await character.loadWeaponPack(packId);
         setActivePack(packId);
+        const cache = bakedCacheStats();
         setInfo(
           clips.length
-            ? `${hero.name} · ${character.meshSourceUrl.includes('grudge6') || character.meshSourceUrl.includes('toon-rts') ? 'grudge6 kit' : 'kit'} · ${WEAPON_PACKS[packId].label} (${clips.length} clips)`
-            : `${hero.name} · embedded anims`,
+            ? `${hero.name} · grudge6 · ${WEAPON_PACKS[packId].label} · ${clips.length} skills (cache ${cache.clips})`
+            : `${hero.name} · embedded anims only`,
         );
 
         // Q/E/R/F skill hotkeys
@@ -710,6 +738,16 @@ export default function AvernusArena() {
                   Pack: {WEAPON_PACKS[packForWeapon(weapon)].label} · Q/E/R/F + LMB combo · range gate
                   in combat
                 </div>
+              </div>
+
+              <div className="mb-3 text-[10px] text-amber-100/40">
+                Baked Bip001 packs:{' '}
+                {preloadDone ? (
+                  <span className="text-green-400/80">ready ({bakedCacheStats().clips} clips)</span>
+                ) : (
+                  <span className="text-amber-300/70">warming cache {preloadPct}%…</span>
+                )}
+                {' · '}SkeletonUtils race kits · strip root motion · parallel load
               </div>
 
               <Button

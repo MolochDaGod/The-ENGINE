@@ -12,9 +12,12 @@ export interface WeaponAnimMap {
   /** grudge6 anim pack alias */
   animPack: 'sword_shield' | '2h_melee' | 'longbow' | 'magic' | 'unarmed';
   label: string;
-  /** Local portal base (public/models/animations/…) */
+  /** Local portal base (public/models/animations/…) — FBX fallback only */
   basePath: string;
-  /** Optional CDN baked GLB root */
+  /**
+   * Baked Bip001 JSON root (preferred).
+   * Live: grudge-arena.grudge-studio.com/anims/baked — see bakedAnimSystem.ts
+   */
   bakedBase?: string;
   clips: Record<string, string>;
   /** Skill bar 1–4 / Q E R F */
