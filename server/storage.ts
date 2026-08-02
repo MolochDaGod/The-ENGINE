@@ -84,6 +84,13 @@ export interface IStorage {
 
   listGames(platform?: string, options?: GameListOptions): Promise<GameListResult>;
   getGame(id: number): Promise<Game | undefined>;
+  /** Lookup by slug (e.g. avernus-arena) for string gameId leaderboard paths. */
+  getGameBySlug(slug: string): Promise<Game | undefined>;
+  /**
+   * Resolve numeric catalog id OR string slug to a game_library row.
+   * Ensures first-party studio games exist when missing.
+   */
+  resolveGameRef(ref: string | number): Promise<Game | undefined>;
   /**
    * Ensure game_library row uses **catalog id** (portal /play/:id / scores FK).
    * Seed historically ignored catalog ids — this heals competitive + score path.
@@ -437,6 +444,69 @@ export class DatabaseStorage implements IStorage {
   async getGame(id: number): Promise<Game | undefined> {
     const [g] = await db.select().from(gameLibrary).where(eq(gameLibrary.id, id));
     return g || undefined;
+  }
+
+  async getGameBySlug(slug: string): Promise<Game | undefined> {
+    const s = String(slug || "").trim().toLowerCase();
+    if (!s) return undefined;
+    const [g] = await db.select().from(gameLibrary).where(eq(gameLibrary.slug, s)).limit(1);
+    return g || undefined;
+  }
+
+  /**
+   * First-party studio games that score by slug (not retro catalog int ids).
+   * Kept small — only games that call /api/leaderboards/:slug.
+   */
+  private static readonly STUDIO_SLUG_GAMES: Record<
+    string,
+    { title: string; platform: string; thumbnailUrl?: string }
+  > = {
+    "avernus-arena": {
+      title: "Avernus Arena",
+      platform: "custom",
+      thumbnailUrl: "/assets/games/game_avernus_arena.png",
+    },
+    "avernus-3d": {
+      title: "Avernus 3D",
+      platform: "custom",
+      thumbnailUrl: "/assets/games/game_avernus_3d.png",
+    },
+  };
+
+  async resolveGameRef(ref: string | number): Promise<Game | undefined> {
+    if (typeof ref === "number" || /^\d+$/.test(String(ref))) {
+      const id = typeof ref === "number" ? ref : parseInt(String(ref), 10);
+      return (await this.ensureCatalogGame(id)) || (await this.getGame(id));
+    }
+
+    const slug = String(ref).trim().toLowerCase();
+    if (!slug) return undefined;
+
+    let game = await this.getGameBySlug(slug);
+    if (game) return game;
+
+    const meta = DatabaseStorage.STUDIO_SLUG_GAMES[slug];
+    if (!meta) return undefined;
+
+    try {
+      const [inserted] = await db
+        .insert(gameLibrary)
+        .values({
+          title: meta.title,
+          slug,
+          platform: meta.platform,
+          thumbnailUrl: meta.thumbnailUrl ?? null,
+          isFeatured: true,
+          isPlayable: true,
+          embedUrl: `/${slug}`,
+          description: `${meta.title} — Grudge Studio first-party game`,
+        })
+        .returning();
+      return inserted;
+    } catch {
+      // race / unique slug — re-read
+      return this.getGameBySlug(slug);
+    }
   }
 
   async ensureCatalogGame(catalogId: number): Promise<Game | undefined> {

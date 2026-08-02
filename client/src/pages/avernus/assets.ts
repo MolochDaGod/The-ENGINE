@@ -8,7 +8,7 @@
  * portal production build still compiles that route.
  */
 
-import { ASSETS_ORIGIN, assetUrl } from '@/lib/api-config';
+import { ASSETS_ORIGIN } from '@/lib/api-config';
 import { GRUDGE_CDN, GRUDGE_CHARACTERS, type AnimPack } from '@/engine';
 
 export const AVERNUS_CDN = ASSETS_ORIGIN || GRUDGE_CDN || 'https://assets.grudge-studio.com';
@@ -131,10 +131,16 @@ export const BAKED_ANIM_BASE = {
   assetsCdn: `${AVERNUS_CDN}/models/animations`,
 } as const;
 
-/** Opening / lobby art */
+/**
+ * Opening / lobby art — **same-origin portal public files**.
+ * Do NOT use assetUrl() here: that prefixes assets.grudge-studio.com and
+ * these PNGs live in client/public (not the R2 game/GLB CDN).
+ */
 export const AVERNUS_ART = {
-  card: assetUrl('/assets/games/game_avernus_arena.png'),
-  emblem: assetUrl('/grudge-logo.png'),
+  card: '/assets/games/game_avernus_arena.png',
+  emblem: '/grudge-logo.png',
+  /** Fallback if primary card is missing in an old deploy */
+  cardFallback: '/assets/games/game_avernus_3d.png',
 };
 
 /** Fleet roster entries (controller / API config). */

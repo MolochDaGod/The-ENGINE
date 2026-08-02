@@ -1416,10 +1416,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "gameId and score are required" });
       }
 
-      const catalogId = parseInt(String(gameId), 10);
-      // Heal catalog-id alignment so portal /play/:id and scores FK share one game row
-      const game =
-        (await storage.ensureCatalogGame(catalogId)) || (await storage.getGame(catalogId));
+      // Accept numeric catalog id OR studio slug (e.g. avernus-arena)
+      const game = await storage.resolveGameRef(gameId);
       if (!game) return res.status(404).json({ error: "Game not found" });
 
       // Determine personal best / global record flags
@@ -1507,10 +1505,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/leaderboards/:gameId", async (req, res) => {
     try {
-      const gameId = parseInt(req.params.gameId);
-      if (!Number.isFinite(gameId)) return res.status(400).json({ error: "Invalid gameId" });
-      const limit = Math.min(parseInt(req.query.limit as string) || 50, 100);
-      const topScores = await storage.getTopScores(gameId, limit);
+      // Numeric catalog id OR slug (avernus-arena) — parseInt alone 400s on slugs
+      const game = await storage.resolveGameRef(req.params.gameId);
+      if (!game) return res.status(404).json({ error: "Game not found" });
+      const limit = Math.min(parseInt(String(req.query.limit), 10) || 50, 100);
+      const topScores = await storage.getTopScores(game.id, limit);
       return res.json(topScores);
     } catch (error) {
       return res.status(500).json({ error: "Failed to fetch leaderboard" });
@@ -1520,7 +1519,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/leaderboards/:gameId/me", requirePlayer, async (req, res) => {
     try {
       const player = getPlayer(req)!;
-      const gameId = parseInt(req.params.gameId);
+      const game = await storage.resolveGameRef(req.params.gameId);
+      if (!game) return res.status(404).json({ error: "Game not found" });
+      const gameId = game.id;
       const best = await storage.getPlayerBestScore(player.id, gameId);
       if (!best) return res.json({ rank: null, score: null });
 
