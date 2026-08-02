@@ -232,8 +232,8 @@ export default function AvernusArena() {
     t0: 0,
     timer: null,
   });
-  const weaponRef = useRef(weapon);
-  weaponRef.current = weapon;
+  /** Mirror weapon state for keydown handlers (must init before useState — avoid TDZ on `weapon`). */
+  const weaponRef = useRef<WeaponType>('sword_shield');
   const radialOpenRef = useRef(false);
 
   const [phase, setPhase] = useState<Phase>('opening');
@@ -259,6 +259,9 @@ export default function AvernusArena() {
 
   const [preloadPct, setPreloadPct] = useState(0);
   const [preloadDone, setPreloadDone] = useState(false);
+
+  // Keep ref in sync for keyboard handlers (declared after state — no TDZ)
+  weaponRef.current = weapon;
 
   // Boot config + leaderboard + **baked anim warmup** (parallel, low lag at match start)
   useEffect(() => {
