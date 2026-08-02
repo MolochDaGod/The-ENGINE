@@ -85,8 +85,15 @@ export class MeleeHitbox extends Attacker {
 
     const target = event.body?.belongTo ?? null;
     if (!target || !target.isCharacter || target === this.owner) return;
+    // Team rules (DRC / Avernus modes):
+    //  player (isRole) → hits enemies only
+    //  enemy           → hits player + allies
+    //  ally            → hits enemies only
+    const ownerAlly = !!(this.owner as { isAlly?: boolean }).isAlly;
+    const targetAlly = !!(target as { isAlly?: boolean }).isAlly;
     if (this.owner.isRole && !target.isEnemy) return;
-    if (this.owner.isEnemy && !target.isRole) return;
+    if (ownerAlly && !target.isEnemy) return;
+    if (this.owner.isEnemy && !target.isRole && !targetAlly) return;
 
     const now = performance.now();
     if (now - this._lastHitAt < 180) return;
@@ -564,7 +571,12 @@ export class AvernusEnemy extends BaseCharacter {
   weaponPack: WeaponPackId;
   equipmentMode: EquipmentVisibilityMode = 'equipped';
   isRole = false;
+  /** Hostile to player (false for squad allies). */
   isEnemy = true;
+  /** Squad / VIP units — team player, not isRole. */
+  isAlly = false;
+  /** Escort mode VIP flag. */
+  isVip = false;
   attackSpeed = 1.3;
   hitbox: MeleeHitbox | null = null;
   vfx: CombatVfx | null = null;
@@ -577,6 +589,9 @@ export class AvernusEnemy extends BaseCharacter {
       speed?: number;
       attackSpeed?: number;
       tint?: number;
+      /** When true, unit is player-team ally (not hostile). */
+      ally?: boolean;
+      vip?: boolean;
     },
   ) {
     super({
@@ -591,12 +606,15 @@ export class AvernusEnemy extends BaseCharacter {
     this.maxHealth = this.health;
     this.speed = opts.speed ?? 0.08;
     this.attackSpeed = opts.attackSpeed ?? 1.3;
+    this.isAlly = !!opts.ally;
+    this.isVip = !!opts.vip;
+    this.isEnemy = !this.isAlly;
   }
 
   attachCombat(vfx: CombatVfx, onHit?: (t: BaseCharacter, n: number) => void) {
     this.vfx = vfx;
     this.hitbox?.destroy();
-    this.hitbox = new MeleeHitbox({ isEnemy: true, vfx, damage: 12, onHit });
+    this.hitbox = new MeleeHitbox({ isEnemy: this.isEnemy, vfx, damage: 12, onHit });
     this.hitbox.owner = this;
   }
 

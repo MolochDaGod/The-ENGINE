@@ -44,8 +44,14 @@ import {
 } from './avernus/characters';
 import { WEAPONS, packForWeapon, type WeaponType } from './avernus/weapons';
 import { WEAPON_PACKS, type WeaponPackId } from './avernus/weaponPacks';
-import { GAME_MODES, MODE_LIST, type GameMode, generateInfiniteWave } from './avernus/modes';
-import { NPC_PROFILES } from './avernus/ai';
+import {
+  GAME_MODES,
+  MODE_LIST,
+  type GameMode,
+  generateInfiniteWave,
+  getAllyProfiles,
+} from './avernus/modes';
+import { NPC_PROFILES, type NPCRole } from './avernus/ai';
 import {
   fetchAvernusConfig,
   createAvernusSession,
@@ -66,9 +72,19 @@ import type { SkillBindKey } from './avernus/weaponPacks';
 
 type Phase = 'opening' | 'loading' | 'playing' | 'results';
 
-interface EnemyInstance {
+interface UnitInstance {
   character: AvernusEnemy;
   ai: BaseAi;
+  team: 'enemy' | 'ally';
+  isVip?: boolean;
+}
+
+/** DRC: enemies aggro player + allies; allies aggro enemies only. */
+function enemyTargetFilter(c: { isRole?: boolean; isAlly?: boolean }): boolean {
+  return !!(c.isRole || c.isAlly);
+}
+function allyTargetFilter(c: { isEnemy?: boolean }): boolean {
+  return !!c.isEnemy;
 }
 
 const MODE_ICONS: Record<GameMode, ReactNode> = {
@@ -215,7 +231,8 @@ export default function AvernusArena() {
   const engineRef = useRef<GrudgeEngine | null>(null);
   const roleRef = useRef<AvernusHero | null>(null);
   const controlsRef = useRef<RoleControls | null>(null);
-  const enemiesRef = useRef<EnemyInstance[]>([]);
+  const enemiesRef = useRef<UnitInstance[]>([]);
+  const alliesRef = useRef<UnitInstance[]>([]);
   const vfxRef = useRef<CombatVfx | null>(null);
   const camRef = useRef<GameCamera | null>(null);
   const sessionIdRef = useRef<string | null>(null);
@@ -226,6 +243,8 @@ export default function AvernusArena() {
   const scoreRef = useRef(0);
   const spawningWaveRef = useRef(false);
   const runEndedRef = useRef(false);
+  /** Match mode snapshot (avoid stale closure in intervals). */
+  const modeRef = useRef<GameMode>('survival');
   /** Danger Room Q hold (Studio: radialHoldT vs 0.18s tap) */
   const qHoldRef = useRef<{ armed: boolean; t0: number; timer: ReturnType<typeof setTimeout> | null }>({
     armed: false,
@@ -240,6 +259,7 @@ export default function AvernusArena() {
   const [config, setConfig] = useState<AvernusConfig | null>(null);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [mode, setMode] = useState<GameMode>('survival');
+  modeRef.current = mode;
   const [race, setRace] = useState<CharacterRace>('human');
   const [weapon, setWeapon] = useState<WeaponType>('sword_shield');
   const [hero, setHero] = useState<AvernusHeroPreset>(() => RACE_DEFAULTS[0] ?? AVERNUS_HEROES[0]);
@@ -254,6 +274,7 @@ export default function AvernusArena() {
   const [activePack, setActivePack] = useState<WeaponPackId>('sword-shield');
   const [skillCdUi, setSkillCdUi] = useState<Record<string, number>>({});
   const [enemyCount, setEnemyCount] = useState(0);
+  const [allyCount, setAllyCount] = useState(0);
   const [radialOpen, setRadialOpen] = useState(false);
   const [flash, setFlash] = useState('');
 
@@ -329,47 +350,112 @@ export default function AvernusArena() {
     setEnemyCount(0);
   }, []);
 
-  const spawnEnemyFromProfile = useCallback(async (role: keyof typeof NPC_PROFILES) => {
-    const engine = engineRef.current;
-    const roleChar = roleRef.current;
-    const vfx = vfxRef.current;
-    if (!engine || !roleChar || !vfx) return;
-
-    const profile = NPC_PROFILES[role];
-    const angle = Math.random() * Math.PI * 2;
-    const dist = 8 + Math.random() * 6;
-    const pos = new THREE.Vector3(
-      roleChar.body.position.x + Math.cos(angle) * dist,
-      2,
-      roleChar.body.position.z + Math.sin(angle) * dist,
-    );
-
-    const enemy = new AvernusEnemy({
-      race: profile.race,
-      weaponPack: profile.weaponPack,
-      health: profile.health,
-      speed: profile.speed * 0.025,
-      attackSpeed: 1.2 + profile.aggressionBias * 0.4,
-      position: pos,
-    });
-
-    await enemy.load();
-    enemy.enableFootIK();
-    enemy.attachCombat(vfx, (target) => {
-      if (target.isRole) {
-        setPlayerHealth(target.health);
-        camRef.current?.shake(0.32);
-      }
-    });
-    const ai = new BaseAi(enemy, 1.4);
-    enemiesRef.current.push({ character: enemy, ai });
-    setEnemyCount(enemiesRef.current.length);
-    vfx.ring({ x: pos.x, y: 0.1, z: pos.z }, 'magic', 1.1);
+  const clearAllies = useCallback(() => {
+    for (const a of alliesRef.current) {
+      a.ai.destroy();
+      a.character.destroy();
+    }
+    alliesRef.current = [];
+    setAllyCount(0);
   }, []);
+
+  const spawnUnitFromProfile = useCallback(
+    async (
+      role: NPCRole,
+      opts: { ally?: boolean; vip?: boolean; nearPlayer?: boolean } = {},
+    ) => {
+      const roleChar = roleRef.current;
+      const vfx = vfxRef.current;
+      if (!roleChar || !vfx) return;
+
+      const profile = NPC_PROFILES[role];
+      if (!profile) return;
+
+      const ally = !!opts.ally || profile.team === 'player';
+      const vip = !!opts.vip;
+      const angle = Math.random() * Math.PI * 2;
+      // Allies spawn near player; enemies at arena rim
+      const dist = ally || opts.nearPlayer ? 2.5 + Math.random() * 2 : 8 + Math.random() * 6;
+      const pos = new THREE.Vector3(
+        roleChar.body.position.x + Math.cos(angle) * dist,
+        2,
+        roleChar.body.position.z + Math.sin(angle) * dist,
+      );
+
+      const unit = new AvernusEnemy({
+        race: profile.race,
+        weaponPack: profile.weaponPack,
+        health: profile.health,
+        speed: profile.speed * 0.025,
+        attackSpeed: 1.2 + profile.aggressionBias * 0.4,
+        position: pos,
+        ally,
+        vip,
+      });
+
+      await unit.load();
+      unit.enableFootIK();
+      unit.attachCombat(vfx, (target) => {
+        if (target.isRole) {
+          setPlayerHealth(target.health);
+          camRef.current?.shake(0.32);
+        }
+      });
+
+      const ai = new BaseAi(
+        unit,
+        ally ? 1.8 : 1.4,
+        1,
+        ally ? allyTargetFilter : enemyTargetFilter,
+      );
+      // Allies need longer aggro radius to find enemies around player
+      if (ally) {
+        (unit as { detectorRadius?: number }).detectorRadius = 14;
+      }
+
+      const inst: UnitInstance = {
+        character: unit,
+        ai,
+        team: ally ? 'ally' : 'enemy',
+        isVip: vip,
+      };
+      if (ally) {
+        alliesRef.current.push(inst);
+        setAllyCount(alliesRef.current.length);
+      } else {
+        enemiesRef.current.push(inst);
+        setEnemyCount(enemiesRef.current.length);
+      }
+      vfx.ring({ x: pos.x, y: 0.1, z: pos.z }, ally ? 'charge' : 'magic', ally ? 0.7 : 1.1);
+    },
+    [],
+  );
+
+  const spawnAlliesForMode = useCallback(
+    async (m: GameMode) => {
+      const modeCfg = GAME_MODES[m];
+      const profiles = getAllyProfiles(m);
+      let i = 0;
+      for (const profile of profiles) {
+        const vip = !!modeCfg.firstAllyIsVip && i === 0;
+        await spawnUnitFromProfile(profile.role, { ally: true, vip, nearPlayer: true });
+        i += 1;
+        await new Promise((r) => setTimeout(r, 200));
+      }
+      if (profiles.length) {
+        setInfo(
+          modeCfg.firstAllyIsVip
+            ? `VIP + ${profiles.length - 1} escort · ${modeCfg.winCondition}`
+            : `Squad ${profiles.length} · ${modeCfg.winCondition}`,
+        );
+      }
+    },
+    [spawnUnitFromProfile],
+  );
 
   const spawnWave = useCallback(
     async (waveNum: number) => {
-      const modeCfg = GAME_MODES[mode];
+      const modeCfg = GAME_MODES[modeRef.current];
       const def =
         waveNum <= modeCfg.waves.length
           ? modeCfg.waves[waveNum - 1]
@@ -378,19 +464,22 @@ export default function AvernusArena() {
             : null;
       if (!def) return;
       setWave(waveNum);
-      setInfo(def.bonus || `Wave ${waveNum}`);
+      setInfo(def.bonus || `Wave ${waveNum} · ${modeCfg.name}`);
+      // spawnDelay is seconds (mode SSOT) — was incorrectly *400ms
+      const delayMs = Math.max(80, def.spawnDelay * 1000);
       for (const entry of def.enemies) {
         for (let i = 0; i < entry.count; i++) {
-          await spawnEnemyFromProfile(entry.role);
-          await new Promise((r) => setTimeout(r, def.spawnDelay * 400));
+          await spawnUnitFromProfile(entry.role, { ally: false });
+          await new Promise((r) => setTimeout(r, delayMs));
         }
       }
     },
-    [mode, spawnEnemyFromProfile],
+    [spawnUnitFromProfile],
   );
 
   const teardownEngine = useCallback(() => {
     clearEnemies();
+    clearAllies();
     controlsRef.current?.destroy();
     controlsRef.current = null;
     roleRef.current?.destroy();
@@ -401,7 +490,7 @@ export default function AvernusArena() {
     camRef.current = null;
     engineRef.current?.destroy();
     engineRef.current = null;
-  }, [clearEnemies]);
+  }, [clearEnemies, clearAllies]);
 
   const endRun = useCallback(
     async (finalScore: number, finalKills: number, finalWave: number) => {
@@ -666,6 +755,11 @@ export default function AvernusArena() {
         window.addEventListener('keydown', onKeyDown, true);
         window.addEventListener('keyup', onKeyUp, true);
 
+        // Mode squad (TDM / boss / escort) before first wave — DRC playable still player-driven
+        const modeCfg0 = GAME_MODES[modeRef.current];
+        setInfo(`${modeCfg0.name} · ${modeCfg0.winCondition}`);
+        await spawnAlliesForMode(modeRef.current);
+
         // First wave
         spawningWaveRef.current = true;
         waveRef.current = 1;
@@ -677,7 +771,9 @@ export default function AvernusArena() {
           const role = roleRef.current;
           if (!role || runEndedRef.current) return;
           setPlayerHealth(role.health);
+          const modeCfg = GAME_MODES[modeRef.current];
 
+          // Player kills only (enemy units)
           let gained = 0;
           enemiesRef.current = enemiesRef.current.filter((e) => {
             if (e.character.health > 0) return true;
@@ -688,16 +784,61 @@ export default function AvernusArena() {
           });
           if (gained) {
             killsRef.current += gained;
-            scoreRef.current += gained * GAME_MODES[mode].scorePerKill;
+            scoreRef.current += gained * modeCfg.scorePerKill;
             setKills(killsRef.current);
             setScore(scoreRef.current);
           }
           setEnemyCount(enemiesRef.current.length);
 
+          // Prune dead allies; escort VIP death = lose
+          let vipDead = false;
+          alliesRef.current = alliesRef.current.filter((a) => {
+            if (a.character.health > 0) return true;
+            if (a.isVip) vipDead = true;
+            a.ai.destroy();
+            a.character.destroy();
+            return false;
+          });
+          setAllyCount(alliesRef.current.length);
+
           if (role.health <= 0) {
             runEndedRef.current = true;
             window.clearInterval(hpPoll);
+            setInfo('You fell in the pit…');
             void endRun(scoreRef.current, killsRef.current, waveRef.current);
+            return;
+          }
+
+          if (modeCfg.firstAllyIsVip && vipDead) {
+            runEndedRef.current = true;
+            window.clearInterval(hpPoll);
+            setInfo('VIP eliminated — escort failed');
+            void endRun(scoreRef.current, killsRef.current, waveRef.current);
+            return;
+          }
+
+          // Team deathmatch kill target
+          if (modeCfg.killTarget && killsRef.current >= modeCfg.killTarget) {
+            runEndedRef.current = true;
+            window.clearInterval(hpPoll);
+            setInfo(`Victory · ${modeCfg.killTarget} kills`);
+            void endRun(
+              scoreRef.current + modeCfg.scorePerWave,
+              killsRef.current,
+              waveRef.current,
+            );
+            return;
+          }
+
+          // Escort timer
+          if (modeCfg.timeLimitSec != null && startedAtRef.current > 0) {
+            const elapsed = (Date.now() - startedAtRef.current) / 1000;
+            if (elapsed >= modeCfg.timeLimitSec) {
+              runEndedRef.current = true;
+              window.clearInterval(hpPoll);
+              setInfo('Time expired — escort failed');
+              void endRun(scoreRef.current, killsRef.current, waveRef.current);
+            }
           }
         }, 250);
 
@@ -708,10 +849,11 @@ export default function AvernusArena() {
           if (spawningWaveRef.current) return;
           if (enemiesRef.current.length > 0) return;
 
-          const modeCfg = GAME_MODES[mode];
+          const modeCfg = GAME_MODES[modeRef.current];
           const next = waveRef.current + 1;
           if (!modeCfg.infiniteWaves && next > modeCfg.waves.length) {
             runEndedRef.current = true;
+            setInfo(`Clear · ${modeCfg.winCondition}`);
             void endRun(
               scoreRef.current + modeCfg.scorePerWave,
               killsRef.current,
@@ -851,6 +993,12 @@ export default function AvernusArena() {
                       <div className="mb-1 text-amber-400">{MODE_ICONS[m.id]}</div>
                       <div className="text-xs font-bold">{m.name}</div>
                       <div className="mt-1 line-clamp-2 text-[10px] opacity-60">{m.description}</div>
+                      <div className="mt-1 text-[9px] text-amber-200/40">
+                        Win: {m.winCondition}
+                        {m.allies.length > 0
+                          ? ` · squad ${m.allies.reduce((n, a) => n + a.count, 0)}`
+                          : ' · solo'}
+                      </div>
                     </button>
                   ))}
                 </div>
@@ -1101,13 +1249,22 @@ export default function AvernusArena() {
         <Badge className="bg-black/70 text-amber-200">{GAME_MODES[mode].name}</Badge>
         <Badge variant="outline" className="border-purple-500/40 text-purple-200">
           Wave {wave}
+          {!GAME_MODES[mode].infiniteWaves
+            ? ` / ${GAME_MODES[mode].waves.length}`
+            : ''}
         </Badge>
         <Badge variant="outline" className="border-red-500/40 text-red-200">
           Kills {kills}
+          {GAME_MODES[mode].killTarget ? ` / ${GAME_MODES[mode].killTarget}` : ''}
         </Badge>
         <Badge variant="outline" className="border-amber-500/40 text-amber-200">
           Score {score}
         </Badge>
+        {GAME_MODES[mode].allies.length > 0 && (
+          <Badge variant="outline" className="border-sky-500/40 text-sky-200">
+            Allies {allyCount}
+          </Badge>
+        )}
         <div className="flex-1" />
         <div className="rounded bg-black/70 px-2 py-1 font-mono text-[10px] text-green-400">
           {fsmState}

@@ -24,6 +24,10 @@ export interface ModeConfig {
   winCondition: string;
   scorePerKill: number;
   scorePerWave: number;
+  /** Team deathmatch: kill count to win (player kills only). */
+  killTarget?: number;
+  /** Escort: first ally entry is VIP — death = lose. */
+  firstAllyIsVip?: boolean;
 }
 
 /* ═══ SURVIVAL — solo, escalating waves ═══ */
@@ -74,6 +78,7 @@ const TEAM_DEATHMATCH: ModeConfig = {
   winCondition: 'Reach 50 kills',
   scorePerKill: 10,
   scorePerWave: 50,
+  killTarget: 50,
 };
 
 /* ═══ BOSS RUSH — fight bosses back to back ═══ */
@@ -119,9 +124,10 @@ const ESCORT: ModeConfig = {
   ],
   infiniteWaves: false,
   timeLimitSec: 180, // 3 minutes to get VIP across
-  winCondition: 'Escort VIP to extraction point',
+  winCondition: 'Keep VIP alive through all waves (or until timer)',
   scorePerKill: 10,
   scorePerWave: 150,
+  firstAllyIsVip: true,
 };
 
 /* ═══ MODE REGISTRY ═══ */
