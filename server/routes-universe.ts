@@ -123,13 +123,21 @@ export function registerUniverseRoutes(app: Express): void {
     }
   });
 
-  // Full universe snapshot + bootstrap starter content
+  // Full universe snapshot — real data only (purge fakes; optional Nexus battledeck sync)
   app.get("/api/me/universe", requirePlayer, async (req, res) => {
     try {
       const player = getPlayer(req)!;
+      const { bearerFromRequest } = await import("./nexus-deck-sync");
+      const nexusBearer =
+        bearerFromRequest(req as any) ||
+        (typeof req.headers["x-grudge-token"] === "string"
+          ? req.headers["x-grudge-token"]
+          : null);
+
       const data = await universe.bootstrapUniverse(
         player.id,
         player.displayName || player.username,
+        { nexusBearer },
       );
       return res.json({
         ...data,
@@ -137,10 +145,47 @@ export function registerUniverseRoutes(app: Express): void {
           biomes: ISLAND_BIOMES,
           launches: UNIVERSE_LAUNCH,
         },
+        policy: {
+          noFakeData: true,
+          decksSource: "grudgeplatform.io /api/user/battledeck (mirror only)",
+          note: "Portal never invents cards. Build decks on grudgeplatform.io.",
+        },
       });
     } catch (error) {
       console.error("GET /api/me/universe", error);
       return res.status(500).json({ error: "Failed to load universe" });
+    }
+  });
+
+  // Explicit resync of real battle deck from Nexus
+  app.post("/api/me/universe/sync-nexus-deck", requirePlayer, async (req, res) => {
+    try {
+      const player = getPlayer(req)!;
+      const { bearerFromRequest, fetchNexusBattleDeck } = await import("./nexus-deck-sync");
+      const token =
+        (typeof req.body?.token === "string" && req.body.token) ||
+        bearerFromRequest(req as any);
+      if (!token) {
+        return res.status(401).json({
+          error: "Need a fleet JWT (Bearer / grudge_token) accepted by grudgeplatform.io",
+        });
+      }
+      const mirror = await fetchNexusBattleDeck(token);
+      if (!mirror) {
+        return res.status(404).json({
+          error: "No battle deck on grudgeplatform — save 20 cards at /deck-builder first",
+          origin: "https://grudgeplatform.io",
+        });
+      }
+      const data = await universe.bootstrapUniverse(
+        player.id,
+        player.displayName || player.username,
+        { nexusBearer: token },
+      );
+      return res.json({ ok: true, mirror, decks: data.decks, nexus: data.nexus });
+    } catch (error) {
+      console.error("POST /api/me/universe/sync-nexus-deck", error);
+      return res.status(500).json({ error: "Nexus deck sync failed" });
     }
   });
 

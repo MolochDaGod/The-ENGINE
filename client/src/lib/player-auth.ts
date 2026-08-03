@@ -135,83 +135,138 @@ export async function completeProfile(data: {
 }
 
 /**
- * Phantom wallet sign-in — uses the Phantom Browser SDK (Connect).
- * Supports: Google/Apple social login (embedded wallet), Phantom Login,
- * browser extension (injected), and mobile deep link.
+ * Solana wallet sign-in (multi-wallet).
+ *
+ * Does NOT use Phantom Auth2 /login/start (that 400s without a valid portal app).
+ * Uses injected extensions only: Phantom, Solflare, Backpack, Glow, etc.
  *
  * Flow:
- *   1. SDK connect() → get Solana address
- *   2. Server issues nonce for that address
- *   3. SDK signs the nonce message
- *   4. Server verifies signature → creates/finds user → sets cookie
+ *   1. connect injected wallet → address
+ *   2. POST /api/auth/solana/nonce (alias of phantom/nonce)
+ *   3. wallet.signMessage(nonce message)
+ *   4. POST /api/auth/solana/verify → session cookie + optional link to existing account
  *
- * When called without a provider argument the function tries "injected"
- * (browser extension) first and automatically falls back to "google"
- * (Phantom embedded wallet) if the extension is not available.
+ * `provider` arg kept for API compat: "auto" | "phantom" | "injected" | wallet id.
+ * "google" | "apple" | "deeplink" Auth2 paths are disabled (return clear error).
  */
 export async function phantomSignIn(
-  provider: "google" | "apple" | "phantom" | "injected" | "deeplink" | "auto" = "auto",
+  provider:
+    | "google"
+    | "apple"
+    | "phantom"
+    | "injected"
+    | "deeplink"
+    | "auto"
+    | "solflare"
+    | "backpack"
+    | "glow"
+    | "coinbase"
+    | "exodus"
+    | "nightly"
+    | "trust" = "auto",
 ): Promise<{ ok: true; player: PlayerProfile } | { ok: false; error: string }> {
-  // Resolve "auto": prefer the browser extension, fall back to Google embedded wallet.
-  if (provider === "auto") {
-    try {
-      const { isPhantomExtensionInstalled } = await import("./phantom-sdk");
-      const hasExtension = await isPhantomExtensionInstalled();
-      provider = hasExtension ? "injected" : "google";
-    } catch {
-      provider = "injected";
-    }
+  // Auth2 embedded paths are broken without Phantom Portal app allowlist — do not call them.
+  if (provider === "google" || provider === "apple" || provider === "deeplink") {
+    return {
+      ok: false,
+      error:
+        "Embedded Phantom Auth2 is disabled. Use a browser Solana wallet (Phantom, Solflare, Backpack, Glow, …).",
+    };
   }
 
-  return _phantomSignInWithProvider(provider as "google" | "apple" | "phantom" | "injected" | "deeplink");
-}
-
-async function _phantomSignInWithProvider(
-  provider: "google" | "apple" | "phantom" | "injected" | "deeplink",
-): Promise<{ ok: true; player: PlayerProfile } | { ok: false; error: string }> {
   try {
-    // Dynamic import to avoid bundling the SDK when not needed
-    const { connectPhantom, signMessage: phantomSignMessage } = await import("./phantom-sdk");
+    const { pickDefaultWallet, connectSolanaWallet, signSolanaMessage } = await import(
+      "./solana-wallets"
+    );
 
-    // Step 1: Connect via chosen provider
-    const { address } = await connectPhantom(provider);
+    let walletId: import("./solana-wallets").SolanaWalletId;
+    if (provider === "auto") {
+      const picked = pickDefaultWallet();
+      if (!picked) {
+        return {
+          ok: false,
+          error:
+            "No Solana wallet extension found. Install Phantom, Solflare, Backpack, or Glow, then refresh.",
+        };
+      }
+      walletId = picked;
+    } else if (provider === "injected") {
+      walletId = pickDefaultWallet() || "injected";
+    } else {
+      walletId = provider as import("./solana-wallets").SolanaWalletId;
+    }
+
+    const { address, wallet, provider: inj } = await connectSolanaWallet(walletId);
     if (!address) return { ok: false, error: "Could not read wallet address." };
 
-    // Step 2: Request nonce from server
-    const nonceRes = await fetch("/api/auth/phantom/nonce", {
+    // Prefer solana/* routes; fall back to legacy phantom/* paths
+    const nonceRes = await fetch("/api/auth/solana/nonce", {
       method: "POST",
       credentials: "include",
       headers: JSON_HEADERS,
-      body: JSON.stringify({ address }),
-    });
-    const nonceJson = await nonceRes.json();
-    if (!nonceRes.ok) return { ok: false, error: nonceJson.error || "Nonce request failed" };
+      body: JSON.stringify({ address, wallet }),
+    }).catch(() => null);
 
-    // Step 3: Sign the nonce message via Phantom SDK
-    const signatureB58 = await phantomSignMessage(nonceJson.message);
+    let nonceJson: any;
+    if (nonceRes && nonceRes.ok) {
+      nonceJson = await nonceRes.json();
+    } else {
+      const legacy = await fetch("/api/auth/phantom/nonce", {
+        method: "POST",
+        credentials: "include",
+        headers: JSON_HEADERS,
+        body: JSON.stringify({ address }),
+      });
+      nonceJson = await legacy.json();
+      if (!legacy.ok) return { ok: false, error: nonceJson.error || "Nonce request failed" };
+    }
 
-    // Step 4: Verify on server → get session cookie
-    const verifyRes = await fetch("/api/auth/phantom/verify", {
+    const signatureB58 = await signSolanaMessage(inj, nonceJson.message);
+
+    const verifyBody = {
+      address,
+      nonce: nonceJson.nonce,
+      signature: signatureB58,
+      wallet,
+    };
+
+    let verifyRes = await fetch("/api/auth/solana/verify", {
       method: "POST",
       credentials: "include",
       headers: JSON_HEADERS,
-      body: JSON.stringify({ address, nonce: nonceJson.nonce, signature: signatureB58 }),
-    });
+      body: JSON.stringify(verifyBody),
+    }).catch(() => null);
+
+    if (!verifyRes || !verifyRes.ok) {
+      verifyRes = await fetch("/api/auth/phantom/verify", {
+        method: "POST",
+        credentials: "include",
+        headers: JSON_HEADERS,
+        body: JSON.stringify(verifyBody),
+      });
+    }
+
     const verifyJson = await verifyRes.json();
-    if (!verifyRes.ok) return { ok: false, error: verifyJson.error || "Wallet verification failed" };
+    if (!verifyRes.ok) {
+      return { ok: false, error: verifyJson.error || "Wallet verification failed" };
+    }
     return { ok: true, player: verifyJson };
   } catch (err: any) {
-    // If the injected provider failed, try the Google embedded wallet as a last resort.
-    if (provider === "injected") {
-      try {
-        return await _phantomSignInWithProvider("google");
-      } catch {
-        // fall through to the error below
-      }
+    const msg = String(err?.message || err || "Wallet sign-in failed");
+    // Surface Auth2 failures with a clear fix message
+    if (/Auth2|login\/start|400|Bad Request/i.test(msg)) {
+      return {
+        ok: false,
+        error:
+          "Phantom Auth2 failed (misconfigured app). Use an installed Solana extension wallet instead of embedded login.",
+      };
     }
-    return { ok: false, error: err?.message || "Wallet sign-in failed" };
+    return { ok: false, error: msg };
   }
 }
+
+/** Alias — multi-wallet Solana login (same as phantomSignIn). */
+export const solanaWalletSignIn = phantomSignIn;
 
 export function discordSignIn(redirectTo: string = "/") {
   const url = `/api/auth/discord/start?redirect=${encodeURIComponent(redirectTo)}`;

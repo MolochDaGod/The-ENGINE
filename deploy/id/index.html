@@ -1124,20 +1124,54 @@ $("btn-github").addEventListener("click", () => startOAuth("github"));
 
 const B58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
 function base58(bytes){ if (!bytes || !bytes.length) return ""; const digits = [0]; for (let i=0;i<bytes.length;i++){ let carry = bytes[i]; for (let j=0;j<digits.length;j++){ carry += digits[j] << 8; digits[j] = carry % 58; carry = (carry / 58) | 0; } while (carry){ digits.push(carry % 58); carry = (carry / 58) | 0; } } let str = ""; for (let k=0; bytes[k] === 0 && k < bytes.length - 1; k++) str += "1"; for (let q=digits.length-1; q>=0; q--) str += B58[digits[q]]; return str; }
+/** Multi-wallet Solana — injected only (no Phantom Auth2 /login/start). */
+function pickSolanaProvider() {
+  const w = window;
+  const candidates = [
+    { id: "phantom", p: w.phantom && w.phantom.solana },
+    { id: "solflare", p: w.solflare },
+    { id: "backpack", p: w.backpack },
+    { id: "glow", p: w.glow },
+    { id: "coinbase", p: w.coinbaseSolana },
+    { id: "exodus", p: w.exodus && w.exodus.solana },
+    { id: "injected", p: w.solana },
+  ];
+  for (const c of candidates) {
+    if (c.p && typeof c.p.connect === "function") return c;
+  }
+  return null;
+}
 $("btn-phantom").addEventListener("click", async () => {
   const btn = $("btn-phantom");
-  const provider = window.solana || (window.phantom && window.phantom.solana);
-  if (!provider || !provider.isPhantom){ toast("Install Phantom wallet to continue.", "error"); window.open("https://phantom.app/", "_blank"); return; }
+  const picked = pickSolanaProvider();
+  if (!picked) {
+    toast("Install a Solana wallet (Phantom, Solflare, Backpack, Glow) and refresh.", "error");
+    window.open("https://phantom.app/", "_blank");
+    return;
+  }
+  const provider = picked.p;
   busy(btn, true);
   try {
     const resp = await provider.connect();
-    const address = (resp.publicKey || provider.publicKey).toString();
-    const { nonce, message } = await api("/api/auth/phantom/nonce", { method:"POST", body: JSON.stringify({ address }) });
+    const pk = (resp && resp.publicKey) || provider.publicKey;
+    const address = pk.toString();
+    let noncePayload;
+    try {
+      noncePayload = await api("/api/auth/solana/nonce", { method:"POST", body: JSON.stringify({ address, wallet: picked.id }) });
+    } catch {
+      noncePayload = await api("/api/auth/phantom/nonce", { method:"POST", body: JSON.stringify({ address, wallet: picked.id }) });
+    }
+    const { nonce, message } = noncePayload;
     const encoded = new TextEncoder().encode(message);
     const signed = await provider.signMessage(encoded, "utf8");
     const sigRaw = signed.signature || signed;
-    const signature = typeof sigRaw === "string" ? sigRaw : base58(sigRaw);
-    const user = await api("/api/auth/phantom/verify", { method:"POST", body: JSON.stringify({ address, nonce, signature }) });
+    const signature = typeof sigRaw === "string" ? sigRaw : base58(sigRaw instanceof Uint8Array ? sigRaw : new Uint8Array(sigRaw));
+    let user;
+    try {
+      user = await api("/api/auth/solana/verify", { method:"POST", body: JSON.stringify({ address, nonce, signature, wallet: picked.id }) });
+    } catch {
+      user = await api("/api/auth/phantom/verify", { method:"POST", body: JSON.stringify({ address, nonce, signature, wallet: picked.id }) });
+    }
     afterAuth(user);
   } catch (e){ toast(e.message || "Wallet sign-in failed.", "error"); }
   finally { busy(btn, false); }

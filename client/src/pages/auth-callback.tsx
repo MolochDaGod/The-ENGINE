@@ -83,8 +83,8 @@ export default function AuthCallback() {
           return;
         }
 
-        // Legacy Phantom Connect OAuth path only if no Grudge token present
-        const result = await phantomSignIn("phantom");
+        // No Grudge SSO token — try multi-wallet Solana (injected only, no Auth2)
+        const result = await phantomSignIn("auto");
         if (cancelled) return;
         if (result.ok) {
           setState("success");
@@ -94,7 +94,10 @@ export default function AuthCallback() {
           }, 800);
         } else {
           setState("error");
-          setError(result.error || "No session token received from Grudge ID.");
+          setError(
+            result.error ||
+              "No session. Sign in at id.grudge-studio.com or connect a Solana wallet extension.",
+          );
         }
       } catch (err: any) {
         if (cancelled) return;

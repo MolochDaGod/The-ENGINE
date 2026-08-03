@@ -583,30 +583,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Phantom wallet (Solana) ---------------------------------------
-  app.post("/api/auth/phantom/nonce", async (req, res) => {
+  // Solana wallet (multi-wallet: Phantom, Solflare, Backpack, Glow, …) ----------
+  // Auth2 /login/start is intentionally NOT used — injected signMessage only.
+  async function issueSolanaNonce(req: any, res: any) {
     try {
       const { address } = req.body || {};
-      if (!address || typeof address !== "string") return res.status(400).json({ error: "address is required" });
+      if (!address || typeof address !== "string") {
+        return res.status(400).json({ error: "address is required" });
+      }
+      // Basic Solana base58 pubkey check
+      try {
+        const pk = bs58.decode(address);
+        if (pk.length !== 32) return res.status(400).json({ error: "Invalid Solana address length" });
+      } catch {
+        return res.status(400).json({ error: "Invalid Solana address (base58)" });
+      }
       pruneMap(phantomNonces);
       const nonce = crypto.randomBytes(16).toString("hex");
-      const message = `Sign in to Grudge Studio\n\nAddress: ${address}\nNonce: ${nonce}\nIssued: ${new Date().toISOString()}`;
+      const walletHint = typeof req.body?.wallet === "string" ? req.body.wallet : "solana";
+      const message =
+        `Sign in to Grudge Studio\n\n` +
+        `Wallet: ${walletHint}\n` +
+        `Address: ${address}\n` +
+        `Nonce: ${nonce}\n` +
+        `Issued: ${new Date().toISOString()}`;
       phantomNonces.set(`${address}:${nonce}`, { message, expiresAt: Date.now() + PHANTOM_NONCE_TTL_MS });
-      return res.json({ nonce, message });
+      return res.json({ nonce, message, wallet: walletHint });
     } catch (error) {
       return res.status(500).json({ error: "Failed to issue nonce" });
     }
-  });
+  }
 
-  app.post("/api/auth/phantom/verify", async (req, res) => {
+  async function verifySolanaWallet(req: any, res: any) {
     try {
-      const { address, nonce, signature } = req.body || {};
-      if (!address || !nonce || !signature) return res.status(400).json({ error: "address, nonce, signature are required" });
+      const { address, nonce, signature, wallet: walletName } = req.body || {};
+      if (!address || !nonce || !signature) {
+        return res.status(400).json({ error: "address, nonce, signature are required" });
+      }
       const key = `${address}:${nonce}`;
       const entry = phantomNonces.get(key);
       if (!entry || entry.expiresAt < Date.now()) {
         phantomNonces.delete(key);
-        return res.status(400).json({ error: "Nonce expired or not found" });
+        return res.status(400).json({ error: "Nonce expired or not found — request a new sign-in" });
       }
       phantomNonces.delete(key);
 
@@ -618,14 +636,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } catch {
         return res.status(400).json({ error: "Invalid base58 in address or signature" });
       }
-      if (pubKey.length !== 32 || sigBytes.length !== 64) return res.status(400).json({ error: "Invalid key or signature length" });
+      if (pubKey.length !== 32) return res.status(400).json({ error: "Invalid key length" });
+      if (sigBytes.length !== 64) {
+        // Some wallets return longer buffers
+        if (sigBytes.length > 64) sigBytes = sigBytes.slice(0, 64);
+        else return res.status(400).json({ error: "Invalid signature length" });
+      }
 
       const messageBytes = new TextEncoder().encode(entry.message);
       const ok = nacl.sign.detached.verify(messageBytes, sigBytes, pubKey);
       if (!ok) return res.status(401).json({ error: "Signature verification failed" });
 
+      const walletLabel = typeof walletName === "string" ? walletName.slice(0, 32) : "solana";
+
+      // Prefer session already loaded by loadPlayer middleware
+      const sessionUser = (req as any).player as { id: number; solanaAddress?: string | null } | undefined;
+
       let user = await storage.getUserBySolanaAddress(address);
       let isNew = false;
+
+      if (sessionUser?.id) {
+        // Wallet already owned by another account?
+        if (user && user.id !== sessionUser.id) {
+          return res.status(409).json({
+            error: "This Solana address is already linked to another Grudge account.",
+            conflictUserId: user.id,
+          });
+        }
+        // Attach to current session account (correct "connect wallet" path)
+        if (!sessionUser.solanaAddress) {
+          await storage.updateUser(sessionUser.id, {
+            solanaAddress: address,
+            lastLoginAt: new Date(),
+          });
+        } else {
+          await storage.updateUser(sessionUser.id, { lastLoginAt: new Date() });
+        }
+        try {
+          await db.insert(walletConnections).values({
+            userId: sessionUser.id,
+            walletAddress: address,
+            chain: "solana",
+            provider: walletLabel,
+            isActive: true,
+          });
+        } catch {
+          /* duplicate connection row ok */
+        }
+        user = (await storage.getUser(sessionUser.id)) || user;
+        if (user) {
+          const token = createPlayerToken(user.id);
+          setPlayerCookie(res, token);
+          return res.json(publicPlayer(user, false, token));
+        }
+      }
+
       if (!user) {
         const baseName = `sol_${address.slice(0, 6)}`;
         const username = await uniqueUsername(baseName);
@@ -647,6 +712,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
           needsProfile: true,
         });
         isNew = true;
+        try {
+          await db.insert(walletConnections).values({
+            userId: user.id,
+            walletAddress: address,
+            chain: "solana",
+            provider: walletLabel,
+            isActive: true,
+          });
+        } catch {
+          /* optional */
+        }
       } else {
         await storage.updateUser(user.id, { lastLoginAt: new Date() });
       }
@@ -655,10 +731,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       setPlayerCookie(res, token);
       return res.json(publicPlayer(user, isNew, token));
     } catch (error) {
-      console.error("Phantom verify error:", error);
+      console.error("Solana wallet verify error:", error);
       return res.status(500).json({ error: "Wallet auth failed" });
     }
-  });
+  }
+
+  app.post("/api/auth/solana/nonce", issueSolanaNonce);
+  app.post("/api/auth/solana/verify", verifySolanaWallet);
+  // Legacy aliases (same handlers)
+  app.post("/api/auth/phantom/nonce", issueSolanaNonce);
+  app.post("/api/auth/phantom/verify", verifySolanaWallet);
 
   // Google OAuth --------------------------------------------------
   const googleOauthState = new Map<string, { redirect: string; expiresAt: number }>();

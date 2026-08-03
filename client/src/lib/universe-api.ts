@@ -206,12 +206,22 @@ export async function launchWithCharacter(
   else window.open(url, "_blank", "noopener,noreferrer");
 }
 
-/** Launch Nexus Nemesis with active deck id. */
+/** Launch Nexus Nemesis on grudgeplatform.io (real battledeck SSOT). */
 export async function launchWithDeck(deck: UniverseDeck): Promise<void> {
+  // Playable deck ownership is grudgeplatform.io /api/user/battledeck — not portal player_decks filler.
+  // Open library/deck-builder with SSO; portal deckId is advisory only.
   let url = appendParams(UNIVERSE_LAUNCH.nemesis.route, {
-    deckId: deck.id,
+    from: "portal-account",
+    portalDeckId: deck.id,
     deck: deck.name,
   });
+  // Prefer deck builder when list is incomplete / placeholder snapshot
+  if (!deck.isValid || deck.totalCards !== 20) {
+    url = appendParams(UNIVERSE_LAUNCH.nemesisDeck.route, {
+      from: "portal-account",
+      portalDeckId: deck.id,
+    });
+  }
   url = await withLaunchToken(url);
   await putGameSave({
     gameKey: UNIVERSE_LAUNCH.nemesis.gameKey,

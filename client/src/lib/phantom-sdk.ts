@@ -1,13 +1,12 @@
 /**
- * Phantom Connect — Browser SDK singleton
+ * @deprecated Prefer `@/lib/solana-wallets` + `phantomSignIn()` / `solanaWalletSignIn()`.
  *
- * Central SDK instance used by all Solana wallet flows:
- *   - Social login (Google / Apple) → embedded wallet
- *   - Phantom Login → embedded wallet linked to Phantom account
- *   - Browser extension (injected) → existing Phantom wallet
+ * Phantom BrowserSDK Auth2 (`/login/start`) returns 400 when the portal appId /
+ * redirect URL is not allowlisted. Production login uses **injected multi-wallet**
+ * only (Phantom, Solflare, Backpack, Glow, …) — no Auth2.
  *
- * App ID:   656b4ef2-7acc-44fe-bec7-4b288cfdd2e9
- * Portal:   https://portal.phantom.com
+ * This module is kept for optional experimental embedded flows and must not
+ * be used as the default sign-in path.
  */
 
 import { BrowserSDK, AddressType, waitForPhantomExtension } from "@phantom/browser-sdk";
@@ -16,7 +15,6 @@ import bs58 from "bs58";
 const PHANTOM_APP_ID =
   import.meta.env.VITE_PHANTOM_APP_ID || "656b4ef2-7acc-44fe-bec7-4b288cfdd2e9";
 
-// Determine redirect URL based on current origin
 function getRedirectUrl(): string {
   if (typeof window === "undefined") return "https://grudge-studio.com/auth/callback";
   return `${window.location.origin}/auth/callback`;
@@ -25,14 +23,15 @@ function getRedirectUrl(): string {
 let _sdk: BrowserSDK | null = null;
 
 /**
- * Returns the shared Phantom BrowserSDK instance.
- * Lazily created on first call so it doesn't break SSR/build.
+ * Injected-only SDK (no google/apple/phantom Auth2 providers).
+ * Still may fail if @phantom/browser-sdk misbehaves — use solana-wallets.ts instead.
  */
 export function getPhantomSDK(): BrowserSDK {
   if (_sdk) return _sdk;
 
   _sdk = new BrowserSDK({
-    providers: ["google", "apple", "phantom", "injected", "deeplink"],
+    // CRITICAL: only "injected" — avoid Auth2 /login/start 400s
+    providers: ["injected"],
     addressTypes: [AddressType.solana],
     appId: PHANTOM_APP_ID,
     authOptions: {
@@ -40,15 +39,9 @@ export function getPhantomSDK(): BrowserSDK {
     },
   });
 
-  // Trigger auto-connect asynchronously (checks for existing session)
-  _sdk.autoConnect().catch(() => {});
-
   return _sdk;
 }
 
-// ── Helpers ──────────────────────────────────────────────────────
-
-/** Check if the Phantom browser extension is installed. */
 export async function isPhantomExtensionInstalled(): Promise<boolean> {
   try {
     return await waitForPhantomExtension(3000);
@@ -57,51 +50,52 @@ export async function isPhantomExtensionInstalled(): Promise<boolean> {
   }
 }
 
-/** Connect via a specific provider and return the Solana address. */
 export async function connectPhantom(
-  provider: "google" | "apple" | "phantom" | "injected" | "deeplink" = "injected",
+  provider: "injected" = "injected",
 ): Promise<{ address: string; addresses: Array<{ address: string; addressType: string }> }> {
-  const sdk = getPhantomSDK();
-  const { addresses } = await sdk.connect({ provider });
-  // addressType may be an enum value — cast to string for comparison
-  const solana = addresses.find((a) => String(a.addressType).toLowerCase() === "solana");
-  if (!solana) throw new Error("No Solana address returned from Phantom Connect");
-  return {
-    address: solana.address,
-    addresses: addresses.map((a) => ({ address: a.address, addressType: String(a.addressType) })),
-  };
+  // Prefer native multi-wallet path
+  const { connectSolanaWallet, pickDefaultWallet } = await import("./solana-wallets");
+  const id = pickDefaultWallet() || "injected";
+  const { address } = await connectSolanaWallet(id);
+  return { address, addresses: [{ address, addressType: "solana" }] };
 }
 
-/** Sign a message with the connected Solana wallet. Returns base58 signature. */
 export async function signMessage(message: string): Promise<string> {
-  const sdk = getPhantomSDK();
-  const result = await sdk.solana.signMessage(message);
-  // signMessage returns { signature: Uint8Array, publicKey: string }
-  return bs58.encode(result.signature);
+  const { connectSolanaWallet, pickDefaultWallet, signSolanaMessage } = await import(
+    "./solana-wallets"
+  );
+  const id = pickDefaultWallet() || "injected";
+  const { provider } = await connectSolanaWallet(id);
+  return signSolanaMessage(provider, message);
 }
 
-/** Get the connected Solana public key (base58). */
 export async function getSolanaPublicKey(): Promise<string> {
-  const sdk = getPhantomSDK();
-  return sdk.solana.publicKey || "";
+  try {
+    const { pickDefaultWallet, getInjectedProvider } = await import("./solana-wallets");
+    const id = pickDefaultWallet();
+    if (!id) return "";
+    const p = getInjectedProvider(id);
+    return p?.publicKey?.toString?.() || "";
+  } catch {
+    return "";
+  }
 }
 
-/** Check if the SDK has an active connection. */
 export function isConnected(): boolean {
   try {
-    const sdk = getPhantomSDK();
-    return sdk.isConnected();
+    const w = window as any;
+    return !!(w.solana?.publicKey || w.phantom?.solana?.publicKey || w.solflare?.publicKey);
   } catch {
     return false;
   }
 }
 
-/** Disconnect the current wallet session. */
 export async function disconnectPhantom(): Promise<void> {
   try {
-    const sdk = getPhantomSDK();
-    await sdk.disconnect();
+    const { disconnectSolanaWallet, pickDefaultWallet } = await import("./solana-wallets");
+    const id = pickDefaultWallet();
+    if (id) await disconnectSolanaWallet(id);
   } catch {
-    // ignore disconnect errors
+    /* ignore */
   }
 }

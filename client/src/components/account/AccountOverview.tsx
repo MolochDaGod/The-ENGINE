@@ -200,14 +200,30 @@ export default function AccountOverview({ player }: { player: PlayerProfile }) {
             )}
             <div>
               <h2 className="text-xl font-bold font-heading gold-text" style={{ WebkitTextFillColor: "unset" }}>
+                {/* Prefer displayName; username may be an old puter/guest handle (e.g. "decjs") */}
                 {player.displayName || player.username}
               </h2>
               <div className="text-sm text-[hsl(45,15%,60%)] font-body mt-0.5 flex flex-wrap gap-2 items-center">
                 <span>@{player.username}</span>
+                {player.displayName &&
+                  player.displayName.toLowerCase() !== player.username.toLowerCase() && (
+                    <Badge
+                      variant="outline"
+                      className="border-amber-500/40 text-amber-200 text-[10px]"
+                      title="Portal login handle differs from display name — fleet Discord/Solana is identity SSOT"
+                    >
+                      login handle ≠ display
+                    </Badge>
+                  )}
                 <Badge variant="outline" className="border-[hsl(43,60%,30%)] text-[hsl(43,85%,55%)] uppercase text-[10px]">
                   {player.role || "player"}
                 </Badge>
               </div>
+              {player.grudgeId && (
+                <p className="text-[10px] font-mono text-[hsl(45,15%,50%)] mt-1">
+                  Grudge ID · {player.grudgeId}
+                </p>
+              )}
               {player.bio && (
                 <p className="text-xs text-[hsl(45,15%,55%)] font-body mt-1 max-w-md">{player.bio}</p>
               )}

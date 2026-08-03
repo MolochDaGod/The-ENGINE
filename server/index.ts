@@ -147,6 +147,8 @@ function sendAuthDiscovery(req: Request, res: Response) {
       discord: "GET /api/auth/discord/start",
       google: "GET /api/auth/google/start",
       github: "GET /api/auth/github/start",
+      solanaNonce: "POST /api/auth/solana/nonce",
+      solanaVerify: "POST /api/auth/solana/verify",
       phantomNonce: "POST /api/auth/phantom/nonce",
       phantomVerify: "POST /api/auth/phantom/verify",
       twilioStart: "POST /api/auth/twilio/start",

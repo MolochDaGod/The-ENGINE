@@ -1,52 +1,96 @@
 /**
- * Starter catalog for the unified account universe.
- * Portal owns identity + save snapshots; fleet games hydrate from these.
+ * Account universe catalog — real fleet data only.
+ *
+ * HARD RULE: No invented cards, no portal filler decks, no demo catalogs.
+ * Nexus battle decks live on grudgeplatform.io (user_season0_cards / battledeck).
+ * Portal may only *mirror* real decks after a successful API sync, or show empty.
  */
 
 export type StarterDeckCard = {
   cardKey: string;
   name: string;
   qty: number;
-  cost: number;
-  attack: number;
-  health: number;
-  rarity: "common" | "uncommon" | "rare" | "epic";
-  tribe: string;
+  cost?: number;
+  attack?: number;
+  health?: number;
+  rarity?: string;
+  tribe?: string;
+  type?: string;
 };
 
-/** Season-0 style starter deck (~30 cards) for Nexus Nemesis account loop. */
-export const STARTER_NEXUS_DECK: {
-  name: string;
-  description: string;
-  tribe: string;
-  cards: StarterDeckCard[];
-} = {
-  name: "Grudge Starter",
-  description: "Portal starter deck — claim packs in Nexus to expand.",
-  tribe: "grudge",
-  cards: [
-    { cardKey: "grudge_grunt", name: "Grudge Grunt", qty: 3, cost: 1, attack: 1, health: 2, rarity: "common", tribe: "grudge" },
-    { cardKey: "dock_runner", name: "Dock Runner", qty: 3, cost: 1, attack: 2, health: 1, rarity: "common", tribe: "grudge" },
-    { cardKey: "harbor_guard", name: "Harbor Guard", qty: 3, cost: 2, attack: 1, health: 4, rarity: "common", tribe: "grudge" },
-    { cardKey: "cutlass_adept", name: "Cutlass Adept", qty: 3, cost: 2, attack: 3, health: 2, rarity: "common", tribe: "grudge" },
-    { cardKey: "powder_monkey", name: "Powder Monkey", qty: 2, cost: 2, attack: 2, health: 2, rarity: "uncommon", tribe: "grudge" },
-    { cardKey: "warcamp_banner", name: "Warcamp Banner", qty: 2, cost: 3, attack: 2, health: 4, rarity: "uncommon", tribe: "grudge" },
-    { cardKey: "cannon_crew", name: "Cannon Crew", qty: 2, cost: 3, attack: 4, health: 2, rarity: "uncommon", tribe: "grudge" },
-    { cardKey: "reef_shaman", name: "Reef Shaman", qty: 2, cost: 3, attack: 2, health: 3, rarity: "uncommon", tribe: "ethereal" },
-    { cardKey: "black_flag", name: "Black Flag", qty: 2, cost: 4, attack: 4, health: 4, rarity: "rare", tribe: "grudge" },
-    { cardKey: "nemesis_blade", name: "Nemesis Blade", qty: 2, cost: 4, attack: 5, health: 3, rarity: "rare", tribe: "legion" },
-    { cardKey: "island_lord", name: "Island Lord", qty: 1, cost: 5, attack: 5, health: 6, rarity: "epic", tribe: "grudge" },
-    { cardKey: "tide_ward", name: "Tide Ward", qty: 2, cost: 1, attack: 0, health: 3, rarity: "common", tribe: "ethereal" },
-    { cardKey: "smuggler_cache", name: "Smuggler Cache", qty: 2, cost: 2, attack: 0, health: 2, rarity: "common", tribe: "grudge" },
-    { cardKey: "board_action", name: "Board Action", qty: 1, cost: 3, attack: 0, health: 0, rarity: "uncommon", tribe: "mixed" },
-  ],
-};
+/**
+ * Known portal-invented card keys/names (must be purged, never re-created).
+ */
+export const LEGACY_FAKE_CARD_KEYS = new Set([
+  "grudge_grunt",
+  "dock_runner",
+  "harbor_guard",
+  "cutlass_adept",
+  "powder_monkey",
+  "warcamp_banner",
+  "cannon_crew",
+  "reef_shaman",
+  "black_flag",
+  "nemesis_blade",
+  "island_lord",
+  "tide_ward",
+  "smuggler_cache",
+  "board_action",
+]);
+
+const LEGACY_FAKE_NAMES = new Set([
+  "grudge grunt",
+  "dock runner",
+  "harbor guard",
+  "cutlass adept",
+  "powder monkey",
+  "warcamp banner",
+  "cannon crew",
+  "reef shaman",
+  "black flag",
+  "nemesis blade",
+  "island lord",
+  "tide ward",
+  "smuggler cache",
+  "board action",
+]);
+
+export function isLegacyFakeDeck(cards: Array<{ cardKey?: string; name?: string }>): boolean {
+  if (!cards?.length) return false;
+  return cards.some((c) => {
+    const key = String(c.cardKey || "").toLowerCase();
+    if (LEGACY_FAKE_CARD_KEYS.has(key)) return true;
+    // Non-numeric keys that aren't real season0 ids are also suspect for "Nexus" decks
+    const n = String(c.name || "").toLowerCase();
+    if (LEGACY_FAKE_NAMES.has(n)) return true;
+    return false;
+  });
+}
+
+/**
+ * A deck is "real Season 0 shape" only when every cardKey is a numeric template id
+ * (matches season0_basic_cards.id / cardId strings like "1".."102").
+ */
+export function isRealSeason0DeckCards(
+  cards: Array<{ cardKey?: string; name?: string }>,
+): boolean {
+  if (!cards?.length) return false;
+  if (isLegacyFakeDeck(cards)) return false;
+  return cards.every((c) => {
+    const key = String(c.cardKey || "").trim();
+    return /^\d+$/.test(key);
+  });
+}
+
+/** @deprecated Never auto-seed. Kept empty so any leftover import fails closed. */
+export const STARTER_NEXUS_DECK = null as never;
 
 export function countDeckCards(cards: Array<{ qty: number }>): number {
   return cards.reduce((sum, c) => sum + Math.max(0, c.qty | 0), 0);
 }
 
-export function isDeckValid(cards: Array<{ qty: number }>, min = 20, max = 40): boolean {
+/** Battle-ready for Nexus is exactly 20 owned instances. */
+export function isDeckValid(cards: Array<{ qty: number }>, min = 20, max = 20): boolean {
   const n = countDeckCards(cards);
   return n >= min && n <= max;
 }
@@ -62,6 +106,10 @@ export const ISLAND_BIOMES: { id: IslandBiome; label: string; emoji: string }[] 
   { id: "ruins", label: "Sunken Ruins", emoji: "🏛️" },
 ];
 
+/**
+ * Home island rows are player-owned progress in portal DB (real rows).
+ * Empty until the player creates one — no auto-fake island.
+ */
 export function defaultHomeIsland(displayName: string) {
   const seed = Math.floor(Math.random() * 1_000_000);
   return {
@@ -89,8 +137,8 @@ export function defaultHomeIsland(displayName: string) {
 }
 
 /**
- * Fleet launch targets for universe loops — keep in sync with fleetRegistry
- * + CANONICAL domains (prefer *.grudge-studio.com over raw vercel when live).
+ * Fleet launch targets — production domains only.
+ * Nemesis TCG SSOT: grudgeplatform.io (Railway nexus-nemesis + Postgres).
  */
 export const UNIVERSE_LAUNCH = {
   warlords: {
@@ -105,8 +153,18 @@ export const UNIVERSE_LAUNCH = {
   },
   nemesis: {
     gameKey: "nemesis-tcg",
-    route: "https://nemesis.grudge-studio.com",
+    route: "https://grudgeplatform.io/library",
     label: "Nexus Nemesis",
+  },
+  nemesisDeck: {
+    gameKey: "nemesis-tcg",
+    route: "https://grudgeplatform.io/deck-builder",
+    label: "Nexus Deck Builder",
+  },
+  nemesisBattledeck: {
+    gameKey: "nemesis-tcg",
+    route: "https://grudgeplatform.io/api/user/battledeck",
+    label: "Battle Deck API",
   },
   metaverse: {
     gameKey: "grudge-metaverse",
@@ -119,3 +177,6 @@ export const UNIVERSE_LAUNCH = {
     label: "Home Islands",
   },
 } as const;
+
+/** Production Nexus host (constant — override only on server via env in nexus-deck-sync). */
+export const NEXUS_TCG_ORIGIN = "https://grudgeplatform.io";

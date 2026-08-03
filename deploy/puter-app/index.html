@@ -533,20 +533,76 @@ async function puterSSO(puterId, puterUsername) {
   } catch (e) { showAuthErr(e.message); showAuthGate(); }
 }
 
+function b58encode(bytes) {
+  const B58 = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+  if (!bytes || !bytes.length) return '';
+  const digits = [0];
+  for (let i = 0; i < bytes.length; i++) {
+    let carry = bytes[i];
+    for (let j = 0; j < digits.length; j++) {
+      carry += digits[j] << 8;
+      digits[j] = carry % 58;
+      carry = (carry / 58) | 0;
+    }
+    while (carry) {
+      digits.push(carry % 58);
+      carry = (carry / 58) | 0;
+    }
+  }
+  let str = '';
+  for (let k = 0; bytes[k] === 0 && k < bytes.length - 1; k++) str += '1';
+  for (let q = digits.length - 1; q >= 0; q--) str += B58[digits[q]];
+  return str;
+}
+
+function pickSolanaProvider() {
+  const w = window;
+  const list = [
+    { id: 'phantom', p: w.phantom?.solana },
+    { id: 'solflare', p: w.solflare },
+    { id: 'backpack', p: w.backpack },
+    { id: 'glow', p: w.glow },
+    { id: 'injected', p: w.solana },
+  ];
+  for (const c of list) if (c.p?.connect) return c;
+  return null;
+}
+
 async function loginPhantom() {
   try {
-    const phantom = window.solana || window.phantom?.solana;
-    if (!phantom?.isPhantom) { showToast('⚠ Phantom not found — install from phantom.app', true); return; }
-    const resp = await phantom.connect();
-    const address = resp.publicKey.toString();
-    // Nonce + verify flow matching The-ENGINE
-    const nonceRes = await apiPost(`${ID_API}/api/auth/phantom/nonce`, { address });
+    const picked = pickSolanaProvider();
+    if (!picked) {
+      showToast('⚠ No Solana wallet found — install Phantom, Solflare, or Backpack', true);
+      return;
+    }
+    const provider = picked.p;
+    const resp = await provider.connect();
+    const address = (resp.publicKey || provider.publicKey).toString();
+    // Multi-wallet nonce + verify (base58 signature for nacl)
+    let nonceRes;
+    try {
+      nonceRes = await apiPost(`${ID_API}/api/auth/solana/nonce`, { address, wallet: picked.id });
+    } catch {
+      nonceRes = await apiPost(`${ID_API}/api/auth/phantom/nonce`, { address, wallet: picked.id });
+    }
     const enc = new TextEncoder();
-    const signed = await phantom.signMessage(enc.encode(nonceRes.message), 'utf8');
-    const sig = btoa(String.fromCharCode(...signed.signature));
-    currentUser = await apiPost(`${ID_API}/api/auth/phantom/verify`, { address, nonce: nonceRes.nonce, signature: sig });
+    const signed = await provider.signMessage(enc.encode(nonceRes.message), 'utf8');
+    const raw = signed.signature || signed;
+    const bytes = raw instanceof Uint8Array ? raw : new Uint8Array(raw);
+    const sig = b58encode(bytes.length > 64 ? bytes.slice(0, 64) : bytes);
+    let user;
+    try {
+      user = await apiPost(`${ID_API}/api/auth/solana/verify`, {
+        address, nonce: nonceRes.nonce, signature: sig, wallet: picked.id,
+      });
+    } catch {
+      user = await apiPost(`${ID_API}/api/auth/phantom/verify`, {
+        address, nonce: nonceRes.nonce, signature: sig, wallet: picked.id,
+      });
+    }
+    currentUser = user;
     showHub(); updateUI();
-    showToast('◎ Signed in with wallet: ' + address.slice(0, 8) + '...');
+    showToast('◎ Signed in with ' + picked.id + ': ' + address.slice(0, 8) + '...');
   } catch (e) { showAuthErr('Wallet auth failed: ' + e.message); }
 }
 

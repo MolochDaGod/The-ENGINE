@@ -14,11 +14,12 @@ import {
   type PlayerGameSave,
 } from "@shared/schema";
 import {
-  STARTER_NEXUS_DECK,
   countDeckCards,
   isDeckValid,
-  defaultHomeIsland,
+  isLegacyFakeDeck,
+  isRealSeason0DeckCards,
 } from "@shared/universe-catalog";
+import type { NexusBattleDeckMirror } from "./nexus-deck-sync";
 
 export async function listCharacters(userId: number): Promise<PlayerCharacter[]> {
   return db
@@ -320,68 +321,154 @@ export async function upsertGameSave(
   return row;
 }
 
-/** Ensure starter deck + home island exist for a player (idempotent). */
+/**
+ * Load universe for a player — REAL DATA ONLY.
+ * - Purges portal-invented fake decks (never re-seed)
+ * - Optionally mirrors grudgeplatform battledeck when a Nexus JWT is provided
+ * - Does NOT invent characters, islands, or cards
+ */
 export async function bootstrapUniverse(
   userId: number,
-  displayName: string,
+  _displayName: string,
+  options?: { nexusBearer?: string | null },
 ): Promise<{
   characters: PlayerCharacter[];
   decks: PlayerDeck[];
   islands: PlayerIsland[];
   saves: PlayerGameSave[];
-  bootstrapped: { deck: boolean; island: boolean; character: boolean };
+  bootstrapped: {
+    deck: boolean;
+    island: boolean;
+    character: boolean;
+    fakeDecksPurged: number;
+    nexusSynced: boolean;
+  };
+  nexus: {
+    origin: string;
+    synced: boolean;
+    error?: string;
+  };
 }> {
-  const bootstrapped = { deck: false, island: false, character: false };
+  const bootstrapped = {
+    deck: false,
+    island: false,
+    character: false,
+    fakeDecksPurged: 0,
+    nexusSynced: false,
+  };
+
   let decks = await listDecks(userId);
-  if (decks.length === 0) {
-    const deck = await createDeck(userId, {
-      name: STARTER_NEXUS_DECK.name,
-      description: STARTER_NEXUS_DECK.description,
-      tribe: STARTER_NEXUS_DECK.tribe,
-      cards: STARTER_NEXUS_DECK.cards,
-      setActive: true,
-    });
-    decks = [deck];
-    bootstrapped.deck = true;
-  }
 
-  let islands = await listIslands(userId);
-  if (islands.length === 0) {
-    const home = defaultHomeIsland(displayName || "Warlord");
-    const island = await createIsland(userId, home);
-    islands = [island];
-    bootstrapped.island = true;
-  }
-
-  let characters = await listCharacters(userId);
-  if (characters.length === 0) {
-    try {
-      // Lazy import avoids circular deps at module load
-      const { getPrefab } = await import("@shared/character-prefabs");
-      const prefab = getPrefab("human_warrior") ?? getPrefab("barbarian_warrior");
-      if (prefab) {
-        const claimed = await claimCharacter(userId, {
-          prefabId: prefab.id,
-          displayName: prefab.name,
-          stats: { ...prefab.baseStats },
-          loadout: { primaryWeapon: "pistol", secondaryWeapon: "knife" },
-          setActive: true,
-        });
-        characters = [claimed];
-        (bootstrapped as any).character = true;
+  // PURGE anything that isn't a real Season 0 template deck (numeric cardIds only)
+  if (decks.length > 0) {
+    const kept: PlayerDeck[] = [];
+    for (const d of decks) {
+      const cards = (d.cards || []) as Array<{ cardKey?: string; name?: string }>;
+      const ok =
+        cards.length > 0 &&
+        isRealSeason0DeckCards(cards) &&
+        !isLegacyFakeDeck(cards);
+      if (!ok) {
+        console.log(
+          `[universe] PURGE non-real deck #${d.id} "${d.name}" for user ${userId} (fake/empty/non-season0)`,
+        );
+        await deleteDeck(userId, d.id);
+        bootstrapped.fakeDecksPurged += 1;
+        continue;
       }
-    } catch (e) {
-      console.error("bootstrap starter character failed:", e);
+      kept.push(d);
+    }
+    decks = kept;
+  }
+
+  // Mirror real battledeck from grudgeplatform when JWT works (fleet JWT_SECRET)
+  let nexusSynced = false;
+  let nexusError: string | undefined;
+  if (options?.nexusBearer) {
+    try {
+      const { fetchNexusBattleDeck } = await import("./nexus-deck-sync");
+      const mirror = await fetchNexusBattleDeck(options.nexusBearer);
+      if (mirror && mirror.cards.length > 0) {
+        decks = await upsertNexusMirrorDeck(userId, mirror);
+        nexusSynced = true;
+        bootstrapped.nexusSynced = true;
+        bootstrapped.deck = true;
+      }
+    } catch (e: any) {
+      nexusError = e?.message || "nexus sync failed";
+      console.warn("[universe] nexus sync error:", nexusError);
     }
   }
 
+  // No auto island / character invent — only what the player has claimed/created
+  const islands = await listIslands(userId);
+  const characters = await listCharacters(userId);
   const saves = await listGameSaves(userId);
+
+  const { NEXUS_TCG_ORIGIN } = await import("@shared/universe-catalog");
 
   return {
     characters,
     decks,
     islands,
     saves,
-    bootstrapped: { ...bootstrapped, character: !!(bootstrapped as any).character },
+    bootstrapped,
+    nexus: {
+      origin: NEXUS_TCG_ORIGIN,
+      synced: nexusSynced,
+      error: nexusError,
+    },
   };
+}
+
+/** Upsert a portal mirror row for the Nexus battle deck (source of truth remains grudgeplatform). */
+async function upsertNexusMirrorDeck(
+  userId: number,
+  mirror: NexusBattleDeckMirror,
+): Promise<PlayerDeck[]> {
+  const existing = await listDecks(userId);
+  const mirrorName = "Nexus Battle Deck";
+  const payload = {
+    name: mirrorName,
+    description: mirror.description,
+    tribe: mirror.tribe || "season0",
+    cards: mirror.cards as PlayerDeck["cards"],
+    setActive: true,
+  };
+
+  const found = existing.find(
+    (d) =>
+      d.name === mirrorName ||
+      (typeof d.meta === "object" &&
+        d.meta &&
+        (d.meta as any).source === "grudgeplatform-battledeck"),
+  );
+
+  if (found) {
+    await updateDeck(userId, found.id, {
+      name: payload.name,
+      description: payload.description,
+      tribe: payload.tribe,
+      cards: payload.cards,
+      isActive: true,
+      meta: {
+        source: "grudgeplatform-battledeck",
+        syncedAt: mirror.syncedAt,
+        totalCards: mirror.totalCards,
+        isValid: mirror.isValid,
+      },
+    });
+  } else {
+    const created = await createDeck(userId, payload);
+    await updateDeck(userId, created.id, {
+      meta: {
+        source: "grudgeplatform-battledeck",
+        syncedAt: mirror.syncedAt,
+        totalCards: mirror.totalCards,
+        isValid: mirror.isValid,
+      },
+    });
+  }
+
+  return listDecks(userId);
 }
