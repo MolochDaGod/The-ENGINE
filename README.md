@@ -4,7 +4,7 @@
 >
 > **Created by Racalvin The Pirate King**
 
-Production deployment powering [grudgewarlords.com](https://grudgewarlords.com), the Grudge Studio game ecosystem, and the Annihilate 3D combat engine.
+Production deployment powering [grudge-studio.com](https://grudge-studio.com), the Grudge Studio game ecosystem portal (The ENGINE), with backend services on Railway.
 
 ---
 
@@ -51,14 +51,15 @@ npm start
 
 ```
 ┌─ Vercel (static frontend + API proxy) ───────────────────┐
+│  grudge-studio.com (The-ENGINE portal)                    │
 │  grudgewarlords.com (Grudge-Builder)                      │
-│  grudge-studio.com / the-engine.vercel.app (The-ENGINE)  │
 │  └─ Vite build → dist/public (SPA + game assets)        │
 │     /api/*    → PROXY → Railway via CF Workers           │
 │     /ws/*     → PROXY → Railway WebSocket                │
 │     /assets/* → Cache-Control: 1yr immutable             │
 │     /models/* → Cache-Control: 1wk                       │
 │     /*        → SPA fallback → index.html                │
+│  ⚠️  the-engine.vercel.app is NOT Grudge (civic OS)     │
 └──────────────────────────────────────────────────────────┘
 
 ┌─ Railway (canonical backend — single source of truth) ───┐
@@ -79,6 +80,7 @@ npm start
 ┌─ Cloudflare Edge ────────────────────────────────────────┐
 │  id.grudge-studio.com → Worker → Railway (SSO)           │
 │  api.grudge-studio.com → Worker → Railway (game API)     │
+│  objectstore.grudge-studio.com → Worker API 3.4.0 + R2   │
 │  info.grudge-studio.com → Game Info Hub (items, data)    │
 │  assets.grudge-studio.com → R2 bucket (CDN)              │
 │  client.grudge-studio.com → CNAME → Vercel               │
@@ -329,15 +331,18 @@ GET /api/health
 | Character Builder | molochdagod.github.io/grudge-character-builder |
 | Grudge Coder | coder.grudge-studio.com |
 
-## Consolidated Services (2026-06-08)
+## ObjectStore & Consolidated Services (2026-08-29)
 
-The following services were consolidated into `info.grudge-studio.com`:
+**VERIFIED LIVE:**
+- `objectstore.grudge-studio.com` — **Worker objectstore-api 3.4.0** + catalog JSON 5.0.0 (R2-backed API, NOT a dead static SPA)
+- `browse.grudge-studio.com` — ObjectStore Item Browser frontend (Cloudflare Pages)
+- `info.grudge-studio.com` — Game Info Hub (items, data)
+
+**Consolidated/deprecated (2026-06-08):**
 - `objects.grudge-studio.com` — DNS dead, never resolved
-- `objectstore.grudge-studio.com` — static SPA only, no API
-- `dash.grudge-studio.com` — 404, nothing deployed
-- `browse.grudge-studio.com` — legacy reference
+- `dash.grudge-studio.com` — 404, nothing deployed (was planned admin surface)
 
-## Production Deployment Status (2026-06-08)
+## Production Deployment Status (2026-08-29)
 
 | Service | URL | Status |
 |---------|-----|--------|

@@ -88,18 +88,20 @@
 | Domain | Type | Origin | Status |
 |--------|------|--------|--------|
 | `api.grudge-studio.com` | CF Tunnel | Railway (The-ENGINE) | ✅ Live |
-| `id.grudge-studio.com` | CF Tunnel | Railway (The-ENGINE) | ✅ Live |
+| `id.grudge-studio.com` | CF Tunnel | Railway (The-ENGINE) | ✅ Live — Player SSOT is Railway, not Neon |
 | `auth.grudge-studio.com` | CF Worker (A 192.0.2.1) | Railway (legacy alias) | ✅ Live |
 | `ws.grudge-studio.com` | CF Tunnel | Railway WebSocket | ✅ Live (WS only) |
-| `dash.grudge-studio.com` | CF Tunnel | Railway admin | ✅ Live |
+| `dash.grudge-studio.com` | CF Tunnel | Railway admin | ⚠️ 522 per verified facts (2026-08-29) |
 | `ai.grudge-studio.com` | CF Worker (AAAA 100::) | Legion AI hub | ✅ Live (401 auth-gated) |
-| `assets.grudge-studio.com` | CNAME → public.r2.dev | R2 binary CDN | ✅ Live |
-| `objectstore.grudge-studio.com` | CF Worker (AAAA 100::) | R2 + D1 | ✅ Live |
+| `assets.grudge-studio.com` | CNAME → public.r2.dev | R2 binary CDN | ✅ Live — CDN 2.2.0 (2026-08-29) |
+| `objectstore.grudge-studio.com` | CF Worker (AAAA 100::) | R2 + D1 | ✅ Live — Worker objectstore-api 3.4.0, catalog JSON 5.0.0 (NOT a dead static SPA) |
 | `models.grudge-studio.com` | CF Worker (AAAA 100::) | 3D model API | ✅ Live |
 | `forge.grudge-studio.com` | CF Worker (AAAA 100::) | Forge Worker | ✅ Live |
 | `vps.grudge-studio.com` | CF Worker (AAAA 100::) | VPS proxy | ✅ Live |
 | `wallet.grudge-studio.com` | A → 74.208.155.229 | Wallet UI (external) | ✅ Live |
 | `conan.grudge-studio.com` | CF Tunnel | Conan game server (VPS) | ⚠️ 502 (server offline) |
+| `account.grudge-studio.com` | | | ⚠️ 522 per verified facts (2026-08-29) |
+| `assets-api.grudge-studio.com` | | | ⚠️ 522 per verified facts (2026-08-29) |
 
 ### Frontend Domains (Vercel — CNAME → cname.vercel-dns.com, DNS only)
 | Domain | Project | Status |
@@ -151,13 +153,14 @@
 | `grudachain.grudgestudio.com` | ✅ Live (Vercel) |
 | `grudgeplatform.io` | ❌ Offline (unverified in Vercel) |
 
-### Decommissioned (2026-06-09)
+### Decommissioned (2026-08-29)
 | Record | Was | Reason |
 |--------|-----|--------|
 | `world.grudge-studio.com` | CNAME → dead CF tunnel | Removed — re-add when openworld server deploys |
-| `nemesis.grudge-studio.com` | CNAME → stale Railway deploy | Removed — 404, no active service |
+| `nemesis.grudge-studio.com` | CNAME → stale Railway deploy | **NOW LIVE** at nemesis.grudge-studio.com (production TCG) |
 | `battle.thc-labz.xyz.grudge-studio.com` | CNAME → dead CF tunnel | Removed — wrong zone (belongs on thc-labz.xyz) |
 | `_railway-verify.nemesis` | TXT | Removed — orphaned verification record |
+| ⚠️ `the-engine.vercel.app` | Was believed to be The-ENGINE | **NOT Grudge** — unrelated civic OS. Never point studio traffic there. |
 
 ### Grudge-Warlords GitHub Org
 | Repo | Purpose | Status |
