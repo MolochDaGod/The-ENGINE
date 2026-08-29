@@ -3,6 +3,7 @@
 ## One account, one games DB
 
 Portal accounts and retro scores share **The-ENGINE Railway Postgres** (not grudge-api Warlords characters).
+Login is **Grudge ID JWT**; the engine links `users.grudge_id` + `users.fleet_user_id` (UUID) onto that row so scores/saves follow the same human. Do not invent a second login host.
 
 ```
 users (id, grudge_id, gbux_balance, recent_plays, …)

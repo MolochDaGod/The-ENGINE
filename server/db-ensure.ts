@@ -10,6 +10,8 @@ const STATEMENTS = [
   // Play settings on users
   `ALTER TABLE users ADD COLUMN IF NOT EXISTS play_settings jsonb DEFAULT '{}'::jsonb`,
   `ALTER TABLE users ADD COLUMN IF NOT EXISTS recent_plays jsonb DEFAULT '[]'::jsonb`,
+  `ALTER TABLE users ADD COLUMN IF NOT EXISTS fleet_user_id text`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS users_fleet_user_id_uidx ON users (fleet_user_id) WHERE fleet_user_id IS NOT NULL`,
 
   // Scores ↔ accounts ↔ games share (indexes for leaderboards / account hub)
   `CREATE INDEX IF NOT EXISTS scores_user_id_idx ON scores (user_id)`,

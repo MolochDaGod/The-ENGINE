@@ -7,7 +7,7 @@
  *   - Warlord-Crafting-Suite/client/src/pages/Settings.tsx (sidebar settings sections)
  *
  * All API calls use The-ENGINE cookie-based routes:
- *   - GET  /api/auth/me          → player profile (incl. provider IDs)
+ *   - GET  /api/auth/me          → player profile (incl. provider IDs); Bearer fleet JWT + cookie
  *   - GET  /api/me/stats         → stats aggregate
  *   - GET  /api/me/scores        → recent scores
  *   - GET  /api/me/games         → games played

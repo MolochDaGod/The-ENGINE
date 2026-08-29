@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Loader2, Shield, UserCircle } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
-import { completeProfile, requestPopupToken } from "@/lib/player-auth";
+import { completeProfile, requestPopupToken, fleetAuthHeaders } from "@/lib/player-auth";
 import { redirectToCanonicalLogin } from "@/lib/canonicalAuth";
 
 type AuthTab = "signin" | "register" | "quick";
@@ -87,7 +87,10 @@ function AuthModalDialog({ isOpen, onClose, options }: { isOpen: boolean; onClos
       const mint = await requestPopupToken(audience);
       if (mint.ok) {
         try {
-          const meRes = await fetch("/api/auth/me", { credentials: "include" });
+          const meRes = await fetch("/api/auth/me", {
+            credentials: "include",
+            headers: fleetAuthHeaders(),
+          });
           const profile = meRes.ok ? await meRes.json() : null;
           window.opener.postMessage(
             { type: "grudge:auth:success", token: mint.data.token, audience: mint.data.audience, player: profile },

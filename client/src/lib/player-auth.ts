@@ -25,9 +25,43 @@ export interface PlayerProfile {
 
 const JSON_HEADERS = { "Content-Type": "application/json" };
 
+/** Fleet JWT keys written by Grudge ID / bootstrap (same order as Open). */
+export const FLEET_AUTH_TOKEN_KEYS = [
+  "grudge.open.token",
+  "grudge_auth_token",
+  "grudge_session_token",
+  "grudge.token",
+  "sso_token",
+  "grudge_token",
+] as const;
+
+export function readFleetAuthToken(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    for (const key of FLEET_AUTH_TOKEN_KEYS) {
+      const value = window.localStorage.getItem(key);
+      if (value && value.split(".").length === 3) return value;
+      if (value && value.length > 20) return value;
+    }
+  } catch {
+    /* private mode */
+  }
+  return null;
+}
+
+export function fleetAuthHeaders(extra?: Record<string, string>): Record<string, string> {
+  const headers: Record<string, string> = { ...(extra || {}) };
+  const token = readFleetAuthToken();
+  if (token && !headers.Authorization) headers.Authorization = `Bearer ${token}`;
+  return headers;
+}
+
 export async function fetchMe(): Promise<PlayerProfile | null> {
   try {
-    const res = await fetch("/api/auth/me", { credentials: "include" });
+    const res = await fetch("/api/auth/me", {
+      credentials: "include",
+      headers: fleetAuthHeaders(),
+    });
     if (!res.ok) return null;
     return await res.json();
   } catch {
@@ -64,7 +98,7 @@ export async function loginPlayer(data: {
     const res = await fetch("/api/auth/login", {
       method: "POST",
       credentials: "include",
-      headers: JSON_HEADERS,
+      headers: fleetAuthHeaders(JSON_HEADERS),
       body: JSON.stringify(data),
     });
     const json = await res.json();
@@ -420,7 +454,7 @@ export async function exchangeLaunchToken(token: string): Promise<{ ok: true; pl
     const res = await fetch("/api/auth/session/exchange", {
       method: "POST",
       credentials: "include",
-      headers: JSON_HEADERS,
+      headers: fleetAuthHeaders(JSON_HEADERS),
       body: JSON.stringify({ token, audience: window.location.origin }),
     });
     const json = await res.json();

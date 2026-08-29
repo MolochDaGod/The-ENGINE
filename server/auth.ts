@@ -72,10 +72,213 @@ export function verifyLaunchToken(token: string): LaunchTokenClaims | null {
     if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
     const claims = JSON.parse(b64urlDecode(body).toString("utf8")) as LaunchTokenClaims;
     if (typeof claims.exp !== "number" || claims.exp * 1000 < Date.now()) return null;
+    // Engine launch tokens always mint numeric portal user ids. Fleet Grudge ID
+    // JWTs use UUID `userId` / string `sub` — do not treat those as launch.
+    if (typeof claims.sub !== "number" || !Number.isFinite(claims.sub)) return null;
     return claims;
   } catch {
     return null;
   }
+}
+
+const FLEET_GAME_DATA =
+  process.env.GRUDGE_GAME_DATA_URL ||
+  process.env.GAME_DATA_ORIGIN ||
+  "https://grudge-api-production-0d46.up.railway.app";
+
+export interface FleetIdentity {
+  fleetUserId: string;
+  grudgeId: string;
+  username: string;
+  email: string | null;
+  displayName: string | null;
+}
+
+function jwtSecretCandidates(): string[] {
+  const out: string[] = [];
+  for (const s of [
+    process.env.JWT_SECRET,
+    process.env.SESSION_SECRET,
+    process.env.PLAYER_SESSION_SECRET,
+    process.env.GRUDGE_JWT_SECRET,
+    process.env.LAUNCH_TOKEN_SECRET,
+  ]) {
+    if (s && s.length > 0 && !out.includes(s)) out.push(s);
+  }
+  return out;
+}
+
+function verifyHs256Payload(token: string): Record<string, unknown> | null {
+  try {
+    const parts = token.split(".");
+    if (parts.length !== 3) return null;
+    const [head, body, sig] = parts;
+    const msg = `${head}.${body}`;
+    for (const secret of jwtSecretCandidates()) {
+      const expected = b64url(createHmac("sha256", secret).update(msg).digest());
+      const a = Buffer.from(sig);
+      const b = Buffer.from(expected);
+      if (a.length !== b.length) continue;
+      if (!timingSafeEqual(a, b)) continue;
+      const claims = JSON.parse(b64urlDecode(body).toString("utf8")) as Record<string, unknown>;
+      const exp = typeof claims.exp === "number" ? claims.exp : Number(claims.exp);
+      if (Number.isFinite(exp) && exp * 1000 < Date.now()) return null;
+      return claims;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function isUuid(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
+function fleetIdentityFromClaims(claims: Record<string, unknown>): FleetIdentity | null {
+  const fleetUserId = String(
+    claims.userId || (typeof claims.sub === "string" ? claims.sub : "") || claims.id || "",
+  ).trim();
+  const grudgeId = String(claims.grudgeId || claims.grudge_id || "").trim();
+  if (!grudgeId && !isUuid(fleetUserId)) return null;
+  const username = String(claims.username || claims.displayName || "").trim();
+  const email = typeof claims.email === "string" && claims.email.includes("@") ? claims.email : null;
+  const displayName =
+    typeof claims.displayName === "string" && claims.displayName.trim()
+      ? claims.displayName.trim()
+      : username || null;
+  return {
+    fleetUserId,
+    grudgeId,
+    username: username || (grudgeId ? grudgeId.slice(0, 24) : fleetUserId.slice(0, 8)),
+    email,
+    displayName,
+  };
+}
+
+async function fetchFleetMe(token: string): Promise<FleetIdentity | null> {
+  try {
+    const res = await fetch(`${FLEET_GAME_DATA.replace(/\/$/, "")}/api/auth/me`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/json",
+      },
+    });
+    if (!res.ok) return null;
+    const body = (await res.json()) as Record<string, unknown>;
+    if (!body || body.success === false) return null;
+    const fleetUserId = String(body.id || body.userId || "").trim();
+    const grudgeId = String(body.grudgeId || body.grudge_id || "").trim();
+    if (!grudgeId && !isUuid(fleetUserId)) return null;
+    const username = String(body.username || body.displayName || "").trim();
+    const email = typeof body.email === "string" && body.email.includes("@") ? body.email : null;
+    return {
+      fleetUserId,
+      grudgeId,
+      username: username || (grudgeId ? grudgeId.slice(0, 24) : fleetUserId.slice(0, 8)),
+      email,
+      displayName: String(body.displayName || username || "").trim() || null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function sanitizeLinkedUsername(raw: string): string {
+  const cleaned = String(raw || "")
+    .replace(/^(discord|puter|wallet|phone|google|github):/i, "")
+    .replace(/[^a-zA-Z0-9._-]/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 24);
+  return cleaned.length >= 3 ? cleaned : `player_${randomBytes(3).toString("hex")}`;
+}
+
+async function uniqueLinkedUsername(base: string): Promise<string> {
+  const safe = sanitizeLinkedUsername(base);
+  let attempt = safe;
+  let suffix = 0;
+  while (await storage.getUserByUsername(attempt)) {
+    suffix += 1;
+    const tail = String(suffix);
+    attempt = `${safe.slice(0, 30 - tail.length - 1)}_${tail}`;
+  }
+  return attempt;
+}
+
+/** Link a verified Grudge ID identity onto the portal users row (scores / saves). */
+export async function getOrCreateEngineUserFromFleet(
+  identity: FleetIdentity,
+): Promise<User | null> {
+  if (!identity.grudgeId && !identity.fleetUserId) return null;
+
+  let user: User | undefined;
+  if (identity.fleetUserId) user = await storage.getUserByFleetUserId(identity.fleetUserId);
+  if (!user && identity.grudgeId) user = await storage.getUserByGrudgeId(identity.grudgeId);
+  if (!user && identity.email) user = await storage.getUserByEmail(identity.email);
+
+  if (user) {
+    const patch: Partial<User> = { lastLoginAt: new Date() };
+    if (identity.fleetUserId && !(user as any).fleetUserId) {
+      (patch as any).fleetUserId = identity.fleetUserId;
+    }
+    if (identity.email && !user.email) patch.email = identity.email;
+    if (identity.displayName && !user.displayName) patch.displayName = identity.displayName;
+    await storage.updateUser(user.id, patch);
+    return (await storage.getUser(user.id)) || user;
+  }
+
+  const username = await uniqueLinkedUsername(identity.username || identity.grudgeId || "player");
+  const grudgeId = identity.grudgeId || `GRUDGE_${identity.fleetUserId.replace(/-/g, "").slice(0, 12).toUpperCase()}`;
+  try {
+    return await storage.createUser({
+      username,
+      password: hashPassword(randomBytes(16).toString("hex")),
+      grudgeId,
+      fleetUserId: identity.fleetUserId || null,
+      puterId: null,
+      email: identity.email,
+      displayName: identity.displayName || username,
+      avatarUrl: null,
+      gbuxBalance: "0",
+      role: "player",
+      solanaAddress: null,
+      discordId: null,
+      githubId: null,
+      googleId: null,
+      phone: null,
+      needsProfile: false,
+    } as any);
+  } catch (err) {
+    console.error("[auth] fleet user create failed:", err);
+    return (
+      (identity.fleetUserId ? await storage.getUserByFleetUserId(identity.fleetUserId) : undefined) ||
+      (identity.grudgeId ? await storage.getUserByGrudgeId(identity.grudgeId) : undefined) ||
+      null
+    );
+  }
+}
+
+export async function resolveEngineUserFromToken(token: string): Promise<User | null> {
+  if (!token) return null;
+
+  const sessionUserId = verifyPlayerToken(token);
+  if (sessionUserId !== null) {
+    const user = await storage.getUser(sessionUserId);
+    if (user) return user;
+  }
+
+  const launch = verifyLaunchToken(token);
+  if (launch?.sub) {
+    const user = await storage.getUser(launch.sub);
+    if (user) return user;
+  }
+
+  const claims = verifyHs256Payload(token);
+  const local = claims ? fleetIdentityFromClaims(claims) : null;
+  const identity = local || (await fetchFleetMe(token));
+  if (!identity) return null;
+  return getOrCreateEngineUserFromFleet(identity);
 }
 
 /** Origins allowed to host the modal / consume launch tokens. Defaults to CORS_ORIGINS. */
@@ -271,7 +474,7 @@ export function clearPlayerCookie(res: Response): void {
  *   3) Authorization: Bearer <launch JWT> (cross-domain handoff)
  *   4) ?grudge_token= / X-Grudge-Token header (fleet launch query)
  */
-export async function loadPlayer(req: Request, _res: Response, next: NextFunction) {
+export async function loadPlayer(req: Request, res: Response, next: NextFunction) {
   try {
     if ((req as any).player) return next();
 
@@ -279,10 +482,20 @@ export async function loadPlayer(req: Request, _res: Response, next: NextFunctio
     const candidates: string[] = [];
 
     if (cookies[PLAYER_COOKIE]) candidates.push(cookies[PLAYER_COOKIE]);
+    if (cookies.grudge_auth_token) candidates.push(cookies.grudge_auth_token);
+    if (cookies.grudge_session_token) candidates.push(cookies.grudge_session_token);
+    if (cookies.sso_token) candidates.push(cookies.sso_token);
 
     const authHeader = req.headers.authorization || req.headers.Authorization;
     if (typeof authHeader === "string" && authHeader.toLowerCase().startsWith("bearer ")) {
       candidates.push(authHeader.slice(7).trim());
+    } else if (typeof authHeader === "string" && authHeader.trim()) {
+      candidates.push(authHeader.trim());
+    }
+
+    const sessionHeader = req.headers["x-session-token"];
+    if (typeof sessionHeader === "string" && sessionHeader.trim()) {
+      candidates.push(sessionHeader.trim());
     }
 
     const headerToken = req.headers["x-grudge-token"];
@@ -291,32 +504,20 @@ export async function loadPlayer(req: Request, _res: Response, next: NextFunctio
     }
 
     const q = (req as any).query as Record<string, unknown> | undefined;
-    const qTok = q?.grudge_token ?? q?.token;
+    const qTok = q?.grudge_token ?? q?.sso_token ?? q?.token;
     if (typeof qTok === "string" && qTok.trim()) candidates.push(qTok.trim());
 
     for (const token of candidates) {
       if (!token) continue;
-      // Long-lived player session
+      const user = await resolveEngineUserFromToken(token);
+      if (!user) continue;
+      (req as any).player = user;
       const sessionUserId = verifyPlayerToken(token);
-      if (sessionUserId !== null) {
-        const user = await storage.getUser(sessionUserId);
-        if (user) {
-          (req as any).player = user;
-          (req as any).authVia = "session";
-          break;
-        }
+      (req as any).authVia = sessionUserId !== null ? "session" : "fleet";
+      if ((req as any).authVia === "fleet") {
+        setPlayerCookie(res, createPlayerToken(user.id));
       }
-      // Short-lived launch JWT from portal handoff
-      const launch = verifyLaunchToken(token);
-      if (launch?.sub) {
-        const user = await storage.getUser(launch.sub);
-        if (user) {
-          (req as any).player = user;
-          (req as any).authVia = "launch";
-          (req as any).launchClaims = launch;
-          break;
-        }
-      }
+      break;
     }
   } catch (e) {
     console.error("loadPlayer error:", e);

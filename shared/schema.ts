@@ -7,6 +7,8 @@ export const users = pgTable("users", {
   username: text("username").notNull().unique(),
   password: text("password").notNull(),
   grudgeId: text("grudge_id").notNull().unique(),
+  /** Railway / Grudge ID users.id (UUID). Links portal scores/saves to fleet account. */
+  fleetUserId: text("fleet_user_id").unique(),
   puterId: text("puter_id").unique(),
   email: text("email").unique(),
   displayName: text("display_name"),

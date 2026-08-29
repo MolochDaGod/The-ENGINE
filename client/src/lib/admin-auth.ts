@@ -7,7 +7,11 @@ const ADMIN_ROLES = ['admin', 'master_admin', 'master'] as const;
 export async function checkAdminSession(): Promise<boolean> {
   // 1. Preferred: check player role from Grudge ID auth
   try {
-    const meRes = await fetch("/api/auth/me", { credentials: "include" });
+    const { fleetAuthHeaders } = await import("./player-auth");
+    const meRes = await fetch("/api/auth/me", {
+      credentials: "include",
+      headers: fleetAuthHeaders(),
+    });
     if (meRes.ok) {
       const player = await meRes.json();
       if (player?.role && ADMIN_ROLES.includes(player.role)) {

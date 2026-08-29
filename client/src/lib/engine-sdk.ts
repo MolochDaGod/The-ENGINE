@@ -11,6 +11,7 @@
  */
 
 import { WS_URL, apiUrl } from "./api-config";
+import { fleetAuthHeaders } from "./player-auth";
 import {
   getTreatyWsUrl,
   gameRoomId,
@@ -36,7 +37,10 @@ let _cachedPlayer: CachedPlayer | null | undefined = undefined; // undefined = n
 async function resolvePlayer(): Promise<CachedPlayer | null> {
   if (_cachedPlayer !== undefined) return _cachedPlayer;
   try {
-    const resp = await fetch(`${API_BASE}/api/auth/me`, { credentials: "include" });
+    const resp = await fetch(`${API_BASE}/api/auth/me`, {
+      credentials: "include",
+      headers: fleetAuthHeaders(),
+    });
     if (!resp.ok) { _cachedPlayer = null; return null; }
     const data = await resp.json();
     _cachedPlayer = { id: data.id, username: data.username, grudgeId: data.grudgeId, displayName: data.displayName };
@@ -65,7 +69,7 @@ export async function submitScore(
     const resp = await fetch(`${API_BASE}/api/scores`, {
       method: "POST",
       credentials: "include",
-      headers: { "Content-Type": "application/json" },
+      headers: fleetAuthHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({ gameId, score }),
     });
 
@@ -91,7 +95,10 @@ export async function fetchLeaderboard(gameId: number, limit: number = 10) {
 // ── Fetch personal best ───────────────────────────────────────
 export async function fetchPersonalBest(gameId: number) {
   try {
-    const resp = await fetch(`${API_BASE}/api/leaderboards/${gameId}/me`, { credentials: "include" });
+    const resp = await fetch(`${API_BASE}/api/leaderboards/${gameId}/me`, {
+      credentials: "include",
+      headers: fleetAuthHeaders(),
+    });
     if (!resp.ok) return null;
     const data = await resp.json();
     return data.score ?? null;
@@ -304,7 +311,10 @@ export function onActivity(callback: (data: any) => void) {
 // ── Challenge helpers ─────────────────────────────────────────
 export async function fetchOpenChallenges() {
   try {
-    const resp = await fetch(`${API_BASE}/api/challenges`, { credentials: "include" });
+    const resp = await fetch(`${API_BASE}/api/challenges`, {
+      credentials: "include",
+      headers: fleetAuthHeaders(),
+    });
     if (!resp.ok) return [];
     return await resp.json();
   } catch {
@@ -324,7 +334,7 @@ export async function createChallenge(
     const resp = await fetch(`${API_BASE}/api/challenges`, {
       method: "POST",
       credentials: "include",
-      headers: { "Content-Type": "application/json" },
+      headers: fleetAuthHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({ opponentId, gameId, gbuxWager }),
     });
     if (!resp.ok) return null;
@@ -339,7 +349,7 @@ export async function acceptChallenge(challengeId: number) {
     const resp = await fetch(`${API_BASE}/api/challenges/${challengeId}/accept`, {
       method: "POST",
       credentials: "include",
-      headers: { "Content-Type": "application/json" },
+      headers: fleetAuthHeaders({ "Content-Type": "application/json" }),
     });
     if (!resp.ok) return null;
     return await resp.json();

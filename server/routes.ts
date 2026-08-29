@@ -50,6 +50,7 @@ import {
   parseCookies as parsePlayerCookies, PLAYER_COOKIE,
   createLaunchToken, verifyLaunchToken, LAUNCH_TOKEN_TTL_MS,
   allowedAuthOrigins, isOriginAllowed, oauthCallbackUrl,
+  resolveEngineUserFromToken,
 } from "./auth";
 import { sendDiscordWebhook, DiscordEmbedType, trackNowPlaying } from "./discord-webhooks";
 import { onScoreSubmitted, startRewardWorker, getRewardQueueStatus } from "./web3/reward-worker";
@@ -401,10 +402,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/auth/me", (req, res) => {
     const player = getPlayer(req);
     if (!player) return res.status(401).json({ error: "Not authenticated" });
+    if ((req as any).authVia === "fleet") {
+      setPlayerCookie(res, createPlayerToken(player.id));
+    }
     return res.json({
       id: player.id,
       username: player.username,
       grudgeId: player.grudgeId,
+      fleetUserId: (player as any).fleetUserId || null,
       puterId: player.puterId,
       email: player.email,
       displayName: player.displayName,
@@ -509,6 +514,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       id: user.id,
       username: user.username,
       grudgeId: user.grudgeId,
+      fleetUserId: user.fleetUserId || null,
       displayName: user.displayName,
       avatarUrl: user.avatarUrl,
       gbuxBalance: user.gbuxBalance,
@@ -1393,26 +1399,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/auth/session/exchange", async (req, res) => {
     try {
-      const { token, audience } = req.body || {};
-      if (!token || typeof token !== "string") return res.status(400).json({ error: "token is required" });
-      const claims = verifyLaunchToken(token);
-      if (!claims) return res.status(401).json({ error: "Invalid or expired launch token" });
+      const bodyToken = typeof req.body?.token === "string" ? req.body.token : "";
+      const header = String(req.headers.authorization || "");
+      const bearer = header.toLowerCase().startsWith("bearer ") ? header.slice(7).trim() : "";
+      const token = bodyToken || bearer;
+      if (!token) return res.status(400).json({ error: "token is required" });
 
-      // Audience check: if the token was minted for a specific audience, enforce it.
-      // Also require the inbound Origin to be allowlisted so any allowlisted frontend
-      // on this same backend can establish a fresh cookie from the handoff JWT.
-      const origin = (req.headers.origin as string | undefined) || audience;
-      if (!isOriginAllowed(origin)) return res.status(403).json({ error: "Origin is not allowlisted" });
-      if (claims.aud && origin && claims.aud !== origin) {
+      const audience = typeof req.body?.audience === "string" ? req.body.audience : "";
+      const origin = (req.headers.origin as string | undefined) || audience || "";
+      // Same-origin POST often omits Origin; token-in-body is the CSRF gate.
+      if (origin && !isOriginAllowed(origin)) {
+        return res.status(403).json({ error: "Origin is not allowlisted" });
+      }
+
+      const launch = verifyLaunchToken(token);
+      if (launch?.aud && origin && launch.aud !== origin) {
         return res.status(403).json({ error: "Launch token audience does not match request origin" });
       }
 
-      const user = await storage.getUser(claims.sub);
-      if (!user) return res.status(404).json({ error: "User not found" });
+      const user = await resolveEngineUserFromToken(token);
+      if (!user) return res.status(401).json({ error: "Invalid or expired token" });
 
       const sessionToken = createPlayerToken(user.id);
       setPlayerCookie(res, sessionToken);
-      return res.json({ ...publicPlayer(user, false), token: sessionToken });
+      return res.json({ ...publicPlayer(user, false), token: sessionToken, sessionToken });
     } catch (error) {
       console.error("session/exchange error:", error);
       return res.status(500).json({ error: "Exchange failed" });

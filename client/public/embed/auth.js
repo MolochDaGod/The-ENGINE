@@ -113,7 +113,15 @@
   function whoami(options) {
     options = options || {};
     var apiHost = (options.apiHost || DEFAULT_HOST).replace(/\/$/, "");
-    return fetch(apiHost + "/api/auth/me", { credentials: "include" })
+    var headers = { Accept: "application/json" };
+    try {
+      var token =
+        localStorage.getItem("grudge_auth_token") ||
+        localStorage.getItem("sso_token") ||
+        localStorage.getItem("grudge.open.token");
+      if (token) headers.Authorization = "Bearer " + token;
+    } catch (e) {}
+    return fetch(apiHost + "/api/auth/me", { credentials: "include", headers: headers })
       .then(function (r) { return r.ok ? r.json() : null; })
       .catch(function () { return null; });
   }

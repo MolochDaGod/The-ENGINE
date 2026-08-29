@@ -84,6 +84,7 @@ app.use(cors({
     "Authorization",
     "X-Requested-With",
     "X-Session-Token",
+    "X-Grudge-Token",
     "If-Match",
     "X-Progress-Revision",
   ],

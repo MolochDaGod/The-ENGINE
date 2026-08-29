@@ -24,6 +24,14 @@
   } catch (e) {}
 
   var TOKEN_KEY = 'grudge_auth_token';
+  var TOKEN_KEYS = [
+    'grudge.open.token',
+    'grudge_auth_token',
+    'grudge_session_token',
+    'grudge.token',
+    'sso_token',
+    'grudge_token'
+  ];
   var ID_KEY = 'grudge_id';
   var USER_KEY = 'grudge_username';
 
@@ -52,20 +60,31 @@
     puterSdk: 'https://js.puter.com/v2/'
   };
 
+  function readStoredToken() {
+    for (var i = 0; i < TOKEN_KEYS.length; i++) {
+      var v = localStorage.getItem(TOKEN_KEYS[i]);
+      if (v) return v;
+    }
+    return null;
+  }
+
   function getSession() {
+    var token = readStoredToken();
     return {
-      token: localStorage.getItem(TOKEN_KEY),
+      token: token,
       grudgeId: localStorage.getItem(ID_KEY),
       username: localStorage.getItem(USER_KEY),
-      signedIn: !!localStorage.getItem(TOKEN_KEY)
+      signedIn: !!token
     };
   }
 
   function saveSession(data) {
     if (!data) return;
     var user = data.user || data.player || data.profile || null;
-    var token = data.token || data.access_token || data.sso_token || (user && user.token);
-    if (token) localStorage.setItem(TOKEN_KEY, token);
+    var token = data.token || data.access_token || data.sso_token || data.sessionToken || (user && user.token);
+    if (token) {
+      TOKEN_KEYS.forEach(function (k) { localStorage.setItem(k, token); });
+    }
     var gid = data.grudge_id || data.grudgeId || (user && user.grudgeId);
     if (gid) localStorage.setItem(ID_KEY, gid);
     var name = data.username || (user && (user.username || user.displayName));
@@ -73,7 +92,7 @@
   }
 
   function clearSession() {
-    [TOKEN_KEY, ID_KEY, USER_KEY, 'grudge_user'].forEach(function (k) {
+    TOKEN_KEYS.concat([ID_KEY, USER_KEY, 'grudge_user']).forEach(function (k) {
       localStorage.removeItem(k);
     });
   }
@@ -94,26 +113,32 @@
       'width=' + w + ',height=' + h + ',left=' + left + ',top=' + top + ',noopener');
   }
 
-  function exchangeLaunchToken(launchToken) {
-    return fetch(FLEET.auth + '/api/auth/session/exchange', {
+  function postExchange(url, launchToken) {
+    return fetch(url, {
       method: 'POST',
       credentials: 'include',
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
-        'Origin': location.origin
+        'Authorization': 'Bearer ' + launchToken
       },
       body: JSON.stringify({ token: launchToken, audience: location.origin })
-    })
-      .then(function (res) { return res.ok ? res.json() : null; })
-      .then(function (profile) {
-        if (!profile || !profile.token) return false;
-        saveSession(profile);
-        global.dispatchEvent(new CustomEvent('grudge-auth:success', { detail: getSession() }));
-        document.dispatchEvent(new CustomEvent('grudge-auth-changed'));
-        return true;
-      })
-      .catch(function () { return false; });
+    }).then(function (res) { return res.ok ? res.json() : null; }).catch(function () { return null; });
+  }
+
+  function exchangeLaunchToken(launchToken) {
+    // Identity SSOT (Grudge ID) plus same-origin engine cookie so play saves attach.
+    return Promise.all([
+      postExchange(FLEET.auth + '/api/auth/session/exchange', launchToken),
+      postExchange('/api/auth/session/exchange', launchToken)
+    ]).then(function (profiles) {
+      var profile = profiles[0] || profiles[1];
+      if (!profile) return false;
+      saveSession(profile);
+      global.dispatchEvent(new CustomEvent('grudge-auth:success', { detail: getSession() }));
+      document.dispatchEvent(new CustomEvent('grudge-auth-changed'));
+      return true;
+    }).catch(function () { return false; });
   }
 
   function handleSsoCallback() {
@@ -139,6 +164,7 @@
       });
       var qs = params.toString();
       history.replaceState(null, '', location.pathname + (qs ? '?' + qs : '') + location.hash);
+      exchangeLaunchToken(token);
       global.dispatchEvent(new CustomEvent('grudge-auth:success', { detail: getSession() }));
       return true;
     } catch (e) {

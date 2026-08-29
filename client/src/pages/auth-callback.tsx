@@ -9,7 +9,7 @@ import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { Loader2, CheckCircle2, XCircle } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
-import { phantomSignIn } from "@/lib/player-auth";
+import { phantomSignIn, exchangeLaunchToken, FLEET_AUTH_TOKEN_KEYS } from "@/lib/player-auth";
 
 type CallbackState = "connecting" | "success" | "error";
 
@@ -37,13 +37,12 @@ function nextPathFromUrl(): string {
 
 function storeToken(token: string) {
   try {
-    localStorage.setItem("grudge_auth_token", token);
-    localStorage.setItem("grudge_token", token);
-    localStorage.setItem("sso_token", token);
+    for (const key of FLEET_AUTH_TOKEN_KEYS) {
+      localStorage.setItem(key, token);
+    }
   } catch {
     /* ignore */
   }
-  // Also set cookie for same-origin API
   try {
     document.cookie = `grudge_auth_token=${encodeURIComponent(token)}; Path=/; Max-Age=${30 * 24 * 3600}; SameSite=Lax`;
   } catch {
@@ -65,7 +64,6 @@ export default function AuthCallback() {
         const token = takeTokenFromUrl();
         if (token) {
           storeToken(token);
-          // Strip tokens from URL
           try {
             const url = new URL(window.location.href);
             for (const k of TOKEN_KEYS) url.searchParams.delete(k);
@@ -73,6 +71,7 @@ export default function AuthCallback() {
           } catch {
             /* ignore */
           }
+          await exchangeLaunchToken(token);
           await refresh();
           if (cancelled) return;
           setState("success");

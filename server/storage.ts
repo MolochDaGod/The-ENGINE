@@ -24,6 +24,16 @@ import {
   libretroBoxartUrl,
 } from "@shared/retroCompetitive";
 
+/** Fleet `GRUDGE_…` and portal `GRUDGE-…` are the same account stamp. */
+function grudgeIdLookupVariants(grudgeId: string): string[] {
+  const raw = String(grudgeId || "").trim();
+  if (!raw) return [];
+  const out = new Set<string>([raw]);
+  if (raw.startsWith("GRUDGE_")) out.add("GRUDGE-" + raw.slice("GRUDGE_".length));
+  if (raw.startsWith("GRUDGE-")) out.add("GRUDGE_" + raw.slice("GRUDGE-".length));
+  return [...out];
+}
+
 /** Portal play SSOT — same ids as /play/:id and api/games on Vercel */
 type PortalGameRow = {
   id: number;
@@ -112,6 +122,7 @@ export interface IStorage {
   getUserByEmail(email: string): Promise<User | undefined>;
   getUserByPuterId(puterId: string): Promise<User | undefined>;
   getUserByGrudgeId(grudgeId: string): Promise<User | undefined>;
+  getUserByFleetUserId(fleetUserId: string): Promise<User | undefined>;
   getUserBySolanaAddress(address: string): Promise<User | undefined>;
   getUserByDiscordId(discordId: string): Promise<User | undefined>;
   getUserByGithubId(githubId: string): Promise<User | undefined>;
@@ -667,8 +678,21 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getUserByGrudgeId(grudgeId: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.grudgeId, grudgeId));
+    const variants = grudgeIdLookupVariants(grudgeId);
+    if (variants.length === 0) return undefined;
+    const [user] = await db.select().from(users).where(or(...variants.map((v) => eq(users.grudgeId, v))));
     return user || undefined;
+  }
+
+  async getUserByFleetUserId(fleetUserId: string): Promise<User | undefined> {
+    const id = String(fleetUserId || "").trim();
+    if (!id) return undefined;
+    try {
+      const [user] = await db.select().from(users).where(eq(users.fleetUserId, id));
+      return user || undefined;
+    } catch {
+      return undefined;
+    }
   }
 
   async getUserBySolanaAddress(address: string): Promise<User | undefined> {
