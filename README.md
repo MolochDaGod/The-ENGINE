@@ -321,28 +321,31 @@ GET /api/health
 
 ## Live Game Catalog (54 products)
 
-### Verified Live Games (2026-05-31)
-| Game | URL | Type |
-|------|-----|------|
-| Grudge Warlords | grudgewarlords.com | MMO RPG |
-| Nexus Nemesis TCG | nexus-nemesis-game.vercel.app | Card Game |
-| Grim Armada | grim-armada-web.vercel.app | Tactical Combat |
-| Grudge Drive | grudge-drive.vercel.app | Vehicular Combat |
-| Grudge Metaverse | grudge-metaverse.vercel.app | 3D Multiplayer |
-| RTS GRUDGE | rts-grudge.vercel.app | Survival RPG |
-| Grudge Fishing | grudge-fishing-game.vercel.app | 3D Fishing |
-| Grudge Three.js Port | grudge-three-port.vercel.app | 3D RPG |
-| THC Labz Battle | thc-labz-battle.vercel.app | Card Battle |
-| Dungeon Crawler Quest | dungeon-crawler-quest.vercel.app | Voxel MOBA |
-| Grudge Space RTS | grudge-space-rts.vercel.app | Space Strategy |
-| Final Fighter | final-fighter.vercel.app | 3D Fighting |
-| RPG Sprite Attack | grudge-rpg-sprite-attack.vercel.app | Tactical RPG |
-| Grudge Arena | grudge-arena.vercel.app | PvP Arena |
-| Grudge Warlords RTS | grudge-warlords-rts.vercel.app | Medieval RTS |
-| Grudge RPG | puter.com/app/grudgeRPG | RPG (Puter) |
-| Grudge Angler | puter.com/app/grudge-angler | Fishing (Puter) |
-| Grudge Match-3 | molochdagod.github.io/grudge-match-webgl | Puzzle (Unity) |
-| Betta Warlords | betta-grudgedev.replit.app | PvP Arena |
+### Historical Game Catalog (2026-05-31) [DATED SNAPSHOT — NOT CURRENT PROD STATUS]
+
+**⚠️ NOTE:** This is a dated historical game catalog from 2026-05-31. Many *.vercel.app URLs listed here are now marked as **preview-only** in the current portal catalog (see `client/src/data/portalProducts.ts`). For current verified production hosts, see "Production Deployment Status (2026-08-29)" section above.
+
+| Game | URL | Type | Current Status |
+|------|-----|------|----------------|
+| Grudge Warlords | grudgewarlords.com | MMO RPG | ✅ Live (custom domain) |
+| Nexus Nemesis TCG | nexus-nemesis-game.vercel.app | Card Game | ⚠️ Preview-only (use nemesis.grudge-studio.com) |
+| Grim Armada | grim-armada-web.vercel.app | Tactical Combat | ⚠️ Preview-only |
+| Grudge Drive | grudge-drive.vercel.app | Vehicular Combat | ⚠️ Preview-only |
+| Grudge Metaverse | grudge-metaverse.vercel.app | 3D Multiplayer | ⚠️ Preview-only (marked beta in catalog) |
+| RTS GRUDGE | rts-grudge.vercel.app | Survival RPG | ⚠️ Preview-only (ERROR after Nexus PR 22) |
+| Grudge Fishing | grudge-fishing-game.vercel.app | 3D Fishing | ⚠️ Preview-only |
+| Grudge Three.js Port | grudge-three-port.vercel.app | 3D RPG | ⚠️ Preview-only (marked beta in catalog) |
+| THC Labz Battle | thc-labz-battle.vercel.app | Card Battle | ⚠️ Preview-only (marked beta in catalog) |
+| Dungeon Crawler Quest | dungeon-crawler-quest.vercel.app | Voxel MOBA | ⚠️ Preview-only |
+| Grudge Space RTS | grudge-space-rts.vercel.app | Space Strategy | ⚠️ Preview-only (marked beta in catalog) |
+| Final Fighter | final-fighter.vercel.app | 3D Fighting | ⚠️ Preview-only (marked beta in catalog) |
+| RPG Sprite Attack | grudge-rpg-sprite-attack.vercel.app | Tactical RPG | ⚠️ Preview-only |
+| Grudge Arena | grudge-arena.vercel.app | PvP Arena | ⚠️ Preview-only |
+| Grudge Warlords RTS | grudge-warlords-rts.vercel.app | Medieval RTS | ⚠️ Preview-only (marked beta in catalog) |
+| Grudge RPG | puter.com/app/grudgeRPG | RPG (Puter) | ✅ Live (Puter platform) |
+| Grudge Angler | puter.com/app/grudge-angler | Fishing (Puter) | ✅ Live (Puter platform) |
+| Grudge Match-3 | molochdagod.github.io/grudge-match-webgl | Puzzle (Unity) | ✅ Live (GitHub Pages) |
+| Betta Warlords | betta-grudgedev.replit.app | PvP Arena | ✅ Live (Replit) |
 
 ### Studio Tools
 | Tool | URL |
