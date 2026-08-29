@@ -15,6 +15,31 @@
       "permanent": false
     },
     {
+      "source": "/games/nexus-nemesis",
+      "destination": "https://nemesis.grudge-studio.com",
+      "permanent": false
+    },
+    {
+      "source": "/games/nexus-nemesis/",
+      "destination": "https://nemesis.grudge-studio.com",
+      "permanent": false
+    },
+    {
+      "source": "/games/nexus-nemesis/:path*",
+      "destination": "https://nemesis.grudge-studio.com/:path*",
+      "permanent": false
+    },
+    {
+      "source": "/nexus-nemesis",
+      "destination": "https://nemesis.grudge-studio.com",
+      "permanent": false
+    },
+    {
+      "source": "/nexus-nemesis/:path*",
+      "destination": "https://nemesis.grudge-studio.com/:path*",
+      "permanent": false
+    },
+    {
       "source": "/warlords",
       "destination": "https://grudgewarlords.com",
       "permanent": false
