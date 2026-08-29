@@ -59,6 +59,82 @@ export const FLEET_REGISTRY: FleetRegistryEntry[] = [
     repo: "Warlord-Crafting-Suite",
   },
 
+  // ── Playing stack (2026-08) — these are the live engines, not demos ──
+  {
+    id: "threeflow",
+    name: "ThreeFlow",
+    description:
+      "Warlords scene editor — Vue + three r185 + Rapier 0.19 + D1 library. Orbit, HUD, AI tab.",
+    canonicalUrl: "https://threeflow.vercel.app/editor",
+    embedUrl: "https://threeflow.vercel.app/editor",
+    allowEmbed: true,
+    status: "live",
+    tags: ["solo"],
+    forge: true,
+    repo: "ThreeFlow",
+  },
+  {
+    id: "casting-lab",
+    name: "Casting Lab",
+    description:
+      "Warlords UX / weapon-effects lab — Toon RTS loadRaceKit, soft-lock TPS, unit frames.",
+    canonicalUrl: "https://casting.grudge.studio/",
+    embedUrl: "https://casting-abilities-threejs.vercel.app/",
+    allowEmbed: true,
+    status: "live",
+    tags: ["solo"],
+    forge: true,
+    repo: "CastingAbilitiesThreeJS",
+  },
+  {
+    id: "open",
+    name: "Grudge Open",
+    description:
+      "Steam-like library + Danger / mimic / brawler. Toon RTS + Rapier KCC. Player SSOT Railway.",
+    canonicalUrl: "https://open.grudge-studio.com/",
+    status: "live",
+    authRequired: true,
+    tags: ["mmo", "solo"],
+    forge: true,
+    allowEmbed: false,
+    repo: "gameopen",
+  },
+  {
+    id: "mineloader",
+    name: "Mine-Loader",
+    description:
+      "Voxel play host — Rapier CCT, harvest, Toon play body from assets CDN.",
+    canonicalUrl: "https://mineloader.grudge-studio.com/#/play",
+    status: "live",
+    tags: ["solo", "coop"],
+    forge: true,
+    allowEmbed: false,
+    repo: "Mine-Loader",
+  },
+  {
+    id: "grudox",
+    name: "GRUDOX",
+    description: "Minecraft-like launcher — cabinets, Carrier, Vox shells.",
+    canonicalUrl: "https://grudox.grudge-studio.com/",
+    status: "live",
+    tags: ["solo", "pvp"],
+    forge: true,
+    allowEmbed: false,
+    repo: "voxgrudge",
+  },
+  {
+    id: "foundry",
+    name: "Character Foundry",
+    description: "Create-only 4-slot heroes → play handoff. Not a dressing room.",
+    canonicalUrl: "https://character.grudge-studio.com/foundry",
+    status: "live",
+    authRequired: true,
+    tags: ["solo"],
+    forge: true,
+    allowEmbed: false,
+    repo: "GrudgeBuilder",
+  },
+
   // ── THC Labz client product (shared grudge_id + client_id=thc-labz) ──
   {
     id: "thc-dope-budz",

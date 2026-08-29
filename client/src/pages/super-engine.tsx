@@ -5,5 +5,5 @@ import { GameTerminal } from "@/components/game-terminal";
  * Single viewport: catalog sidebar + one iframe player for the full fleet.
  */
 export default function SuperEngine() {
-  return <GameTerminal />;
+  return <GameTerminal defaultGameId="threeflow" />;
 }

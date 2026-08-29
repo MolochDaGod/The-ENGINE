@@ -31,8 +31,10 @@ COPY --from=build /app/dist ./dist
 
 # Copy source for drizzle-kit schema push (needs schema.ts)
 COPY shared ./shared
-COPY attached_assets ./attached_assets
 COPY drizzle.config.ts ./
+# API image is not the asset host (Vercel + CDN). Keep an empty dir so
+# /api/assets readdir does not throw if the folder is railwayignored.
+RUN mkdir -p attached_assets
 
 ENV NODE_ENV=production
 ENV PORT=8080

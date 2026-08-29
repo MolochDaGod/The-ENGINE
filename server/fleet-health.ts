@@ -69,6 +69,13 @@ const SERVICES: ServiceDef[] = [
   { id: 'vc-grudge-arena', name: 'Grudge Arena', region: 'vercel', url: 'https://grudge-arena.grudge-studio.com/', timeoutMs: 8000, warnThresholdMs: 2000 },
   { id: 'vc-warlord-genesis', name: 'Warlord Genesis', region: 'vercel', url: 'https://warlord-genesis.vercel.app/play', timeoutMs: 8000, warnThresholdMs: 2000 },
   { id: 'vc-grudge6', name: 'Character Viewer', region: 'vercel', url: 'https://grudge6.grudge-studio.com/', timeoutMs: 8000, warnThresholdMs: 2000 },
+  { id: 'vc-threeflow', name: 'ThreeFlow', region: 'vercel', url: 'https://threeflow.vercel.app/', timeoutMs: 8000, warnThresholdMs: 2000 },
+  { id: 'vc-casting', name: 'Casting lab', region: 'vercel', url: 'https://casting-abilities-threejs.vercel.app/', timeoutMs: 8000, warnThresholdMs: 2000 },
+  { id: 'vc-open', name: 'Grudge Open', region: 'vercel', url: 'https://open.grudge-studio.com/', timeoutMs: 8000, warnThresholdMs: 2000 },
+  { id: 'vc-mineloader', name: 'Mine-Loader', region: 'vercel', url: 'https://mineloader.grudge-studio.com/', timeoutMs: 8000, warnThresholdMs: 2000 },
+  { id: 'vc-grudox', name: 'GRUDOX', region: 'vercel', url: 'https://grudox.grudge-studio.com/', timeoutMs: 8000, warnThresholdMs: 2000 },
+  { id: 'r2-toon-human', name: 'Toon RTS human.glb', region: 'r2', url: 'https://assets.grudge-studio.com/asset-packs/toon-rts-characters/glb/characters/human.glb', timeoutMs: 8000, warnThresholdMs: 800 },
+  { id: 'rail-player', name: 'Player API (Railway)', region: 'railway', url: 'https://grudge-api-production-0d46.up.railway.app/api/health', timeoutMs: 8000, warnThresholdMs: 2000 },
 
   // Puter
   { id: 'puter-platform', name: 'Puter', region: 'puter', url: 'https://puter.com/', timeoutMs: 8000, warnThresholdMs: 2000 },

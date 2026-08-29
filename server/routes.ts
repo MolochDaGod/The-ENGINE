@@ -55,7 +55,7 @@ import {
 import { sendDiscordWebhook, DiscordEmbedType, trackNowPlaying } from "./discord-webhooks";
 import { onScoreSubmitted, startRewardWorker, getRewardQueueStatus } from "./web3/reward-worker";
 import { getPlatformBalances, listOnChainTransactions, listDBTransactions, disconnectWallet, getActiveConnections, recordWalletConnection } from "./web3/admin-wallet";
-import { getWalletStatus } from "./web3/solana-client";
+import { getWalletStatus, getAccountDetail } from "./web3/solana-client";
 import { getFleetHealth, checkSingleService, getServiceRegistry } from "./fleet-health";
 import { legionAI, generateNPCDialogue, moderateContent, generateQuestText, analyzeFleetStatus, type LegionTask } from "./legion-ai";
 import { getGBuxBalance, requestGBuxMint, savePlayerData, loadPlayerData, listPlayerSaves, deletePlayerSave, linkPuterToGrudge, resolveGrudgeId, getGrudaChainStatus } from "./grudachain";
@@ -2555,6 +2555,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Start the autonomous reward worker
   startRewardWorker();
+
+  // Solscan Pro v2 account/detail (or RPC fallback) — player may read their own wallet
+  app.get("/api/web3/account/:address", requirePlayer, async (req, res) => {
+    try {
+      const address = String(req.params.address || "").trim();
+      if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(address)) {
+        return res.status(400).json({ error: "Invalid Solana address" });
+      }
+      const detail = await getAccountDetail(address);
+      res.json(detail);
+    } catch (error) {
+      const status = (error as { status?: number }).status;
+      res.status(status && status >= 400 ? status : 502).json({
+        error: error instanceof Error ? error.message : "Account lookup failed",
+      });
+    }
+  });
 
   // Admin: Platform wallet status + balances
   app.get("/api/web3/wallet/status", async (req, res) => {

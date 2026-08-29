@@ -14,11 +14,35 @@ import {
   type TransactionSignature,
 } from "@solana/web3.js";
 import bs58 from "bs58";
+import {
+  solscanAccountDetail,
+  solscanProConfigured,
+  type SolscanAccountDetail,
+} from "./solscanPro";
 
 // ── Connection singleton ─────────────────────────────────────────
 
-const RPC_URL = process.env.SOLANA_RPC_URL || "https://api.devnet.solana.com";
-const NETWORK = process.env.SOLANA_NETWORK || "devnet";
+function resolveNetwork(): string {
+  const n = (process.env.SOLANA_NETWORK || process.env.VITE_SOLANA_NETWORK || "").trim();
+  if (n === "mainnet" || n === "mainnet-beta") return "mainnet-beta";
+  if (n === "devnet" || n === "testnet") return n;
+  // Solscan Pro is mainnet-only — default production to mainnet
+  return process.env.NODE_ENV === "production" ? "mainnet-beta" : "devnet";
+}
+
+function resolveRpcUrl(network: string): string {
+  if (process.env.SOLANA_RPC_URL) return process.env.SOLANA_RPC_URL;
+  const helius = process.env.HELIUS_API_KEY;
+  if (helius && network === "mainnet-beta") {
+    return `https://mainnet.helius-rpc.com/?api-key=${helius}`;
+  }
+  return network === "mainnet-beta"
+    ? "https://api.mainnet-beta.solana.com"
+    : "https://api.devnet.solana.com";
+}
+
+const NETWORK = resolveNetwork();
+const RPC_URL = resolveRpcUrl(NETWORK);
 
 let _connection: Connection | null = null;
 
@@ -87,10 +111,60 @@ export function getGBUXMint(): PublicKey | null {
 // ── Balance helpers ──────────────────────────────────────────────
 
 export async function getSolBalance(address: string): Promise<number> {
+  if (solscanProConfigured() && NETWORK === "mainnet-beta") {
+    const d = await solscanAccountDetail(address);
+    return (d.lamports || 0) / LAMPORTS_PER_SOL;
+  }
   const conn = getConnection();
   const pubkey = new PublicKey(address);
   const lamports = await conn.getBalance(pubkey);
   return lamports / LAMPORTS_PER_SOL;
+}
+
+/**
+ * Wallet account snapshot. Prefers Solscan Pro v2 account/detail on mainnet
+ * (indexed, no RPC node). Falls back to Connection.getAccountInfo.
+ */
+export async function getAccountDetail(address: string): Promise<{
+  address: string;
+  lamports: number;
+  sol: number;
+  type: string | null;
+  executable: boolean;
+  ownerProgram: string | null;
+  rentEpoch: number | null;
+  onCurve: boolean | null;
+  source: "solscan-pro" | "rpc";
+}> {
+  if (solscanProConfigured() && (NETWORK === "mainnet-beta" || NETWORK === "mainnet")) {
+    const d: SolscanAccountDetail = await solscanAccountDetail(address);
+    return {
+      address: d.account,
+      lamports: d.lamports,
+      sol: (d.lamports || 0) / LAMPORTS_PER_SOL,
+      type: d.type ?? null,
+      executable: !!d.executable,
+      ownerProgram: d.owner_program ?? null,
+      rentEpoch: d.rent_epoch ?? null,
+      onCurve: Number(d.is_oncurve) === 1,
+      source: "solscan-pro",
+    };
+  }
+  const conn = getConnection();
+  const pubkey = new PublicKey(address);
+  const info = await conn.getAccountInfo(pubkey);
+  const lamports = info?.lamports ?? 0;
+  return {
+    address,
+    lamports,
+    sol: lamports / LAMPORTS_PER_SOL,
+    type: info ? (info.executable ? "program" : "account") : null,
+    executable: !!info?.executable,
+    ownerProgram: info?.owner?.toBase58() ?? null,
+    rentEpoch: info ? Number(info.rentEpoch) : null,
+    onCurve: PublicKey.isOnCurve(pubkey.toBytes()),
+    source: "rpc",
+  };
 }
 
 export async function getSplTokenBalance(

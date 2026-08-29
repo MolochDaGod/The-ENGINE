@@ -21,6 +21,7 @@ import { GamePreviewFrame } from "@/components/game-preview-frame";
 import { ForgeSystemPanel } from "@/components/forge-system-panel";
 import { navigateGame, openGameTab, resolveGameLaunch } from "@/lib/game-launch";
 import { DEFAULT_FORGE_SETTINGS, type ForgeRenderSettings } from "@/lib/engine3d";
+import { SuperEngineStack } from "@/components/super-engine-stack";
 
 const FILTER_TAGS: { id: "all" | Capability; label: string }[] = [
   { id: "all", label: "ALL" },
@@ -196,7 +197,7 @@ export function GameTerminal({ games = FORGE_GAMES, defaultGameId }: GameTermina
   }, [fullscreen]);
 
   const logLines = [
-    `GRUDGE FORGE TERMINAL v2 — ${games.length} titles loaded`,
+    `SUPER ENGINE — live stack · ThreeFlow · Rapier · Node · D1 · ${games.length} titles`,
     selectedGame
       ? `SESSION: ${selectedGame.name} (${launch?.mode ?? "idle"})`
       : "AWAITING SELECTION — pick a title from the catalog",
@@ -238,6 +239,7 @@ export function GameTerminal({ games = FORGE_GAMES, defaultGameId }: GameTermina
           </Link>
         </div>
       </header>
+      <SuperEngineStack />
 
       <div className="relative flex min-h-0 flex-1">
         {/* Catalog sidebar */}

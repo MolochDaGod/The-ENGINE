@@ -162,6 +162,18 @@
   ],
   "rewrites": [
     {
+      "source": "/gst",
+      "destination": "https://grudge-studio-tool.vercel.app/gst"
+    },
+    {
+      "source": "/gst/",
+      "destination": "https://grudge-studio-tool.vercel.app/gst/"
+    },
+    {
+      "source": "/gst/:path*",
+      "destination": "https://grudge-studio-tool.vercel.app/gst/:path*"
+    },
+    {
       "source": "/",
       "has": [{ "type": "host", "value": "fleet.grudge-studio.com" }],
       "destination": "https://grudge-fleet-harbor.grudge.workers.dev/"

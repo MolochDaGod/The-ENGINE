@@ -58,6 +58,19 @@ export default function AccountWallet({ player }: { player: PlayerProfile }) {
     queryFn: () => fetchJSON<WalletRow[]>("/api/me/wallets"),
   });
 
+  const chainQuery = useQuery<{
+    sol: number;
+    lamports: number;
+    type: string | null;
+    ownerProgram: string | null;
+    source: string;
+  }>({
+    queryKey: ["/api/web3/account", player.solanaAddress],
+    queryFn: () => fetchJSON(`/api/web3/account/${player.solanaAddress}`),
+    enabled: !!player.solanaAddress,
+    staleTime: 30_000,
+  });
+
   const txQuery = useQuery<TransactionRow[]>({
     queryKey: ["/api/transactions"],
     queryFn: () => fetchJSON<TransactionRow[]>("/api/transactions?limit=20"),
@@ -107,6 +120,14 @@ export default function AccountWallet({ player }: { player: PlayerProfile }) {
             <div>
               <div className="text-[10px] text-[hsl(45,15%,50%)] uppercase tracking-wider font-body">Primary Solana Wallet</div>
               <div className="text-sm font-mono text-[hsl(270,60%,70%)]">{player.solanaAddress}</div>
+              {chainQuery.data && (
+                <div className="mt-1 text-xs font-mono text-[hsl(45,20%,70%)]">
+                  {chainQuery.data.sol.toFixed(4)} SOL
+                  <span className="ml-2 text-[hsl(45,15%,45%)]">
+                    {chainQuery.data.source === "solscan-pro" ? "Solscan Pro" : "RPC"}
+                  </span>
+                </div>
+              )}
             </div>
             <div className="flex items-center gap-1">
               <button onClick={() => copyText(player.solanaAddress!)} className="text-[hsl(45,15%,45%)] hover:text-[hsl(270,60%,70%)] transition p-1">

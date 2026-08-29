@@ -57,6 +57,60 @@ const DEFAULT_META: ForgeCardMeta = {
 };
 
 const FORGE_CARD_META: Record<string, ForgeCardMeta> = {
+  threeflow: {
+    type: "Scene editor",
+    emoji: "🌀",
+    color: "from-sky-900/60 to-indigo-800/30",
+    gradientBorder: "from-sky-500 via-indigo-500 to-violet-500",
+    icon: Globe,
+    capabilities: ["3D", "Physics", "AI"],
+    previewType: "threejs",
+  },
+  "casting-lab": {
+    type: "Warlords lab",
+    emoji: "✨",
+    color: "from-violet-900/60 to-fuchsia-800/30",
+    gradientBorder: "from-violet-500 via-fuchsia-500 to-amber-500",
+    icon: Swords,
+    capabilities: ["3D", "Physics", "Particles"],
+    previewType: "threejs",
+  },
+  open: {
+    type: "Library / play",
+    emoji: "📚",
+    color: "from-amber-900/60 to-stone-800/30",
+    gradientBorder: "from-amber-500 via-yellow-500 to-orange-500",
+    icon: Gamepad,
+    capabilities: ["3D", "Physics", "Multiplayer"],
+    previewType: "threejs",
+  },
+  mineloader: {
+    type: "Voxel play",
+    emoji: "⛏️",
+    color: "from-emerald-900/60 to-lime-800/30",
+    gradientBorder: "from-emerald-500 via-lime-500 to-yellow-500",
+    icon: Cpu,
+    capabilities: ["3D", "Physics", "Multiplayer"],
+    previewType: "threejs",
+  },
+  grudox: {
+    type: "Launcher",
+    emoji: "🕹️",
+    color: "from-cyan-900/60 to-slate-800/30",
+    gradientBorder: "from-cyan-500 via-sky-500 to-slate-500",
+    icon: Gamepad,
+    capabilities: ["3D", "Multiplayer"],
+    previewType: "static",
+  },
+  foundry: {
+    type: "Create hero",
+    emoji: "🪪",
+    color: "from-yellow-900/60 to-amber-800/30",
+    gradientBorder: "from-yellow-500 via-amber-500 to-orange-500",
+    icon: Shield,
+    capabilities: ["3D"],
+    previewType: "static",
+  },
   warlords: {
     type: "MMO / RPG",
     emoji: "⚔️",
@@ -296,7 +350,14 @@ function entryToCard(entry: FleetRegistryEntry): FleetGameCard {
     disambiguation: entry.disambiguation,
     description: entry.description,
     type: meta.type,
-    engine: "Grudge Studio Forge",
+    engine:
+      entry.id === "threeflow"
+        ? "three 0.185 · Rapier 0.19 · D1 library"
+        : entry.id === "casting-lab"
+          ? "three 0.185 · Toon RTS · Rapier"
+          : entry.id === "open" || entry.id === "mineloader"
+            ? "three 0.185 · Rapier KCC · Railway player"
+            : "Grudge Studio Forge",
     route: entry.canonicalUrl,
     embedRoute: entry.embedUrl,
     allowEmbed: entry.allowEmbed,
@@ -312,6 +373,12 @@ function entryToCard(entry: FleetRegistryEntry): FleetGameCard {
 
 /** Ordered forge grid — flagship first, then live fleet, then portal demos. */
 const FORGE_ORDER = [
+  "threeflow",
+  "casting-lab",
+  "open",
+  "mineloader",
+  "grudox",
+  "foundry",
   "warlords",
   "grudge-forge",
   "survival-game",
