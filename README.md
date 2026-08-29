@@ -4,7 +4,7 @@
 >
 > **Created by Racalvin The Pirate King**
 
-Production deployment powering [grudgewarlords.com](https://grudgewarlords.com), the Grudge Studio game ecosystem, and the Annihilate 3D combat engine.
+Production deployment powering [grudge-studio.com](https://grudge-studio.com), the Grudge Studio game ecosystem portal (The ENGINE), with backend services on Railway.
 
 ---
 
@@ -51,14 +51,32 @@ npm start
 
 ```
 ┌─ Vercel (static frontend + API proxy) ───────────────────┐
-│  grudgewarlords.com (Grudge-Builder)                      │
-│  grudge-studio.com / the-engine.vercel.app (The-ENGINE)  │
+│  Team: grudgenexus                                        │
+│  Project: the-engine (prj_kzJDFjk5t5KJsXwmILyBabZ2T70S)  │
+│  Repo: MolochDaGod/The-ENGINE                             │
+│  Title: Rec0deD:88 — Grudge Studio Gaming Portal         │
+│                                                           │
+│  PRODUCTION:                                              │
+│  ├─ grudge-studio.com (apex + www)                       │
+│  │  └─ Cloudflare in front → this Vercel project origin │
 │  └─ Vite build → dist/public (SPA + game assets)        │
 │     /api/*    → PROXY → Railway via CF Workers           │
 │     /ws/*     → PROXY → Railway WebSocket                │
 │     /assets/* → Cache-Control: 1yr immutable             │
 │     /models/* → Cache-Control: 1wk                       │
 │     /*        → SPA fallback → index.html                │
+│                                                           │
+│  PREVIEW ONLY (not production):                          │
+│  ├─ the-engine-grudgenexus.vercel.app                    │
+│  ├─ the-engine-snowy.vercel.app                          │
+│  └─ per-deploy *.vercel.app URLs                         │
+│                                                           │
+│  ⚠️  the-engine.vercel.app is NOT Grudge (civic OS)     │
+│                                                           │
+│  Vercel aliases (listed but live via CF, not Vercel):    │
+│  ├─ id.grudge-studio.com → CF + Railway (GrudgeID)       │
+│  ├─ fleet.grudge-studio.com → CF HTML (no x-vercel)      │
+│  └─ characters.grudge-studio.com → CF 522                │
 └──────────────────────────────────────────────────────────┘
 
 ┌─ Railway (canonical backend — single source of truth) ───┐
@@ -79,6 +97,7 @@ npm start
 ┌─ Cloudflare Edge ────────────────────────────────────────┐
 │  id.grudge-studio.com → Worker → Railway (SSO)           │
 │  api.grudge-studio.com → Worker → Railway (game API)     │
+│  objectstore.grudge-studio.com → Worker API 3.4.0 + R2   │
 │  info.grudge-studio.com → Game Info Hub (items, data)    │
 │  assets.grudge-studio.com → R2 bucket (CDN)              │
 │  client.grudge-studio.com → CNAME → Vercel               │
@@ -123,7 +142,7 @@ CSP is set in `vercel.json` headers (both The-ENGINE and Grudge-Builder), **not*
 | `worker-src` | `'self' blob:` | Service workers, game workers |
 
 **Important:** The CSP lives in two places:
-- `D:\The-ENGINE\vercel.json` — for grudge-studio.com / the-engine.vercel.app
+- `D:\The-ENGINE\vercel.json` — for the-engine project (grudge-studio.com)
 - `E:\Grudge-Builder\vercel.json` — for grudgewarlords.com (the main game client)
 
 Both must be updated together. If images or API calls break, check `img-src` and `connect-src`.
@@ -251,13 +270,19 @@ Wired in: `client/src/hooks/useLaunchNav.ts`, `client/src/components/header.tsx`
 
 ## Deployment
 
-### Railway (backend)
-Push to `main` → Railway auto-deploys via Dockerfile.
-
 ### Vercel (frontend)
-Push to `main` → Vercel auto-builds via `npm run build:client`.
+
+**Current Production State (2026-08-29):**
+- Deployment: `dpl_2qxQkWQ7bBDMgKv2tssL6W5ARmdx`
+- Source: `cli` with `gitDirty` ⚠️
+- Main SHA: `4fd24ca`
+- ⚠️ **Hygiene issue:** Production is a dirty CLI deploy, not a clean git push. Future promotions should be via Git, not CLI with uncommitted changes.
+
+**Deployment via Git (recommended):**
+Push to `main` branch → Vercel auto-builds via `npm run build:client`.
 
 ### Cloudflare Workers
+
 ```bash
 cd deploy/auth-gateway && npx wrangler deploy
 cd deploy/game-api-gateway && npx wrangler deploy
@@ -296,28 +321,31 @@ GET /api/health
 
 ## Live Game Catalog (54 products)
 
-### Verified Live Games (2026-05-31)
-| Game | URL | Type |
-|------|-----|------|
-| Grudge Warlords | grudgewarlords.com | MMO RPG |
-| Nexus Nemesis TCG | nexus-nemesis-game.vercel.app | Card Game |
-| Grim Armada | grim-armada-web.vercel.app | Tactical Combat |
-| Grudge Drive | grudge-drive.vercel.app | Vehicular Combat |
-| Grudge Metaverse | grudge-metaverse.vercel.app | 3D Multiplayer |
-| RTS GRUDGE | rts-grudge.vercel.app | Survival RPG |
-| Grudge Fishing | grudge-fishing-game.vercel.app | 3D Fishing |
-| Grudge Three.js Port | grudge-three-port.vercel.app | 3D RPG |
-| THC Labz Battle | thc-labz-battle.vercel.app | Card Battle |
-| Dungeon Crawler Quest | dungeon-crawler-quest.vercel.app | Voxel MOBA |
-| Grudge Space RTS | grudge-space-rts.vercel.app | Space Strategy |
-| Final Fighter | final-fighter.vercel.app | 3D Fighting |
-| RPG Sprite Attack | grudge-rpg-sprite-attack.vercel.app | Tactical RPG |
-| Grudge Arena | grudge-arena.vercel.app | PvP Arena |
-| Grudge Warlords RTS | grudge-warlords-rts.vercel.app | Medieval RTS |
-| Grudge RPG | puter.com/app/grudgeRPG | RPG (Puter) |
-| Grudge Angler | puter.com/app/grudge-angler | Fishing (Puter) |
-| Grudge Match-3 | molochdagod.github.io/grudge-match-webgl | Puzzle (Unity) |
-| Betta Warlords | betta-grudgedev.replit.app | PvP Arena |
+### Historical Game Catalog (2026-05-31) [DATED SNAPSHOT — NOT CURRENT PROD STATUS]
+
+**⚠️ NOTE:** This is a dated historical game catalog from 2026-05-31. Many *.vercel.app URLs listed here are now marked as **preview-only** in the current portal catalog (see `client/src/data/portalProducts.ts`). For current verified production hosts, see "Production Deployment Status (2026-08-29)" section above.
+
+| Game | URL | Type | Current Status |
+|------|-----|------|----------------|
+| Grudge Warlords | grudgewarlords.com | MMO RPG | ✅ Live (custom domain) |
+| Nexus Nemesis TCG | nexus-nemesis-game.vercel.app | Card Game | ⚠️ Preview-only (use nemesis.grudge-studio.com) |
+| Grim Armada | grim-armada-web.vercel.app | Tactical Combat | ⚠️ Preview-only |
+| Grudge Drive | grudge-drive.vercel.app | Vehicular Combat | ⚠️ Preview-only |
+| Grudge Metaverse | grudge-metaverse.vercel.app | 3D Multiplayer | ⚠️ Preview-only (marked beta in catalog) |
+| RTS GRUDGE | rts-grudge.vercel.app | Survival RPG | ⚠️ Preview-only (ERROR after Nexus PR 22) |
+| Grudge Fishing | grudge-fishing-game.vercel.app | 3D Fishing | ⚠️ Preview-only |
+| Grudge Three.js Port | grudge-three-port.vercel.app | 3D RPG | ⚠️ Preview-only (marked beta in catalog) |
+| THC Labz Battle | thc-labz-battle.vercel.app | Card Battle | ⚠️ Preview-only (marked beta in catalog) |
+| Dungeon Crawler Quest | dungeon-crawler-quest.vercel.app | Voxel MOBA | ⚠️ Preview-only |
+| Grudge Space RTS | grudge-space-rts.vercel.app | Space Strategy | ⚠️ Preview-only (marked beta in catalog) |
+| Final Fighter | final-fighter.vercel.app | 3D Fighting | ⚠️ Preview-only (marked beta in catalog) |
+| RPG Sprite Attack | grudge-rpg-sprite-attack.vercel.app | Tactical RPG | ⚠️ Preview-only |
+| Grudge Arena | grudge-arena.vercel.app | PvP Arena | ⚠️ Preview-only |
+| Grudge Warlords RTS | grudge-warlords-rts.vercel.app | Medieval RTS | ⚠️ Preview-only (marked beta in catalog) |
+| Grudge RPG | puter.com/app/grudgeRPG | RPG (Puter) | ✅ Live (Puter platform) |
+| Grudge Angler | puter.com/app/grudge-angler | Fishing (Puter) | ✅ Live (Puter platform) |
+| Grudge Match-3 | molochdagod.github.io/grudge-match-webgl | Puzzle (Unity) | ✅ Live (GitHub Pages) |
+| Betta Warlords | betta-grudgedev.replit.app | PvP Arena | ✅ Live (Replit) |
 
 ### Studio Tools
 | Tool | URL |
@@ -329,15 +357,18 @@ GET /api/health
 | Character Builder | molochdagod.github.io/grudge-character-builder |
 | Grudge Coder | coder.grudge-studio.com |
 
-## Consolidated Services (2026-06-08)
+## ObjectStore & Consolidated Services (2026-08-29)
 
-The following services were consolidated into `info.grudge-studio.com`:
+**VERIFIED LIVE:**
+- `objectstore.grudge-studio.com` — **Worker objectstore-api 3.4.0** + catalog JSON 5.0.0 (R2-backed API, NOT a dead static SPA)
+- `browse.grudge-studio.com` — ObjectStore Item Browser frontend (Cloudflare Pages)
+- `info.grudge-studio.com` — Game Info Hub (items, data)
+- `dash.grudge-studio.com` — ✅ 200 Dashboard WITH x-vercel (Vercel origin, verified 2026-08-29)
+
+**Consolidated/deprecated (2026-06-08):**
 - `objects.grudge-studio.com` — DNS dead, never resolved
-- `objectstore.grudge-studio.com` — static SPA only, no API
-- `dash.grudge-studio.com` — 404, nothing deployed
-- `browse.grudge-studio.com` — legacy reference
 
-## Production Deployment Status (2026-06-08)
+## Production Deployment Status (2026-08-29)
 
 | Service | URL | Status |
 |---------|-----|--------|
