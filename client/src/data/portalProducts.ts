@@ -269,7 +269,7 @@ const _PORTAL_PRODUCTS_RAW = [
     image: "/assets/carousel/grudge-angler-bg.png",
   },
   {
-    id: "grudge-studio-puter-app",
+    id: "grudge-studio-app",
     name: "Grudge Studio (Puter)",
     href: "https://puter.com/app/gs",
     description: "Grudge Studio on Puter platform — cloud-based hub with character creation and saves sync.",

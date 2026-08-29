@@ -363,10 +363,10 @@ GET /api/health
 - `objectstore.grudge-studio.com` — **Worker objectstore-api 3.4.0** + catalog JSON 5.0.0 (R2-backed API, NOT a dead static SPA)
 - `browse.grudge-studio.com` — ObjectStore Item Browser frontend (Cloudflare Pages)
 - `info.grudge-studio.com` — Game Info Hub (items, data)
+- `dash.grudge-studio.com` — ✅ 200 Dashboard WITH x-vercel (Vercel origin, verified 2026-08-29)
 
 **Consolidated/deprecated (2026-06-08):**
 - `objects.grudge-studio.com` — DNS dead, never resolved
-- `dash.grudge-studio.com` — 404, nothing deployed (was planned admin surface)
 
 ## Production Deployment Status (2026-08-29)
 
