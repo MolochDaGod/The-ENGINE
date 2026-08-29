@@ -51,15 +51,32 @@ npm start
 
 ```
 ┌─ Vercel (static frontend + API proxy) ───────────────────┐
-│  grudge-studio.com (The-ENGINE portal)                    │
-│  grudgewarlords.com (Grudge-Builder)                      │
+│  Team: grudgenexus                                        │
+│  Project: the-engine (prj_kzJDFjk5t5KJsXwmILyBabZ2T70S)  │
+│  Repo: MolochDaGod/The-ENGINE                             │
+│  Title: Rec0deD:88 — Grudge Studio Gaming Portal         │
+│                                                           │
+│  PRODUCTION:                                              │
+│  ├─ grudge-studio.com (apex + www)                       │
+│  │  └─ Cloudflare in front → this Vercel project origin │
 │  └─ Vite build → dist/public (SPA + game assets)        │
 │     /api/*    → PROXY → Railway via CF Workers           │
 │     /ws/*     → PROXY → Railway WebSocket                │
 │     /assets/* → Cache-Control: 1yr immutable             │
 │     /models/* → Cache-Control: 1wk                       │
 │     /*        → SPA fallback → index.html                │
+│                                                           │
+│  PREVIEW ONLY (not production):                          │
+│  ├─ the-engine-grudgenexus.vercel.app                    │
+│  ├─ the-engine-snowy.vercel.app                          │
+│  └─ per-deploy *.vercel.app URLs                         │
+│                                                           │
 │  ⚠️  the-engine.vercel.app is NOT Grudge (civic OS)     │
+│                                                           │
+│  Vercel aliases (listed but live via CF, not Vercel):    │
+│  ├─ id.grudge-studio.com → CF + Railway (GrudgeID)       │
+│  ├─ fleet.grudge-studio.com → CF HTML (no x-vercel)      │
+│  └─ characters.grudge-studio.com → CF 522                │
 └──────────────────────────────────────────────────────────┘
 
 ┌─ Railway (canonical backend — single source of truth) ───┐
@@ -253,13 +270,19 @@ Wired in: `client/src/hooks/useLaunchNav.ts`, `client/src/components/header.tsx`
 
 ## Deployment
 
-### Railway (backend)
-Push to `main` → Railway auto-deploys via Dockerfile.
-
 ### Vercel (frontend)
-Push to `main` → Vercel auto-builds via `npm run build:client`.
+
+**Current Production State (2026-08-29):**
+- Deployment: `dpl_2qxQkWQ7bBDMgKv2tssL6W5ARmdx`
+- Source: `cli` with `gitDirty` ⚠️
+- Main SHA: `4fd24ca`
+- ⚠️ **Hygiene issue:** Production is a dirty CLI deploy, not a clean git push. Future promotions should be via Git, not CLI with uncommitted changes.
+
+**Deployment via Git (recommended):**
+Push to `main` branch → Vercel auto-builds via `npm run build:client`.
 
 ### Cloudflare Workers
+
 ```bash
 cd deploy/auth-gateway && npx wrangler deploy
 cd deploy/game-api-gateway && npx wrangler deploy

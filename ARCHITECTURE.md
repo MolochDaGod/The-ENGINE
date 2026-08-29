@@ -104,11 +104,41 @@
 | `assets-api.grudge-studio.com` | | | ⚠️ 522 per verified facts (2026-08-29) |
 
 ### Frontend Domains (Vercel — CNAME → cname.vercel-dns.com, DNS only)
-| Domain | Project | Status |
-|--------|---------|--------|
-| `grudge-studio.com` | the-engine | ✅ Live |
-| `www.grudge-studio.com` | the-engine | ✅ Live |
-| `grudgewarlords.com` | grudge-builder | ✅ Live |
+
+**The-ENGINE Vercel Project** (verified 2026-08-29):
+- Team: `grudgenexus`
+- Project slug: `the-engine`
+- Project ID: `prj_kzJDFjk5t5KJsXwmILyBabZ2T70S`
+- GitHub: `MolochDaGod/The-ENGINE`
+- Title: **Rec0deD:88 — Grudge Studio Gaming Portal**
+- Production deployment: `dpl_2qxQkWQ7bBDMgKv2tssL6W5ARmdx` (main SHA `4fd24ca`, source: cli with gitDirty)
+
+**Production domains:**
+
+| Domain | Project | Status | Notes |
+|--------|---------|--------|-------|
+| `grudge-studio.com` | the-engine | ✅ Live | Apex — Cloudflare in front, Vercel origin |
+| `www.grudge-studio.com` | the-engine | ✅ Live | WWW — Cloudflare in front, Vercel origin |
+
+**Preview-only domains (NOT production):**
+
+| Domain | Project | Notes |
+|--------|---------|-------|
+| `the-engine-grudgenexus.vercel.app` | the-engine | Preview only — never treat as prod |
+| `the-engine-snowy.vercel.app` | the-engine | Preview only — never treat as prod |
+| Per-deploy `*.vercel.app` | the-engine | Preview only — never treat as prod |
+| ⚠️ `the-engine.vercel.app` | **NOT Grudge** | Unrelated civic OS — never point studio traffic here |
+
+**Vercel aliases (listed on project but live via CF, not Vercel):**
+
+| Domain | Listed on Vercel | Actual Live Route | Notes |
+|--------|------------------|-------------------|-------|
+| `id.grudge-studio.com` | ✅ | CF + Railway (GrudgeID) | Auth front door stays Railway. No x-vercel header. |
+| `fleet.grudge-studio.com` | ✅ | CF HTML | No x-vercel header. |
+| `characters.grudge-studio.com` | ✅ | CF 522 | Alias exists but service degraded. |
+
+**Other Vercel Projects:**
+| `grudgewarlords.com` | grudge-builder | ✅ Live | Separate project — GitHub MolochDaGod/Grudge-Builder |
 | `warlord3d.grudge-studio.com` | grudge-builder | ✅ Live |
 | `test.grudge-studio.com` | grudge-builder | ✅ Live |
 | `ui.grudge-studio.com` | grudge-ui-editor | ✅ Live |
@@ -421,16 +451,22 @@ npm run db:push   # applies schema changes to Railway Postgres
 - Start: `node dist/index.js`
 - Migrations: run automatically if `db:push` is in start script, or run manually via Railway shell
 
-### Cloudflare Workers
-```bash
-cd deploy/auth-gateway       # or game-api-gateway
-npx wrangler deploy          # deploys to production
-npx wrangler tail             # live logs
-```
+### Vercel (The-ENGINE frontend)
 
-### Vercel (GrudgeBuilder)
+**Current Production State (2026-08-29):**
+- Team: `grudgenexus`
+- Project: `the-engine` (prj_kzJDFjk5t5KJsXwmILyBabZ2T70S)
+- Deployment: `dpl_2qxQkWQ7bBDMgKv2tssL6W5ARmdx`
+- Source: `cli` with `gitDirty` ⚠️
+- Main SHA: `4fd24ca`
+- ⚠️ **Hygiene issue:** Production is a dirty CLI deploy, not a clean git push.
+
+**Deployment via Git (recommended):**
 - Push to `main` branch → Vercel auto-deploys
+- Build command: `npm run build:client`
 - Rewrites in `vercel.json` proxy API calls to `id.grudge-studio.com` and `api.grudge-studio.com`
+
+**Note:** `id.grudge-studio.com`, `fleet.grudge-studio.com`, and `characters.grudge-studio.com` are listed as Vercel aliases but actually served by Cloudflare (not Vercel origin). Keep DNS as-is.
 
 ## 10. Decommissioned Systems
 
