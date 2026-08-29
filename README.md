@@ -142,7 +142,7 @@ CSP is set in `vercel.json` headers (both The-ENGINE and Grudge-Builder), **not*
 | `worker-src` | `'self' blob:` | Service workers, game workers |
 
 **Important:** The CSP lives in two places:
-- `D:\The-ENGINE\vercel.json` — for grudge-studio.com / the-engine.vercel.app
+- `D:\The-ENGINE\vercel.json` — for the-engine project (grudge-studio.com)
 - `E:\Grudge-Builder\vercel.json` — for grudgewarlords.com (the main game client)
 
 Both must be updated together. If images or API calls break, check `img-src` and `connect-src`.

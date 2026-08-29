@@ -88,10 +88,10 @@
 | Domain | Type | Origin | Status |
 |--------|------|--------|--------|
 | `api.grudge-studio.com` | CF Tunnel | Railway (The-ENGINE) | ✅ Live |
-| `id.grudge-studio.com` | CF Tunnel | Railway (The-ENGINE) | ✅ Live — Player SSOT is Railway, not Neon |
+| `id.grudge-studio.com` | CF Tunnel | Railway (GrudgeID / Keel) | ✅ Live — 200 Sign in, no x-vercel. Player SSOT is Railway, not Neon. Auth front door, not The-ENGINE origin. |
 | `auth.grudge-studio.com` | CF Worker (A 192.0.2.1) | Railway (legacy alias) | ✅ Live |
 | `ws.grudge-studio.com` | CF Tunnel | Railway WebSocket | ✅ Live (WS only) |
-| `dash.grudge-studio.com` | CF Tunnel | Railway admin | ⚠️ 522 per verified facts (2026-08-29) |
+| `dash.grudge-studio.com` | CF Tunnel | Railway admin | ✅ Live — 200 Dashboard WITH x-vercel (2026-08-29) |
 | `ai.grudge-studio.com` | CF Worker (AAAA 100::) | Legion AI hub | ✅ Live (401 auth-gated) |
 | `assets.grudge-studio.com` | CNAME → public.r2.dev | R2 binary CDN | ✅ Live — CDN 2.2.0 (2026-08-29) |
 | `objectstore.grudge-studio.com` | CF Worker (AAAA 100::) | R2 + D1 | ✅ Live — Worker objectstore-api 3.4.0, catalog JSON 5.0.0 (NOT a dead static SPA) |
@@ -131,11 +131,14 @@
 
 **Vercel aliases (listed on project but live via CF, not Vercel):**
 
-| Domain | Listed on Vercel | Actual Live Route | Notes |
-|--------|------------------|-------------------|-------|
-| `id.grudge-studio.com` | ✅ | CF + Railway (GrudgeID) | Auth front door stays Railway. No x-vercel header. |
-| `fleet.grudge-studio.com` | ✅ | CF HTML | No x-vercel header. |
-| `characters.grudge-studio.com` | ✅ | CF 522 | Alias exists but service degraded. |
+| Domain | Listed on Vercel | Actual Live Route | Verified 2026-08-29 |
+|--------|------------------|-------------------|---------------------|
+| `id.grudge-studio.com` | ✅ | CF + Railway (GrudgeID / Keel) | ✅ 200 Sign in, no x-vercel |
+| `fleet.grudge-studio.com` | ✅ | CF HTML | ✅ 200 Harbor Map, no x-vercel |
+| `characters.grudge-studio.com` | ✅ | CF | ⚠️ 522 |
+| `dash.grudge-studio.com` | Listed elsewhere | Vercel origin | ✅ 200 Dashboard WITH x-vercel |
+| `account.grudge-studio.com` | | | ⚠️ 522 |
+| `assets-api.grudge-studio.com` | | | ⚠️ 522 |
 
 **Other Vercel Projects:**
 | `grudgewarlords.com` | grudge-builder | ✅ Live | Separate project — GitHub MolochDaGod/Grudge-Builder |
@@ -144,7 +147,7 @@
 | `ui.grudge-studio.com` | grudge-ui-editor | ✅ Live |
 | `tv.grudge-studio.com` | grudatv | ✅ Live |
 | `play.grudge-studio.com` | star-way-gruda-web-client | ✅ Live |
-| `characters.grudge-studio.com` | playground | ✅ Live |
+| `characters.grudge-studio.com` | playground | ⚠️ 522 | Verified 2026-08-29: CF 522, not Live |
 | `dcq.grudge-studio.com` | dungeon-crawler-quest | ✅ Live |
 | `metaverse.grudge-studio.com` | grudge-metaverse | ✅ Live |
 | `info.grudge-studio.com` | objectstore-grudge | ✅ Live |
@@ -161,13 +164,13 @@
 | `client.grudge-studio.com` | grudge-builder (alias) | ✅ Live |
 
 ### Cloudflare Pages
-| Domain | Pages project | Status |
-|--------|---------------|--------|
-| `browse.grudge-studio.com` | grudge-objectstore | ✅ Live |
-| `fleet.grudge-studio.com` | grudge-fleet | ✅ Live |
-| `coder.grudge-studio.com` | grudgechain-vibe-ide | ✅ Live |
-| `grudgedot.grudge-studio.com` | grudgedot | ✅ Live |
-| `wcs.grudge-studio.com` | grudge-wcs | ✅ Live |
+| Domain | Pages project | Status | Verified 2026-08-29 |
+|--------|---------------|--------|---------------------|
+| `browse.grudge-studio.com` | grudge-objectstore | ✅ Live | |
+| `fleet.grudge-studio.com` | grudge-fleet | ✅ Live | 200 Harbor Map, CF HTML, no x-vercel |
+| `coder.grudge-studio.com` | grudgechain-vibe-ide | ✅ Live | |
+| `grudgedot.grudge-studio.com` | grudgedot | ✅ Live | |
+| `wcs.grudge-studio.com` | grudge-wcs | ✅ Live | |
 
 ### Puter
 | Domain | Serves | Status |
@@ -526,11 +529,10 @@ To deploy the Puter app:
 
 ### 2026-05-25 — Full deployment + integration test (commit `3bf3f4a`)
 
-**Deployment status** — 12 services tested, all green:
+**Deployment status** — 11 services tested, all green:
 
 | Service | URL | HTTP |
 |---------|-----|------|
-| ENGINE Vercel | the-engine.vercel.app | ✅ 200 |
 | GrudgeWarlords | grudgewarlords.com | ✅ 200 |
 | GrudgeWarlords /wallet | grudgewarlords.com/wallet | ✅ 200 |
 | GrudgeWarlords API | /api/health | ✅ healthy, DB connected |
