@@ -91,7 +91,7 @@
 | `id.grudge-studio.com` | CF Tunnel | Railway (GrudgeID / Keel) | ✅ Live — 200 Sign in, no x-vercel. Player SSOT is Railway, not Neon. Auth front door, not The-ENGINE origin. |
 | `auth.grudge-studio.com` | CF Worker (A 192.0.2.1) | Railway (legacy alias) | ✅ Live |
 | `ws.grudge-studio.com` | CF Tunnel | Railway WebSocket | ✅ Live (WS only) |
-| `dash.grudge-studio.com` | CF Tunnel | Railway admin | ✅ Live — 200 Dashboard WITH x-vercel (2026-08-29) |
+| `dash.grudge-studio.com` | Vercel origin | Dashboard | ✅ Live — 200 Dashboard WITH x-vercel (2026-08-29) |
 | `ai.grudge-studio.com` | CF Worker (AAAA 100::) | Legion AI hub | ✅ Live (401 auth-gated) |
 | `assets.grudge-studio.com` | CNAME → public.r2.dev | R2 binary CDN | ✅ Live — CDN 2.2.0 (2026-08-29) |
 | `objectstore.grudge-studio.com` | CF Worker (AAAA 100::) | R2 + D1 | ✅ Live — Worker objectstore-api 3.4.0, catalog JSON 5.0.0 (NOT a dead static SPA) |
@@ -527,9 +527,11 @@ To deploy the Puter app:
 
 ## 14. Production Verification Log
 
-### 2026-05-25 — Full deployment + integration test (commit `3bf3f4a`)
+### 2026-05-25 — Full deployment + integration test (commit `3bf3f4a`) [HISTORICAL LOG ONLY — NOT CURRENT PROD]
 
-**Deployment status** — 11 services tested, all green:
+**⚠️ NOTE:** This section is a dated historical verification log from 2026-05-25. Service URLs listed here reflect that date's deployment state and may no longer be current production. See § "Production Deployment Status (2026-08-29)" in README.md for current verified hosts.
+
+**Deployment status** — 11 services tested, all green (as of 2026-05-25):
 
 | Service | URL | HTTP |
 |---------|-----|------|
