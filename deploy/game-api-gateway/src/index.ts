@@ -1,22 +1,20 @@
 /**
  * Grudge Game API Gateway — Cloudflare Worker
  *
- * Proxies all requests from api.grudge-studio.com → the-engine.up.railway.app
+ * Host: api.grudge-studio.com
  *
- * This Worker replaces the dead VPS Cloudflare Tunnel that previously served
- * api.grudge-studio.com. Now both id.grudge-studio.com (auth) and
- * api.grudge-studio.com (game API) route to the same Railway backend.
+ * This is NOT The-ENGINE portal SPA and NOT player-bag SSOT by itself.
+ * - `/` `/health` `/api/*`  → Railway grudge-api (player JSON)
+ * - `/assets*` `/gamedata*` → sibling Worker `grudge-asset-api` (more-specific CF routes)
+ * - `/lobby*` `/lobbies`    → grudge-game-servers service binding
+ *
+ * Do not point BACKEND_URL at:
+ *   - the-engine.up.railway.app (portal; `/` 302s to HTML)
+ *   - grudge-api-production.up.railway.app (dead hostname; serves marketing HTML)
  *
  * Deploy:
  *   cd deploy/game-api-gateway
  *   npx wrangler deploy
- *
- * Before deploying:
- *   1. The api.grudge-studio.com DNS record in Cloudflare must be a proxied
- *      A record (e.g. 192.0.2.1) or AAAA (100::) — just needs to exist so
- *      the Worker route can attach to it. The old tunnel record works fine.
- *   2. Delete or disable the old Cloudflare Tunnel for api.grudge-studio.com
- *      in Zero Trust → Tunnels so it doesn't conflict.
  */
 
 export interface Env {
@@ -25,6 +23,14 @@ export interface Env {
   GAME_SERVERS?: Fetcher;
 }
 
+/** Player characters / bag / island / wallet — Railway Postgres. */
+const PLAYER_API = "https://grudge-api-production-0d46.up.railway.app";
+
+const HTML_SPA_BACKENDS = [
+  "https://the-engine.up.railway.app",
+  "https://grudge-api-production.up.railway.app",
+];
+
 const DEFAULT_ALLOWED_ORIGINS = [
   "https://grudgewarlords.com",
   "https://www.grudgewarlords.com",
@@ -32,13 +38,18 @@ const DEFAULT_ALLOWED_ORIGINS = [
   "https://grudge-studio.com",
   "https://id.grudge-studio.com",
   "https://dash.grudge-studio.com",
+  "https://open.grudge-studio.com",
+  "https://grudox.grudge-studio.com",
+  "https://forge.grudge-studio.com",
+  "https://character.grudge-studio.com",
+  "https://wallet.grudge-studio.com",
+  "https://coder.grudge-studio.com",
   "https://grudge-studio-dash.pages.dev",
   "https://grudgedot.pages.dev",
   "https://grudge-crafting.puter.site",
   "https://grudgewarlords.puter.site",
   "https://grudgestudio.puter.site",
   "https://grudgeplatform.com",
-  "https://wallet.grudge-studio.com",
   "https://molochdagod.github.io",
   "https://puter.com",
   "https://app.puter.com",
@@ -52,22 +63,74 @@ function getAllowedOrigins(env: Env): Set<string> {
   return new Set(list.length > 0 ? list : DEFAULT_ALLOWED_ORIGINS);
 }
 
-const CANONICAL_BACKEND = "https://the-engine.up.railway.app";
-
-function resolveBackend(env: Env): string {
-  const raw = (env.BACKEND_URL || CANONICAL_BACKEND).replace(/\/$/, "");
-  return raw.includes("grudge-api-production") ? CANONICAL_BACKEND : raw;
+function originAllowed(origin: string | null, allowed: Set<string>): boolean {
+  if (!origin) return false;
+  if (allowed.has(origin)) return true;
+  try {
+    const host = new URL(origin).hostname;
+    if (host === "grudge-studio.com" || host.endsWith(".grudge-studio.com")) return true;
+    if (host === "grudgewarlords.com" || host.endsWith(".grudgewarlords.com")) return true;
+    if (host.endsWith(".vercel.app")) return true;
+    if (host.endsWith(".puter.site") || host.endsWith(".puter.work")) return true;
+    if (host === "localhost" || host === "127.0.0.1") return true;
+  } catch {
+    /* ignore */
+  }
+  return false;
 }
 
 function corsHeaders(origin: string | null, allowed: Set<string>): Record<string, string> {
-  if (!origin || !allowed.has(origin)) return {};
+  if (!originAllowed(origin, allowed)) return {};
   return {
-    "Access-Control-Allow-Origin": origin,
+    "Access-Control-Allow-Origin": origin as string,
     "Access-Control-Allow-Credentials": "true",
     "Access-Control-Allow-Methods": "GET,POST,PUT,PATCH,DELETE,OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Session-Token, X-Puter-Token, X-Request-ID",
-    "Vary": "Origin",
+    "Access-Control-Allow-Headers":
+      "Content-Type, Authorization, X-Session-Token, X-Puter-Token, X-Request-ID, X-Admin-Token",
+    Vary: "Origin",
   };
+}
+
+function json(
+  body: unknown,
+  status: number,
+  extra: Record<string, string> = {},
+): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "Content-Type": "application/json; charset=utf-8", ...extra },
+  });
+}
+
+/**
+ * Never send traffic to the portal SPA or the dead `grudge-api-production`
+ * hostname (no -0d46). Those return 200 text/html for API paths.
+ */
+function resolveBackend(env: Env): string {
+  const raw = (env.BACKEND_URL || PLAYER_API).replace(/\/$/, "");
+  if (!raw || HTML_SPA_BACKENDS.includes(raw)) return PLAYER_API;
+  if (raw === PLAYER_API) return PLAYER_API;
+  // Any other grudge-api-production* host without 0d46 is the HTML ghost.
+  if (/grudge-api-production(?!-0d46)/.test(raw)) return PLAYER_API;
+  return raw;
+}
+
+/**
+ * Satellite vercel.json often rewrites `/api/:path*` → `api.grudge-studio.com/:path*`
+ * (strips `/api`). Railway grudge-api mounts REST under `/api/*`.
+ * `/health` on Railway is 404; `/api/health` is the live probe.
+ */
+function mapUpstreamPath(pathname: string): string {
+  const p = pathname.replace(/\/+$/, "") || "/";
+  if (p === "/") return "/";
+  if (p === "/health" || p === "/healthz") return "/api/health";
+  if (p === "/api") return "/api/health";
+  if (p.startsWith("/api/")) return p;
+  return `/api${p}`;
+}
+
+function looksLikeHtml(contentType: string | null): boolean {
+  return (contentType || "").toLowerCase().includes("text/html");
 }
 
 export default {
@@ -75,35 +138,27 @@ export default {
     const url = new URL(request.url);
     const origin = request.headers.get("Origin");
     const allowed = getAllowedOrigins(env);
+    const cors = corsHeaders(origin, allowed);
 
-    // CORS pre-flight
     if (request.method === "OPTIONS") {
-      return new Response(null, {
-        status: 204,
-        headers: corsHeaders(origin, allowed),
-      });
+      return new Response(null, { status: 204, headers: cors });
     }
 
-    // Lobby + matchmake — grudge-game-servers worker (not Railway)
     const isGameServersPath =
       url.pathname === "/lobbies" ||
       url.pathname === "/lobby" ||
       url.pathname.startsWith("/lobby/");
     if (isGameServersPath) {
       if (!env.GAME_SERVERS) {
-        return new Response(
-          JSON.stringify({ error: "Lobby service unavailable — GAME_SERVERS binding missing" }),
-          {
-            status: 503,
-            headers: { "Content-Type": "application/json", ...corsHeaders(origin, allowed) },
-          },
+        return json(
+          { error: "Lobby service unavailable — GAME_SERVERS binding missing" },
+          503,
+          cors,
         );
       }
       const lobbyResponse = await env.GAME_SERVERS.fetch(request);
       const headers = new Headers(lobbyResponse.headers);
-      for (const [k, v] of Object.entries(corsHeaders(origin, allowed))) {
-        headers.set(k, v);
-      }
+      for (const [k, v] of Object.entries(cors)) headers.set(k, v);
       return new Response(lobbyResponse.body, {
         status: lobbyResponse.status,
         statusText: lobbyResponse.statusText,
@@ -114,28 +169,40 @@ export default {
 
     const upstreamBase = resolveBackend(env);
 
-    // Edge health check — responds without hitting Railway
     if (url.pathname === "/__edge/health") {
-      return new Response(
-        JSON.stringify({
+      return json(
+        {
           ok: true,
           worker: "grudge-game-api",
           backend: upstreamBase,
+          assets: "https://api.grudge-studio.com/assets",
           time: new Date().toISOString(),
-        }),
-        {
-          headers: {
-            "Content-Type": "application/json",
-            ...corsHeaders(origin, allowed),
-          },
-        }
+        },
+        200,
+        cors,
       );
     }
 
-    // Build upstream URL — forward path + query as-is to Railway
-    const upstreamUrl = upstreamBase + url.pathname + url.search;
+    // Visiting the API host in a browser must never dump The-ENGINE marketing HTML.
+    if ((url.pathname === "/" || url.pathname === "") && request.method === "GET") {
+      return json(
+        {
+          service: "grudge-game-api",
+          status: "ok",
+          playerApi: upstreamBase,
+          health: "/api/health",
+          assets: "/assets",
+          gamedata: "/gamedata/:key",
+          note: "D1 index is /assets. Player bag/characters are Railway /api/* — not this HTML portal.",
+        },
+        200,
+        cors,
+      );
+    }
 
-    // Forward request with proper headers
+    const upstreamPath = mapUpstreamPath(url.pathname);
+    const upstreamUrl = upstreamBase + upstreamPath + url.search;
+
     const upstreamHeaders = new Headers(request.headers);
     upstreamHeaders.set("Host", new URL(upstreamBase).host);
     upstreamHeaders.set("X-Forwarded-Host", url.host);
@@ -151,23 +218,33 @@ export default {
         redirect: "manual",
       });
     } catch (err) {
-      return new Response(
-        JSON.stringify({ error: "Gateway error — Railway backend unreachable", detail: String(err) }),
-        {
-          status: 502,
-          headers: {
-            "Content-Type": "application/json",
-            ...corsHeaders(origin, allowed),
-          },
-        }
+      return json(
+        { error: "Gateway error — Railway backend unreachable", detail: String(err) },
+        502,
+        cors,
       );
     }
 
-    // Merge CORS headers into response
-    const responseHeaders = new Headers(upstreamResponse.headers);
-    for (const [k, v] of Object.entries(corsHeaders(origin, allowed))) {
-      responseHeaders.set(k, v);
+    if (looksLikeHtml(upstreamResponse.headers.get("content-type"))) {
+      const status = upstreamResponse.status === 404 ? 404 : 502;
+      return json(
+        {
+          error:
+            status === 404
+              ? "Not found"
+              : "API upstream served HTML — refused (wrong Railway app or SPA fallback)",
+          backend: upstreamBase,
+          path: upstreamPath,
+        },
+        status,
+        cors,
+      );
     }
+
+    const responseHeaders = new Headers(upstreamResponse.headers);
+    for (const [k, v] of Object.entries(cors)) responseHeaders.set(k, v);
+    responseHeaders.set("X-Gateway", "grudge-game-api");
+    responseHeaders.set("X-Gateway-Upstream", upstreamBase);
 
     return new Response(upstreamResponse.body, {
       status: upstreamResponse.status,
