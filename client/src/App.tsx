@@ -1,4 +1,4 @@
-import { Switch, Route } from "wouter";
+import { Switch, Route, useLocation } from "wouter";
 import type { ComponentType } from "react";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -36,7 +36,6 @@ import CollaborationHub from "@/pages/collaboration-hub";
 import AdvancedEngines from "@/pages/advanced-engines";
 import AnalyticsDashboard from "@/pages/analytics-dashboard";
 import DecaySurvival from "@/pages/decay-survival";
-import OverdriveRacing from "@/pages/overdrive-racing";
 import Overdrive3D from "@/pages/overdrive-3d";
 import AvernusArena from "@/pages/avernus-arena";
 import Wargus from "@/pages/wargus";
@@ -44,18 +43,26 @@ import GameLibrary from "@/pages/game-library";
 import GamePlayer from "@/pages/game-player";
 import Chat from "@/pages/chat";
 import AdminLogin from "@/pages/admin-login";
+import SystemDevPage from "@/pages/system-dev";
 import NotFound from "@/pages/not-found";
 import MageArena from "@/pages/mage-arena";
-import AnnihilateDemo from "@/pages/annihilate-demo";
+import GrudgeControllerDemo from "@/pages/grudge-controller-demo";
+import GrudgeFishingPage from "@/pages/grudge-fishing";
 import WargusDefault from "@/pages/wargus-default";
 import AssetPipeline from "@/pages/asset-pipeline";
-import ComingSoon from "@/pages/coming-soon";
+
+import CharacterViewerPage from "@/pages/character-viewer";
+import CharacterRosterPage from "@/pages/character-roster";
+import GameWeaponsLibraryPage from "@/pages/game-weapons-library";
+import ConanInfoPage from "@/pages/conan-info";
 import VoxelSandbox from "@/pages/voxel-sandbox";
 import PolyFighter from "@/pages/polyfighter";
 import TerraForge from "@/pages/terraforge";
+import ForgeAccessPage from "@/pages/forge-access";
 import GrudgeBrawl from "@/pages/grudge-brawl";
 import AdminGuard from "@/components/admin-guard";
 import AdminEntryButton from "@/components/admin-entry-button";
+import { FleetConnectInit } from "@/components/fleet-connect-init";
 
 const withAdminGuard = (Component: ComponentType) => {
   return function GuardedComponent() {
@@ -71,6 +78,7 @@ function Router() {
   return (
     <Switch>
       <Route path="/" component={Home} />
+      <Route path="/gs" component={Home} />
       <Route path="/home" component={Home} />
       <Route path="/login" component={Login} />
       <Route path="/account" component={AccountPage} />
@@ -82,7 +90,11 @@ function Router() {
       <Route path="/cloud" component={CloudPage} />
       <Route path="/games" component={GameLibrary} />
       <Route path="/game-library" component={GameLibrary} />
+      <Route path="/play/fleet/:id" component={GamePlayer} />
       <Route path="/play/:id" component={GamePlayer} />
+      <Route path="/forge" component={ForgeAccessPage} />
+      <Route path="/studio-forge" component={ForgeAccessPage} />
+      <Route path="/forge-access" component={ForgeAccessPage} />
       <Route path="/scraping" component={withAdminGuard(Scraping)} />
       <Route path="/store" component={Store} />
       <Route path="/tower-defense" component={TowerDefense} />
@@ -95,6 +107,7 @@ function Router() {
       <Route path="/real-engine-manager" component={withAdminGuard(RealEngineManager)} />
       <Route path="/advantage" component={Advantage} />
       <Route path="/super-engine" component={SuperEngine} />
+      <Route path="/super-engine/:legacyId" component={SuperEngine} />
       <Route path="/grudge-editor" component={withAdminGuard(GrudgeEditor)} />
       <Route path="/engine-launcher" component={EngineLauncher} />
       <Route path="/asset-store" component={AssetStore} />
@@ -102,27 +115,168 @@ function Router() {
       <Route path="/advanced-engines" component={withAdminGuard(AdvancedEngines)} />
       <Route path="/analytics-dashboard" component={withAdminGuard(AnalyticsDashboard)} />
       <Route path="/decay-survival" component={DecaySurvival} />
-      <Route path="/overdrive-racing" component={OverdriveRacing} />
+      <Route path="/overdrive-racing" component={Overdrive3D} />
       <Route path="/overdrive-3d" component={Overdrive3D} />
       <Route path="/avernus-arena" component={AvernusArena} />
       <Route path="/wargus" component={Wargus} />
       <Route path="/default" component={WargusDefault} />
       <Route path="/chat" component={Chat} />
       <Route path="/mage-arena" component={MageArena} />
-      <Route path="/annihilate-demo" component={AnnihilateDemo} />
+      {/* Edge redirect also in vercel.json — SPA bounce for client-side nav */}
+      <Route path="/annihilate-demo">
+        {() => {
+          const q =
+            typeof window !== "undefined" ? window.location.search || "" : "";
+          window.location.replace(
+            `https://open.grudge-studio.com/annihilate-demo${q}`,
+          );
+          return null;
+        }}
+      </Route>
+      <Route path="/annihilate">
+        {() => {
+          const q =
+            typeof window !== "undefined" ? window.location.search || "" : "";
+          window.location.replace(
+            `https://open.grudge-studio.com/annihilate-demo${q}`,
+          );
+          return null;
+        }}
+      </Route>
+      <Route path="/grudge-controller" component={GrudgeControllerDemo} />
+      <Route path="/grudge-fishing" component={GrudgeFishingPage} />
       <Route path="/asset-pipeline" component={withAdminGuard(AssetPipeline)} />
       <Route path="/admin-login" component={AdminLogin} />
+      <Route path="/system-dev" component={SystemDevPage} />
       <Route path="/voxel-sandbox" component={VoxelSandbox} />
       <Route path="/polyfighter" component={PolyFighter} />
       <Route path="/terraforge" component={TerraForge} />
       <Route path="/grudge-brawl" component={GrudgeBrawl} />
-      <Route path="/starway-gruda" component={ComingSoon} />
-      <Route path="/rts-star-armada" component={ComingSoon} />
-      <Route path="/mech-armada" component={ComingSoon} />
-      <Route path="/star-rts" component={ComingSoon} />
-      <Route path="/survival" component={ComingSoon} />
+      <Route path="/viewer" component={CharacterViewerPage} />
+      <Route path="/roster" component={CharacterRosterPage} />
+      <Route path="/game/weapons" component={GameWeaponsLibraryPage} />
+      <Route path="/conan" component={ConanInfoPage} />
+      {/* Planned titles — do not leave users on empty shells; bounce to live fleet */}
+      <Route path="/starway-gruda">
+        {() => {
+          window.location.replace("https://play.grudge-studio.com");
+          return null;
+        }}
+      </Route>
+      <Route path="/rts-star-armada">
+        {() => {
+          window.location.replace("https://rts-grudge.vercel.app");
+          return null;
+        }}
+      </Route>
+      <Route path="/mech-armada">
+        {() => {
+          window.location.replace("https://mech-playground.vercel.app");
+          return null;
+        }}
+      </Route>
+      <Route path="/star-rts">
+        {() => {
+          window.location.replace("https://rts-grudge.vercel.app");
+          return null;
+        }}
+      </Route>
+      <Route path="/survival">
+        {() => {
+          window.location.replace("https://grudges.grudge-studio.com");
+          return null;
+        }}
+      </Route>
+      {/* Common dead paths → live surfaces */}
+      <Route path="/library">
+        {() => {
+          window.location.replace("/games");
+          return null;
+        }}
+      </Route>
+      <Route path="/warlords">
+        {() => {
+          window.location.replace("https://grudgewarlords.com");
+          return null;
+        }}
+      </Route>
+      <Route path="/arena">
+        {() => {
+          window.location.replace("https://arena.grudge-studio.com");
+          return null;
+        }}
+      </Route>
+      <Route path="/profile">
+        {() => {
+          window.location.replace("/account");
+          return null;
+        }}
+      </Route>
+      <Route path="/settings">
+        {() => {
+          window.location.replace("/account");
+          return null;
+        }}
+      </Route>
+      <Route path="/leaderboard">
+        {() => {
+          window.location.replace("/leaderboards");
+          return null;
+        }}
+      </Route>
       <Route component={NotFound} />
     </Switch>
+  );
+}
+
+function AppShell() {
+  const [location] = useLocation();
+  const hostname = typeof window !== "undefined" ? window.location.hostname : "";
+  const isViewerHost =
+    hostname === "character.grudge-studio.com" ||
+    hostname === "characters.grudge-studio.com" ||
+    hostname === "grudge6.grudge-studio.com";
+  const isConanHost =
+    hostname === "conan.grudge-studio.com";
+  const isViewerRoute =
+    location === "/viewer" || location.startsWith("/viewer?") ||
+    location === "/roster" || location.startsWith("/roster?") ||
+    location === "/game/weapons" || location.startsWith("/game/weapons?") ||
+    location === "/conan" || location.startsWith("/conan?");
+  const isSuperEngineRoute =
+    location === "/super-engine" ||
+    location.startsWith("/super-engine?") ||
+    location.startsWith("/super-engine/");
+  const isForgeGameRoute =
+    isSuperEngineRoute ||
+    location === "/voxel-sandbox" || location.startsWith("/voxel-sandbox?") ||
+    location === "/polyfighter" || location.startsWith("/polyfighter?") ||
+    location === "/terraforge" || location.startsWith("/terraforge?") ||
+    location === "/grudge-brawl" || location.startsWith("/grudge-brawl?") ||
+    location === "/overdrive-racing" || location.startsWith("/overdrive-racing?") ||
+    location === "/overdrive-3d" || location.startsWith("/overdrive-3d?") ||
+    location === "/annihilate-demo" || location.startsWith("/annihilate-demo?") ||
+    location === "/grudge-controller" || location.startsWith("/grudge-controller?");
+  const isPortalEmbed =
+    typeof window !== "undefined" &&
+    (window.self !== window.top ||
+      new URLSearchParams(window.location.search).get("embed") === "1");
+  const minimalChrome = isViewerHost || isConanHost || isViewerRoute || isForgeGameRoute || isPortalEmbed;
+
+  return (
+    <TooltipProvider>
+      <Toaster />
+      {!minimalChrome && <Header />}
+      <Router />
+      {!minimalChrome && (
+        <>
+          <GrudgePanelTab />
+          <AdminEntryButton />
+          {/* Pill only on portal chrome — not over full-screen forge/game canvases */}
+          <FleetConnectInit />
+        </>
+      )}
+    </TooltipProvider>
   );
 }
 
@@ -132,13 +286,7 @@ function App() {
       <AuthProvider>
         <AuthModalProvider>
           <GrudgePanelProvider>
-            <TooltipProvider>
-              <Toaster />
-              <Header />
-              <Router />
-              <GrudgePanelTab />
-              <AdminEntryButton />
-            </TooltipProvider>
+            <AppShell />
           </GrudgePanelProvider>
         </AuthModalProvider>
       </AuthProvider>

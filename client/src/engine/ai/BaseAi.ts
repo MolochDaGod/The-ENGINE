@@ -21,6 +21,8 @@ import { BaseCharacter } from '../character/BaseCharacter';
 import { GrudgeEngine, Updatable } from '../core/GrudgeEngine';
 import { GROUP_TRIGGER, GROUP_ROLE } from '../core/collisionGroups';
 
+export type BaseAiTargetFilter = (contacted: BaseCharacter) => boolean;
+
 export class BaseAi implements Updatable {
   character:    BaseCharacter;
   target:       BaseCharacter | null = null;
@@ -28,6 +30,8 @@ export class BaseAi implements Updatable {
   enabled:      boolean = true;
   isAttack:     boolean = true;
   isMove:       boolean = true;
+  /** Optional team filter (Avernus allies vs enemies). Default: any character. */
+  targetFilter: BaseAiTargetFilter | null = null;
 
   protected _engine:          GrudgeEngine;
   protected _detector:        CANNON.Body;
@@ -39,11 +43,13 @@ export class BaseAi implements Updatable {
     character:          BaseCharacter,
     distance            = 1,
     initialPosTolerance = 1,
+    targetFilter:       BaseAiTargetFilter | null = null,
   ) {
     this.character        = character;
     this.distance         = distance;
     this._posToleranceSq  = initialPosTolerance ** 2;
     this._engine          = GrudgeEngine.getInstance();
+    this.targetFilter     = targetFilter;
 
     // Store the spawn position as the "home" position
     this._initialPos = new THREE.Vector3(
@@ -68,7 +74,9 @@ export class BaseAi implements Updatable {
     // beginContact / endContact arrive via world-level bubbling in GrudgeEngine
     this._detector.addEventListener('beginContact', (event: any) => {
       const contacted: BaseCharacter | null = event.body?.belongTo ?? null;
-      if (contacted?.isCharacter) this.setTarget(contacted);
+      if (!contacted?.isCharacter) return;
+      if (this.targetFilter && !this.targetFilter(contacted)) return;
+      this.setTarget(contacted);
     });
     this._detector.addEventListener('endContact', (event: any) => {
       const contacted: BaseCharacter | null = event.body?.belongTo ?? null;

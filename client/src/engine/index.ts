@@ -37,8 +37,22 @@ export type { CharacterOptions, CharacterRace, RaceConfig } from './character/Ba
 export { RACE_CONFIGS, DEFAULT_RACE }    from './character/BaseCharacter';
 
 export { Attacker }                      from './character/Attacker';
-export { RoleControls }                  from './character/RoleControls';
+export { RoleControls, ROLE_HOTKEYS }    from './character/RoleControls';
 export { FootIK }                        from './character/FootIK';
+
+// Grudge6 Toon-RTS multi-mesh equipment (unarmed default)
+export {
+  loadRaceWithEquipment,
+  loadRaceWardrobeGlb,
+  setRaceEquipmentMode,
+  prefabFromRaceClass,
+  resolveCharacterPrefab,
+  prepareRaceMaterials,
+  normalizeRaceModel,
+  raceGlbCandidates,
+  raceFbxCandidates,
+} from './character/RaceEquipment';
+export type { RaceEquipmentLoadResult } from './character/RaceEquipment';
 
 // ── Character States (Sketchbook-style class-based FSM) ─────────────────────
 export type { ICharacterState }          from './character/states/ICharacterState';
@@ -63,5 +77,32 @@ export { HarvestingBase, Mining, Herbalism, Woodcutting, Fishing, Skinning } fro
 // Interaction
 export { Mounting, Dismounting, Emoting } from './character/states/_stateLibrary';
 
+// ── Systems ───────────────────────────────────────────────────────────────────
+export { CombatVfx }                     from './systems/CombatVfx';
+export type { VfxKind }                  from './systems/CombatVfx';
+export { GameCamera }                    from './systems/GameCamera';
+export type { CameraMode }               from './systems/GameCamera';
+export { CombatSystem }                  from './systems/CombatSystem';
+
 // ── AI ─────────────────────────────────────────────────────────────────────────────
 export { BaseAi }                        from './ai/BaseAi';
+
+// ── Unified player controller (grudge-control + artifact animator) ─────────────
+export {
+  GrudgePlayerController,
+  GrudgeFighterAi,
+  GRUDGE_CHARACTERS,
+  GRUDGE_CDN,
+  meleeStrike,
+  buildOWR,
+  loadControlSettings,
+  InputState,
+  LocomotionBlend,
+} from './controller';
+export type {
+  GrudgePlayerControllerOptions,
+  GrudgeCharacterEntry,
+  AiTarget,
+  ControlSettings,
+  LocoBlendInput,
+} from './controller';

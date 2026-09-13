@@ -12,6 +12,8 @@ import { eq, or, and, desc, ilike, sql, count } from "drizzle-orm";
 import { db } from "../db";
 import { users, friends, tournaments, tournamentEntries, tournamentMatches } from "@shared/schema";
 import { getPlayer, requirePlayer } from "../auth";
+import { isUserOnline } from "../chat-presence";
+import { dmRoomId } from "../treaty-chat";
 import crypto from "crypto";
 
 // ── Admin auth helper (matches routes.ts pattern) ────────────────
@@ -308,10 +310,9 @@ export function registerStudioFeatures(app: Express) {
         return {
           friendshipId: r.id,
           ...friendUser,
-          // Online = last login within 5 minutes
-          isOnline: friendUser?.lastLoginAt
-            ? Date.now() - new Date(friendUser.lastLoginAt).getTime() < 5 * 60 * 1000
-            : false,
+          // Live Treaty WS presence (not last_login guess)
+          isOnline: isUserOnline(friendId),
+          dmRoom: dmRoomId(player.id, friendId),
         };
       });
 

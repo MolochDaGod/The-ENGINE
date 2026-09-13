@@ -1,9 +1,11 @@
+import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Coins, Copy, ExternalLink, Loader2, Plus, Trash2, Wallet } from "lucide-react";
 import type { PlayerProfile } from "@/lib/player-auth";
+import { apiUrl, solanaExplorerAccountUrl } from "@/lib/api-config";
 
 interface WalletRow {
   id: number;
@@ -23,8 +25,8 @@ interface TransactionRow {
   createdAt: string;
 }
 
-async function fetchJSON<T>(url: string): Promise<T> {
-  const res = await fetch(url, { credentials: "include" });
+async function fetchJSON<T>(path: string): Promise<T> {
+  const res = await fetch(apiUrl(path), { credentials: "include" });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }
@@ -39,10 +41,34 @@ function shortenAddress(addr: string) {
 
 export default function AccountWallet({ player }: { player: PlayerProfile }) {
   const queryClient = useQueryClient();
+  const [walletError, setWalletError] = useState<string | null>(null);
+  const [walletBusy, setWalletBusy] = useState<string | null>(null);
+  const [detected, setDetected] = useState<
+    Array<{ id: string; name: string; icon: string; available: boolean }>
+  >([]);
+
+  useEffect(() => {
+    void import("@/lib/solana-wallets").then((m) => {
+      setDetected(m.detectSolanaWallets());
+    });
+  }, []);
 
   const walletsQuery = useQuery<WalletRow[]>({
     queryKey: ["/api/me/wallets"],
     queryFn: () => fetchJSON<WalletRow[]>("/api/me/wallets"),
+  });
+
+  const chainQuery = useQuery<{
+    sol: number;
+    lamports: number;
+    type: string | null;
+    ownerProgram: string | null;
+    source: string;
+  }>({
+    queryKey: ["/api/web3/account", player.solanaAddress],
+    queryFn: () => fetchJSON(`/api/web3/account/${player.solanaAddress}`),
+    enabled: !!player.solanaAddress,
+    staleTime: 30_000,
   });
 
   const txQuery = useQuery<TransactionRow[]>({
@@ -52,19 +78,29 @@ export default function AccountWallet({ player }: { player: PlayerProfile }) {
 
   const removeWallet = useMutation({
     mutationFn: async (walletId: number) => {
-      const res = await fetch(`/api/me/wallets/${walletId}`, { method: "DELETE", credentials: "include" });
+      const res = await fetch(apiUrl(`/api/me/wallets/${walletId}`), { method: "DELETE", credentials: "include" });
       if (!res.ok) throw new Error("Failed to remove wallet");
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/me/wallets"] }),
   });
 
-  const connectPhantom = async () => {
+  const connectSolana = async (provider: string = "auto") => {
+    setWalletError(null);
+    setWalletBusy(provider);
     try {
       const { phantomSignIn } = await import("@/lib/player-auth");
-      await phantomSignIn("auto");
+      const result = await phantomSignIn(provider as any);
+      if (!result.ok) {
+        setWalletError(result.error);
+        return;
+      }
       queryClient.invalidateQueries({ queryKey: ["/api/me/wallets"] });
-    } catch {
-      // handled by phantomSignIn
+      // Refresh page session so primary solanaAddress updates
+      window.location.reload();
+    } catch (e: any) {
+      setWalletError(e?.message || "Wallet connect failed");
+    } finally {
+      setWalletBusy(null);
     }
   };
 
@@ -84,22 +120,85 @@ export default function AccountWallet({ player }: { player: PlayerProfile }) {
             <div>
               <div className="text-[10px] text-[hsl(45,15%,50%)] uppercase tracking-wider font-body">Primary Solana Wallet</div>
               <div className="text-sm font-mono text-[hsl(270,60%,70%)]">{player.solanaAddress}</div>
+              {chainQuery.data && (
+                <div className="mt-1 text-xs font-mono text-[hsl(45,20%,70%)]">
+                  {chainQuery.data.sol.toFixed(4)} SOL
+                  <span className="ml-2 text-[hsl(45,15%,45%)]">
+                    {chainQuery.data.source === "solscan-pro" ? "Solscan Pro" : "RPC"}
+                  </span>
+                </div>
+              )}
             </div>
             <div className="flex items-center gap-1">
               <button onClick={() => copyText(player.solanaAddress!)} className="text-[hsl(45,15%,45%)] hover:text-[hsl(270,60%,70%)] transition p-1">
                 <Copy className="w-3.5 h-3.5" />
               </button>
-              <a href={`https://solscan.io/account/${player.solanaAddress}?cluster=devnet`} target="_blank" rel="noopener noreferrer" className="text-[hsl(45,15%,45%)] hover:text-[hsl(270,60%,70%)] transition p-1">
+              <a href={solanaExplorerAccountUrl(player.solanaAddress!)} target="_blank" rel="noopener noreferrer" className="text-[hsl(45,15%,45%)] hover:text-[hsl(270,60%,70%)] transition p-1">
                 <ExternalLink className="w-3.5 h-3.5" />
               </a>
             </div>
           </div>
         )}
-        {!player.solanaAddress && (
-          <Button onClick={connectPhantom} className="gilded-button w-full sm:w-auto">
-            <Wallet className="w-4 h-4 mr-2" /> Connect Phantom Wallet
-          </Button>
-        )}
+        <div className="mt-3 space-y-2">
+          <div className="text-[10px] uppercase tracking-wider text-[hsl(45,15%,50%)] font-body">
+            Connect Solana wallet (multi-wallet · no Phantom Auth2)
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              onClick={() => connectSolana("auto")}
+              className="gilded-button"
+              disabled={!!walletBusy}
+            >
+              {walletBusy === "auto" ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Wallet className="w-4 h-4 mr-2" />
+              )}
+              {player.solanaAddress ? "Reconnect / switch wallet" : "Connect detected wallet"}
+            </Button>
+            {detected
+              .filter((w) => w.available && w.id !== "injected")
+              .map((w) => (
+                <Button
+                  key={w.id}
+                  size="sm"
+                  variant="outline"
+                  className="border-[hsl(270,50%,40%)]/40 text-xs"
+                  disabled={!!walletBusy}
+                  onClick={() => connectSolana(w.id)}
+                >
+                  {walletBusy === w.id ? (
+                    <Loader2 className="w-3 h-3 mr-1 animate-spin" />
+                  ) : (
+                    <span className="mr-1">{w.icon}</span>
+                  )}
+                  {w.name}
+                </Button>
+              ))}
+          </div>
+          {!detected.some((w) => w.available) && (
+            <p className="text-xs text-amber-200/90 font-body">
+              No wallet extension detected. Install{" "}
+              <a className="underline" href="https://phantom.app" target="_blank" rel="noreferrer">
+                Phantom
+              </a>
+              ,{" "}
+              <a className="underline" href="https://solflare.com" target="_blank" rel="noreferrer">
+                Solflare
+              </a>
+              , or{" "}
+              <a className="underline" href="https://backpack.app" target="_blank" rel="noreferrer">
+                Backpack
+              </a>
+              , then refresh.
+            </p>
+          )}
+          {walletError && (
+            <p className="text-xs text-red-300 font-body border border-red-500/30 rounded p-2 bg-red-500/10">
+              {walletError}
+            </p>
+          )}
+        </div>
       </section>
 
       {/* GBUX Purchase Packages */}

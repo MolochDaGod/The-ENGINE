@@ -11,7 +11,11 @@ import { GameCover } from "@/components/game-cover";
 
 interface PlayerStats {
   gamesPlayed: number;
+  retroGamesPlayed?: number;
+  fleetGamesPlayed?: number;
   totalScores: number;
+  retroScores?: number;
+  fleetPlays?: number;
   personalBests: number;
   globalRecords: number;
   challengesWon: number;
@@ -52,11 +56,130 @@ export default function AccountOverview({ player }: { player: PlayerProfile }) {
     queryFn: () => fetchJSON<RecentScore[]>("/api/me/scores?limit=8"),
   });
 
+  const competitiveQuery = useQuery<{
+    games: Array<{
+      gameId: number;
+      title: string;
+      platform: string;
+      thumbnailUrl: string | null;
+      modes: string[];
+      bestScore: number | null;
+      playUrl: string;
+      leaderboardUrl: string;
+    }>;
+    submitted: number;
+    total: number;
+  }>({
+    queryKey: ["/api/me/competitive"],
+    queryFn: () => fetchJSON("/api/me/competitive"),
+  });
+
+  const universeQuery = useQuery({
+    queryKey: ["/api/me/universe"],
+    queryFn: () =>
+      fetchJSON<{
+        characters: unknown[];
+        decks: unknown[];
+        islands: unknown[];
+        bootstrapped?: { deck?: boolean; island?: boolean };
+      }>("/api/me/universe"),
+  });
+
   const stats = statsQuery.data;
   const gbux = stats?.gbuxBalance ?? player.gbuxBalance ?? "0";
+  const universe = universeQuery.data;
+  const competitive = competitiveQuery.data;
 
   return (
     <div className="space-y-6">
+      {/* Rec0deD competitive — same users.id + game_library.id as scores */}
+      <section className="fantasy-panel p-5 space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div>
+            <div className="text-[10px] uppercase tracking-wider text-[hsl(43,85%,55%)] font-body">
+              Rec0deD · Competitive Top 10
+            </div>
+            <h3 className="font-heading text-lg text-[hsl(45,30%,92%)]" style={{ WebkitTextFillColor: "unset" }}>
+              Your scores on shared games DB
+            </h3>
+            <p className="text-[11px] text-[hsl(45,15%,55%)] font-body mt-0.5">
+              Account <code className="text-[hsl(43,85%,55%)]">{player.grudgeId}</code> ·{" "}
+              {competitiveQuery.isLoading
+                ? "loading…"
+                : `${competitive?.submitted ?? 0}/${competitive?.total ?? 10} boards submitted`}
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <Link href="/pvp">
+              <Button size="sm" className="gilded-button h-8">
+                <Swords className="w-3 h-3 mr-1" /> PvP hub
+              </Button>
+            </Link>
+            <Link href="/leaderboards?tab=competitive">
+              <Button size="sm" variant="outline" className="h-8 border-[hsl(43,60%,30%)]">
+                <Trophy className="w-3 h-3 mr-1" /> Boards
+              </Button>
+            </Link>
+          </div>
+        </div>
+        {competitiveQuery.isLoading ? (
+          <Loader2 className="w-5 h-5 animate-spin text-[hsl(43,85%,55%)]" />
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+            {(competitive?.games || []).slice(0, 10).map((g) => (
+              <Link key={g.gameId} href={g.playUrl} className="block">
+                <div className="rounded border border-[hsl(43,60%,30%)]/25 overflow-hidden hover:rune-glow transition-all bg-[hsl(225,25%,10%)]">
+                  <div className="aspect-[3/4] relative bg-[hsl(225,25%,12%)]">
+                    <GameCover
+                      src={g.thumbnailUrl}
+                      alt={g.title}
+                      className="absolute inset-0 w-full h-full object-cover"
+                    />
+                  </div>
+                  <div className="p-1.5">
+                    <div className="text-[10px] font-heading truncate">{g.title}</div>
+                    <div className="text-[10px] text-[hsl(43,85%,55%)] font-body">
+                      {g.bestScore != null ? g.bestScore.toLocaleString() : "— play"}
+                    </div>
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* Universe loops strip */}
+      <section className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <Link href="/account">
+          <div className="fantasy-panel p-4 h-full hover:rune-glow transition-all cursor-pointer">
+            <div className="text-[10px] uppercase tracking-wider text-[hsl(45,15%,55%)] font-body">Warlords heroes</div>
+            <div className="text-2xl font-heading gold-text mt-1">
+              {universeQuery.isLoading ? "…" : universe?.characters?.length ?? 0}
+            </div>
+            <p className="text-[11px] text-[hsl(45,15%,55%)] font-body mt-1">Claimed characters · open Characters tab</p>
+          </div>
+        </Link>
+        <div className="fantasy-panel p-4 h-full">
+          <div className="text-[10px] uppercase tracking-wider text-[hsl(45,15%,55%)] font-body">Nexus decks</div>
+          <div className="text-2xl font-heading gold-text mt-1">
+            {universeQuery.isLoading ? "…" : universe?.decks?.length ?? 0}
+          </div>
+          <p className="text-[11px] text-[hsl(45,15%,55%)] font-body mt-1">
+            {universe?.bootstrapped?.deck ? "Starter provisioned · " : ""}Decks tab
+          </p>
+        </div>
+        <div className="fantasy-panel p-4 h-full">
+          <div className="text-[10px] uppercase tracking-wider text-[hsl(45,15%,55%)] font-body">Home islands</div>
+          <div className="text-2xl font-heading gold-text mt-1">
+            {universeQuery.isLoading ? "…" : universe?.islands?.length ?? 0}
+          </div>
+          <p className="text-[11px] text-[hsl(45,15%,55%)] font-body mt-1">
+            {universe?.bootstrapped?.island ? "Home plot ready · " : ""}Islands tab
+          </p>
+        </div>
+      </section>
+
       {/* Profile Card — based on GrudgeBuilder AccountPage pattern */}
       <section className="fantasy-panel p-6 md:p-8">
         <div className="flex flex-col md:flex-row md:items-center gap-6">
@@ -77,14 +200,30 @@ export default function AccountOverview({ player }: { player: PlayerProfile }) {
             )}
             <div>
               <h2 className="text-xl font-bold font-heading gold-text" style={{ WebkitTextFillColor: "unset" }}>
+                {/* Prefer displayName; username may be an old puter/guest handle (e.g. "decjs") */}
                 {player.displayName || player.username}
               </h2>
               <div className="text-sm text-[hsl(45,15%,60%)] font-body mt-0.5 flex flex-wrap gap-2 items-center">
                 <span>@{player.username}</span>
+                {player.displayName &&
+                  player.displayName.toLowerCase() !== player.username.toLowerCase() && (
+                    <Badge
+                      variant="outline"
+                      className="border-amber-500/40 text-amber-200 text-[10px]"
+                      title="Portal login handle differs from display name — fleet Discord/Solana is identity SSOT"
+                    >
+                      login handle ≠ display
+                    </Badge>
+                  )}
                 <Badge variant="outline" className="border-[hsl(43,60%,30%)] text-[hsl(43,85%,55%)] uppercase text-[10px]">
                   {player.role || "player"}
                 </Badge>
               </div>
+              {player.grudgeId && (
+                <p className="text-[10px] font-mono text-[hsl(45,15%,50%)] mt-1">
+                  Grudge ID · {player.grudgeId}
+                </p>
+              )}
               {player.bio && (
                 <p className="text-xs text-[hsl(45,15%,55%)] font-body mt-1 max-w-md">{player.bio}</p>
               )}
@@ -162,7 +301,10 @@ export default function AccountOverview({ player }: { player: PlayerProfile }) {
           <div className="py-8 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-[hsl(43,85%,55%)]" /></div>
         ) : !scoresQuery.data?.length ? (
           <p className="text-sm text-[hsl(45,15%,60%)] font-body">
-            No scores yet. Play a game in the <Link href="/games" className="text-[hsl(43,85%,55%)] hover:underline">retro library</Link> to get started.
+            No retro scores yet. Launch a fleet game from{" "}
+            <Link href="/account" className="text-[hsl(43,85%,55%)] hover:underline">Games</Link>
+            {" "}or play classics in the{" "}
+            <Link href="/games" className="text-[hsl(43,85%,55%)] hover:underline">retro library</Link>.
           </p>
         ) : (
           <ul className="divide-y divide-[hsl(43,60%,30%)]/15">

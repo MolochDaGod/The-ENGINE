@@ -67,8 +67,12 @@ export interface CharacterPrefab {
   };
   /** Starting skill tree (first 3 skills per class) */
   skills: SkillTreeEntry[];
-  /** Icon URL on GitHub CDN */
+  /** Primary card icon (race portrait from assets CDN) */
   iconUrl: string;
+  /** Canonical race icon — assets.grudge-studio.com/icons/pack/races */
+  raceIconUrl: string;
+  /** Canonical class icon — assets.grudge-studio.com/icons/pack/classes */
+  classIconUrl: string;
   /** Class color for UI */
   classColor: string;
   /** Lore snippet */
@@ -88,7 +92,36 @@ const RACE_META: Record<RaceId, { prefix: string; faction: FactionId; modelDir: 
   undead:    { prefix: "UD_",  faction: "legion",  modelDir: "Undead" },
 };
 
-const ICONS_BASE = "https://molochdagod.github.io/ObjectStore/icons";
+const ASSETS_CDN = "https://assets.grudge-studio.com";
+/** Open launcher race faces (verified PNG) — secondary portrait source. */
+const OPEN_RACES = "https://open.grudge-studio.com/races";
+
+export function prefabRaceIconUrl(race: RaceId): string {
+  return `${ASSETS_CDN}/icons/pack/races/${race}.png`;
+}
+
+export function prefabClassIconUrl(classId: ClassId): string {
+  // CDN has worge + worg aliases
+  const key = classId === "worge" ? "worge" : classId;
+  return `${ASSETS_CDN}/icons/pack/classes/${key}.png`;
+}
+
+/**
+ * Ordered portrait candidates for a race×class hero card.
+ * Prefer race icon (always on CDN); Open race PNG; class badge as last.
+ */
+export function prefabPortraitCandidates(
+  race: RaceId,
+  classId: ClassId,
+): string[] {
+  return [
+    prefabRaceIconUrl(race),
+    `${OPEN_RACES}/${race}.png`,
+    // Open uses high_elf for some elves
+    race === "elf" ? `${OPEN_RACES}/elf.png` : "",
+    prefabClassIconUrl(classId),
+  ].filter(Boolean);
+}
 
 // ═══════════════════════════════════════════════════════════════════
 // CLASS DEFINITIONS (shared across races)
@@ -125,7 +158,7 @@ const CLASS_CONFIGS: Record<ClassId, {
   mage: {
     animPack: "magic",
     equipment: {
-      head: null,
+      head: "A", // bare / default head mesh (not helmetless-invisible)
       shoulders: null,
       rightHand: null, rightHandType: null,
       leftHand: "A", leftHandType: "staff",
@@ -146,7 +179,7 @@ const CLASS_CONFIGS: Record<ClassId, {
   ranger: {
     animPack: "longbow",
     equipment: {
-      head: null,
+      head: "A",
       shoulders: null,
       rightHand: null, rightHandType: null,
       leftHand: null, leftHandType: "bow",
@@ -167,7 +200,7 @@ const CLASS_CONFIGS: Record<ClassId, {
   worge: {
     animPack: "2h_melee",
     equipment: {
-      head: null,
+      head: "A",
       shoulders: null,
       rightHand: "A", rightHandType: "axe",
       leftHand: null, leftHandType: null,
@@ -209,22 +242,68 @@ function buildPrefab(race: RaceId, classId: ClassId): CharacterPrefab {
     legion: "char_enemy",
   };
 
-  // Starting armor variant per class
-  const armorVariant: Record<ClassId, { body: string; arms: string; legs: string }> = {
-    warrior: { body: "A", arms: "A", legs: "A" },  // Heavy plate
-    mage:    { body: "C", arms: "C", legs: "B" },  // Light robes
-    ranger:  { body: "B", arms: "B", legs: "B" },  // Medium leather
-    worge:   { body: "D", arms: "A", legs: "C" },  // Primal/light
+  // Starting armor variant per class (material: metal / leather / cloth / mix)
+  // head letter = face/helm mesh variant. Prefer "A" bare/default when unhelmeted —
+  // never leave head unset at runtime (see character-meshes pickHeadMesh).
+  const armorVariant: Record<ClassId, { body: string; arms: string; legs: string; head: string | null; shoulders: string | null }> = {
+    warrior: { body: "A", arms: "A", legs: "A", head: "A", shoulders: "A" }, // Metal plate + helm A
+    mage:    { body: "C", arms: "C", legs: "B", head: "A", shoulders: null }, // Cloth + bare head A
+    ranger:  { body: "B", arms: "B", legs: "B", head: "A", shoulders: null }, // Leather + bare head A
+    worge:   { body: "D", arms: "A", legs: "C", head: "A", shoulders: null }, // Mix + bare head A
+  };
+
+  /**
+   * Per-hero T0/T1 practice weapons — faction partners never share the same kit.
+   * Crusade: human/barbarian · Fabled: elf/dwarf · Legion: orc/undead
+   * Warriors: one sword+shield, one sword+dagger per faction.
+   * Rangers: gun/bow/crossbow/spear/dagger/mace (unique per race).
+   * Mages: unique T1 staff family per race.
+   * Worges: 2H hammer/mace/axe/nature staff.
+   */
+  type HandKit = Pick<
+    EquipmentSlots,
+    "rightHand" | "rightHandType" | "leftHand" | "leftHandType" | "shield" | "utility"
+  >;
+  const raceWeaponKit: Record<string, HandKit> = {
+    // Warriors — metal
+    human_warrior:     { rightHand: "A", rightHandType: "sword", leftHand: null, leftHandType: null, shield: "A", utility: [] },
+    barbarian_warrior: { rightHand: "A", rightHandType: "sword", leftHand: "A", leftHandType: "dagger", shield: null, utility: [] },
+    elf_warrior:       { rightHand: "A", rightHandType: "sword", leftHand: null, leftHandType: null, shield: "A", utility: [] },
+    dwarf_warrior:     { rightHand: "A", rightHandType: "sword", leftHand: "A", leftHandType: "dagger", shield: null, utility: [] },
+    orc_warrior:       { rightHand: "A", rightHandType: "sword", leftHand: null, leftHandType: null, shield: "A", utility: [] },
+    undead_warrior:    { rightHand: "A", rightHandType: "sword", leftHand: "A", leftHandType: "dagger", shield: null, utility: [] },
+    // Rangers — leather · T0 unique weapons
+    human_ranger:      { rightHand: null, rightHandType: null, leftHand: "A", leftHandType: "bow", shield: null, utility: ["quiver"] },
+    barbarian_ranger:  { rightHand: "A", rightHandType: "pick", leftHand: null, leftHandType: null, shield: null, utility: [] }, // T0 gun proxy
+    elf_ranger:        { rightHand: null, rightHandType: null, leftHand: "B", leftHandType: "bow", shield: null, utility: ["quiver"] }, // crossbow→bow mesh
+    dwarf_ranger:      { rightHand: "A", rightHandType: "spear", leftHand: null, leftHandType: null, shield: null, utility: [] },
+    orc_ranger:        { rightHand: "A", rightHandType: "dagger", leftHand: null, leftHandType: null, shield: null, utility: [] },
+    undead_ranger:     { rightHand: "A", rightHandType: "mace", leftHand: null, leftHandType: null, shield: null, utility: [] },
+    // Mages — cloth · T1 staffs
+    human_mage:        { rightHand: null, rightHandType: null, leftHand: "A", leftHandType: "staff", shield: null, utility: [] },
+    barbarian_mage:    { rightHand: null, rightHandType: null, leftHand: "B", leftHandType: "staff", shield: null, utility: [] },
+    elf_mage:          { rightHand: null, rightHandType: null, leftHand: "C", leftHandType: "staff", shield: null, utility: [] },
+    dwarf_mage:        { rightHand: null, rightHandType: null, leftHand: "A", leftHandType: "staff", shield: null, utility: [] },
+    orc_mage:          { rightHand: null, rightHandType: null, leftHand: "B", leftHandType: "staff", shield: null, utility: [] },
+    undead_mage:       { rightHand: null, rightHandType: null, leftHand: "C", leftHandType: "staff", shield: null, utility: [] },
+    // Worges — leather/cloth · 2H
+    human_worge:       { rightHand: "A", rightHandType: "axe", leftHand: null, leftHandType: null, shield: null, utility: [] },
+    barbarian_worge:   { rightHand: "A", rightHandType: "hammer", leftHand: null, leftHandType: null, shield: null, utility: [] },
+    elf_worge:         { rightHand: null, rightHandType: null, leftHand: "A", leftHandType: "staff", shield: null, utility: [] }, // nature staff
+    dwarf_worge:       { rightHand: "A", rightHandType: "mace", leftHand: null, leftHandType: null, shield: null, utility: [] },
+    orc_worge:         { rightHand: "B", rightHandType: "axe", leftHand: null, leftHandType: null, shield: null, utility: [] },
+    undead_worge:      { rightHand: "B", rightHandType: "hammer", leftHand: null, leftHandType: null, shield: null, utility: [] },
   };
 
   const armor = armorVariant[classId];
-  const classIcon: Record<ClassId, string> = {
-    warrior: "abilities/ability_shield_bash",
-    mage: "abilities/ability_arcane_bolt",
-    ranger: "abilities/ability_arrow_storm",
-    worge: "abilities/ability_bear_form",
+  const hands = raceWeaponKit[`${race}_${classId}`] ?? {
+    rightHand: classCfg.equipment.rightHand,
+    rightHandType: classCfg.equipment.rightHandType,
+    leftHand: classCfg.equipment.leftHand,
+    leftHandType: classCfg.equipment.leftHandType,
+    shield: classCfg.equipment.shield,
+    utility: classCfg.equipment.utility,
   };
-
   const loreMap: Record<string, string> = {
     human_warrior: "A disciplined soldier of the Western Kingdoms, trained in sword and shield from birth.",
     human_mage: "A scholar of Odin's wisdom, channeling arcane forces through ancient staves.",
@@ -265,19 +344,21 @@ function buildPrefab(race: RaceId, classId: ClassId): CharacterPrefab {
       body: armor.body,
       arms: armor.arms,
       legs: armor.legs,
-      head: classCfg.equipment.head,
-      shoulders: classCfg.equipment.shoulders,
-      rightHand: classCfg.equipment.rightHand,
-      rightHandType: classCfg.equipment.rightHandType,
-      leftHand: classCfg.equipment.leftHand,
-      leftHandType: classCfg.equipment.leftHandType,
-      shield: classCfg.equipment.shield,
-      utility: classCfg.equipment.utility,
+      head: armor.head,
+      shoulders: armor.shoulders,
+      rightHand: hands.rightHand,
+      rightHandType: hands.rightHandType,
+      leftHand: hands.leftHand,
+      leftHandType: hands.leftHandType,
+      shield: hands.shield,
+      utility: hands.utility,
     },
     animationPack: classCfg.animPack,
     baseStats: { ...classCfg.baseStats },
     skills: classCfg.skills.map(s => ({ ...s })),
-    iconUrl: `${ICONS_BASE}/${classIcon[classId]}.png`,
+    iconUrl: prefabRaceIconUrl(race),
+    raceIconUrl: prefabRaceIconUrl(race),
+    classIconUrl: prefabClassIconUrl(classId),
     classColor: classCfg.color,
     lore: loreMap[`${race}_${classId}`] || `A ${raceNames[race]} ${classNames[classId]} of the ${raceMeta.faction} faction.`,
   };
@@ -324,7 +405,8 @@ export function getEquipmentMeshNames(prefab: CharacterPrefab): string[] {
   meshes.push(`${p}Units_Body_${e.body}`);
   meshes.push(`${p}Units_Arms_${e.arms}`);
   meshes.push(`${p}Units_Legs_${e.legs}`);
-  if (e.head) meshes.push(`${p}Units_head_${e.head}`);
+  // Always declare a head mesh id (bare default A when unset)
+  meshes.push(`${p}Units_head_${e.head || "A"}`);
   if (e.shoulders) meshes.push(`${p}Units_shoulderpads_${e.shoulders}`);
   if (e.rightHand && e.rightHandType) meshes.push(`${p}Units_${e.rightHandType}_${e.rightHand}`);
   if (e.leftHand && e.leftHandType) {

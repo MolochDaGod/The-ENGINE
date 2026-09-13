@@ -8,18 +8,25 @@ Path alias: `/auth/*` is automatically rewritten to `/api/auth/*` at the Cloudfl
 
 ## Session model
 
-Every successful auth call sets an **HttpOnly** session cookie:
+**Identity SSOT** is Grudge ID → Railway `grudge-api-production` (`id.grudge-studio.com`).  
+The engine **does not** mint a second login. It accepts the fleet JWT and links a portal `users` row by `grudge_id` / `fleet_user_id` for scores and game saves.
 
-| Attribute | Value |
+| Source | How the engine takes it |
 |---|---|
-| Name | `gs_player_session` |
-| Domain | `.grudge-studio.com` (shared across all subdomains) |
-| SameSite | `None` (cross-site requests supported) |
+| `Authorization: Bearer <jwt>` | Fleet Grudge ID session JWT (`userId` UUID + `grudgeId`) |
+| `grudge_auth_token` / `sso_token` cookie or localStorage | Same JWT, dual-written by bootstrap |
+| `?sso_token=` / `?grudge_token=` | Handoff; bootstrap posts `/api/auth/session/exchange` |
+| `gs_player_session` cookie | Engine HMAC session **after** a successful fleet link |
+
+| Attribute | Engine cookie (`gs_player_session`) |
+|---|---|
+| Domain | `.grudge-studio.com` |
+| SameSite | `None` (cross-site) / `Lax` in dev |
 | Secure | `true` in production |
 | Max-Age | 7 days |
 
-All subsequent requests must include `credentials: "include"` so the cookie is sent.
-No `Authorization` header is required or used.
+Send `credentials: "include"` **and** `Authorization: Bearer` when a fleet token is in localStorage.
+`POST /api/auth/session/exchange` bridges fleet/launch JWT → engine cookie.
 
 ---
 
@@ -61,7 +68,8 @@ No auth required.
 ### Session management
 
 #### `GET /api/auth/me`
-Returns the current session's `PlayerProfile` or `401 { "error": "Not authenticated" }`.
+Returns the current session's `PlayerProfile` or `401 { "error": "Not authenticated" }`.  
+Accepts engine cookie **or** `Authorization: Bearer` fleet JWT. On fleet JWT, also sets `gs_player_session`.
 
 #### `POST /api/auth/logout`
 Clears the session cookie.

@@ -14,6 +14,21 @@
 
 import * as THREE from 'three';
 import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { clone as skeletonClone } from 'three/examples/jsm/utils/SkeletonUtils.js';
+
+/** Independent instance — SkeletonUtils for skinned characters; plain clone for rigid props. */
+function cloneSceneGraph(source: THREE.Object3D, skinned: boolean): THREE.Group {
+  if (skinned) return skeletonClone(source) as THREE.Group;
+  return source.clone(true) as THREE.Group;
+}
+
+function hasSkinnedMesh(root: THREE.Object3D): boolean {
+  let found = false;
+  root.traverse((o) => {
+    if ((o as THREE.SkinnedMesh).isSkinnedMesh) found = true;
+  });
+  return found;
+}
 
 // ═══════════════════════════════════════════════════════════════════
 // CDN + Object Storage Config
@@ -88,9 +103,14 @@ export const ASSET_MANIFEST: Record<string, AssetEntry> = {
 // RTS Asset Mapping — maps Grudge RTS data IDs to manifest keys
 // ═══════════════════════════════════════════════════════════════════
 
-/** Map RTS unit/building IDs to the best available 3D model */
+/**
+ * Map RTS unit/building IDs → legacy toon-shooter keys (fallback only).
+ * Wargus units now load via createGrudge6RtsUnit (full grudge6 race kits).
+ * Keep this map for buildings / resources / siege props.
+ */
 export const RTS_MODEL_MAP: Record<string, string> = {
-  // Crusade units
+  // Units — preferred path is grudge6 (rts-grudge6-units). These keys are
+  // legacy fallbacks if the grudge6 loader fails.
   'sky_serf':         'char_soldier',
   'valor_guard':      'char_soldier',
   'fate_lancer':      'char_soldier',
@@ -100,7 +120,6 @@ export const RTS_MODEL_MAP: Record<string, string> = {
   'wisdom_seer':      'char_hazmat',
   'raven_scout':      'char_soldier',
   'eye_watcher':      'char_hazmat',
-  // Fabled units
   'grove_tender':     'char_soldier',
   'root_warden':      'char_soldier',
   'stone_sentinel':   'char_soldier',
@@ -110,7 +129,6 @@ export const RTS_MODEL_MAP: Record<string, string> = {
   'nature_channeler': 'char_hazmat',
   'bark_scout':       'char_soldier',
   'sylph_watcher':    'char_hazmat',
-  // Legion units
   'thrall_worker':    'char_enemy',
   'chaos_grunt':      'char_enemy',
   'doom_berserker':   'char_enemy',
@@ -133,6 +151,37 @@ export const RTS_MODEL_MAP: Record<string, string> = {
   'gold':             'env_crate',
   'lumber':           'env_tree_1',
 };
+
+/**
+ * True when entity is a **character unit** (race kit + skeleton + anims).
+ * False for buildings (env_structure_*), siege vehicles (env_tank), resources.
+ * NEVER load grudge6 race kits for buildings / props.
+ */
+export function isGrudge6RtsUnit(entityId: string): boolean {
+  const key = RTS_MODEL_MAP[entityId];
+  if (!key) {
+    // Unknown IDs: only treat as character if not clearly a building/resource key
+    if (/hall|barracks|tower|farm|forge|mill|chapel|armory|stable|workshop|outpost|den|citadel|pit|archery/i.test(entityId)) {
+      return false;
+    }
+    return true;
+  }
+  if (key.startsWith('env_')) return false;
+  if (key.startsWith('char_')) return true;
+  return false;
+}
+
+/** Building / structure manifest keys — rigid mesh only, no skeleton/anim. */
+export function isRtsBuildingAsset(entityId: string): boolean {
+  const key = RTS_MODEL_MAP[entityId];
+  return !!key && key.startsWith('env_structure');
+}
+
+/** Siege / vehicle — rigid prop GLB, not human race kit. */
+export function isRtsVehicleAsset(entityId: string): boolean {
+  const key = RTS_MODEL_MAP[entityId];
+  return key === 'env_tank';
+}
 
 // ═══════════════════════════════════════════════════════════════════
 // Singleton Loader
@@ -211,20 +260,19 @@ export class GrudgeAssets {
     const url = this.resolveURL(keyOrPath);
     const gltf = this._cache.get(url);
     if (!gltf) return null;
-    const clone = gltf.scene.clone();
-    return clone;
+    return cloneSceneGraph(gltf.scene, hasSkinnedMesh(gltf.scene));
   }
 
   /**
-   * Load a model for an RTS entity. Uses RTS_MODEL_MAP to find the best match.
-   * Returns a colored fallback geometry if the model isn't available yet.
+   * Load a **prop/building/vehicle** GLB (not grudge6 characters).
+   * Rigid graph clone — do not SI-fit as a 1.8 m human.
    */
   async loadRTSModel(entityId: string, fallbackColor: number = 0x888888, fallbackScale: number = 1): Promise<THREE.Object3D> {
     const manifestKey = RTS_MODEL_MAP[entityId];
     if (manifestKey) {
       const gltf = await this.loadModel(manifestKey);
       if (gltf) {
-        const clone = gltf.scene.clone();
+        const clone = cloneSceneGraph(gltf.scene, hasSkinnedMesh(gltf.scene));
         clone.traverse((child) => {
           if ((child as THREE.Mesh).isMesh) {
             (child as THREE.Mesh).castShadow = true;
@@ -234,7 +282,6 @@ export class GrudgeAssets {
         return clone;
       }
     }
-    // Fallback: colored capsule
     return this.createFallbackMesh(fallbackColor, fallbackScale);
   }
 
@@ -477,26 +524,70 @@ export async function createAnimatedUnit(
   const gltf = await assets.loadModel(manifestKey);
   if (!gltf) return null;
 
-  // Clone scene and animations
-  const clone = gltf.scene.clone();
-  // Deep clone skeleton for independent animation
+  // Skeleton-safe clone when asset has skins (toon-shooter chars); plain for rigid tanks
+  const clone = cloneSceneGraph(gltf.scene, hasSkinnedMesh(gltf.scene));
   const clips = gltf.animations;
 
   return new AnimatedUnit(clone, clips, factionColor, scale);
 }
 
 /**
- * Create an animated unit for a specific RTS entity.
- * Maps entity ID → character model, applies faction color.
+ * Create a **unit** visual (never buildings).
+ *
+ * Pipeline split:
+ * - **Character units** (workers/soldiers): grudge6 race kit — full wardrobe GLB,
+ *   SkeletonUtils, armor mesh visibility, Bip001 clips, SI human height.
+ * - **Siege vehicles**: env_tank GLB, rigid scale, no race equip / human fit.
+ * - **Buildings**: do NOT call this — use createBuilding (boxes + Rapier cuboids).
  */
 export async function createRTSAnimatedUnit(
   entityId: string,
   factionColor: number,
   scale: number = 0.5,
-): Promise<AnimatedUnit | null> {
+  faction?: 'crusade' | 'fabled' | 'legion',
+): Promise<AnimatedUnit | Grudge6RtsUnitCompat | null> {
+  // Buildings must never enter this path
+  if (isRtsBuildingAsset(entityId)) {
+    console.warn('[createRTSAnimatedUnit] refused building id — use createBuilding', entityId);
+    return null;
+  }
+
+  if (isGrudge6RtsUnit(entityId)) {
+    try {
+      const { createGrudge6RtsUnit } = await import('@/lib/rts-grudge6-units');
+      // scale arg is legacy modelScale; map to SI metres for characters only
+      const targetHeight =
+        scale >= 0.75 ? 2.0 : scale >= 0.58 ? 1.9 : scale >= 0.52 ? 1.75 : 1.7;
+      const g6 = await createGrudge6RtsUnit({
+        unitId: entityId,
+        faction: faction ?? 'crusade',
+        factionColor,
+        targetHeight,
+      });
+      if (g6) return g6 as unknown as Grudge6RtsUnitCompat;
+    } catch (e) {
+      console.warn('[createRTSAnimatedUnit] grudge6 load failed, falling back', e);
+    }
+  }
+
+  // Vehicle / non-character unit (siege) — rigid prop path
   const manifestKey = RTS_MODEL_MAP[entityId];
-  if (!manifestKey) return null;
+  if (!manifestKey || manifestKey.startsWith('env_structure')) return null;
   return createAnimatedUnit(manifestKey, factionColor, scale);
+}
+
+/** Structural type matching Grudge6RtsUnit for wargus without circular imports. */
+export interface Grudge6RtsUnitCompat {
+  root: THREE.Group;
+  state: string;
+  isDead: boolean;
+  play(state: string | UnitAnimState): void;
+  update(dt: number): void;
+  setPosition(x: number, y: number, z: number): void;
+  lookAt(targetX: number, targetZ: number): void;
+  dispose(): void;
+  setCarrying?(resource: 'gold' | 'lumber' | null): void;
+  setFactionColor?(color: number): void;
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -530,11 +621,20 @@ export async function preloadWeapons(): Promise<void> {
 export async function preloadRTS(onProgress?: (loaded: number, total: number) => void): Promise<void> {
   const assets = getAssets();
   const keys = [
-    ...Object.keys(ASSET_MANIFEST).filter(k => k.startsWith('char_')),
     ...Object.keys(ASSET_MANIFEST).filter(k => k.startsWith('env_tree')),
     ...Object.keys(ASSET_MANIFEST).filter(k => k.startsWith('env_structure')),
     'env_crate', 'env_barrel', 'env_sandbag', 'env_tank',
-    'weapon_knife_1', 'weapon_short_cannon',
   ];
-  await assets.preload(keys, onProgress);
+  // Buildings/env first, then grudge6 race kits + unarmed locomotion
+  await assets.preload(keys, (loaded, total) => {
+    onProgress?.(loaded, total + 6);
+  });
+  try {
+    const { preloadGrudge6Rts } = await import('@/lib/rts-grudge6-units');
+    await preloadGrudge6Rts(['crusade', 'fabled', 'legion'], (loaded, total) => {
+      onProgress?.(keys.length + loaded, keys.length + total);
+    });
+  } catch (e) {
+    console.warn('[preloadRTS] grudge6 preload partial fail', e);
+  }
 }

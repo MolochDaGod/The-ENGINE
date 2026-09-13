@@ -55,7 +55,18 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
 import { useAuthModal } from "@/components/auth-modal";
+import { GameCover } from "@/components/game-cover";
 import { completeProfile } from "@/lib/player-auth";
+import {
+  buildJoinPayload,
+  buildSwitchRoomPayload,
+  getTreatyWsUrl,
+  identityFromPlayer,
+  TREATY_CHANNELS,
+  fetchTreatyFriends,
+  type TreatyFriend,
+} from "@/lib/treaty-chat";
+import TreatyChannelPicker, { treatyChannelById } from "@/components/treaty/TreatyChannelPicker";
 
 // ── Context ──────────────────────────────────────────────────────
 
@@ -111,8 +122,11 @@ const TABS = [
   { id: "games", label: "Games", icon: Gamepad },
   { id: "social", label: "Social", icon: Users },
   { id: "activity", label: "Activity", icon: Zap },
+  { id: "studio", label: "Studio", icon: Globe },
   { id: "settings", label: "Settings", icon: Settings },
 ] as const;
+
+const DASH = "https://dash.grudge-studio.com";
 
 // ── Sheet ────────────────────────────────────────────────────────
 
@@ -207,6 +221,8 @@ function GrudgePanelSheet() {
               <SocialTab />
             ) : activeTab === "activity" ? (
               <ActivityTab />
+            ) : activeTab === "studio" ? (
+              <StudioTab />
             ) : activeTab === "settings" ? (
               <SettingsTab />
             ) : null}
@@ -376,17 +392,25 @@ function useGrudgePanelClose() {
 function GamesTab() {
   const gamesQ = useQuery({
     queryKey: ["/api/me/games"],
-    queryFn: () => fetchJSON<any[]>("/api/me/games"),
+    queryFn: () => fetchJSON<{
+      retro: Array<{ game: { id: number; title: string; platform: string; thumbnailUrl: string | null }; bestScore: number }>;
+      fleet: Array<{ gameKey: string; title: string; url?: string; playCount: number }>;
+      all: unknown[];
+    }>("/api/me/games"),
   });
   const { close } = useGrudgePanel();
+
+  const retro = gamesQ.data?.retro ?? [];
+  const fleet = gamesQ.data?.fleet ?? [];
+  const hasPlays = retro.length > 0 || fleet.length > 0;
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <span className="text-xs font-heading text-[hsl(43,85%,55%)] uppercase tracking-wider">My Games</span>
-        <Link href="/games" onClick={close}>
+        <Link href="/account" onClick={close}>
           <span className="text-[10px] text-[hsl(43,85%,55%)] hover:underline font-body flex items-center gap-0.5">
-            Library <ChevronRight className="w-3 h-3" />
+            Hub <ChevronRight className="w-3 h-3" />
           </span>
         </Link>
       </div>
@@ -395,19 +419,43 @@ function GamesTab() {
         <div className="py-8 text-center">
           <Loader2 className="w-5 h-5 animate-spin text-[hsl(43,85%,55%)] mx-auto" />
         </div>
-      ) : !gamesQ.data?.length ? (
+      ) : !hasPlays ? (
         <div className="text-center py-8">
           <Gamepad className="w-8 h-8 text-[hsl(45,15%,40%)] mx-auto mb-2" />
           <p className="text-sm text-[hsl(45,15%,55%)] font-body">No games played yet.</p>
-          <Link href="/games" onClick={close}>
+          <Link href="/account" onClick={close}>
             <Button size="sm" className="gilded-button mt-3 text-xs">
-              Browse Library
+              Open Games Hub
             </Button>
           </Link>
         </div>
       ) : (
         <div className="space-y-2">
-          {gamesQ.data.slice(0, 12).map((row: any) => (
+          {fleet.slice(0, 6).map((row) => (
+            <a
+              key={row.gameKey}
+              href={row.url || "/super-engine"}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={close}
+            >
+              <div className="flex items-center gap-3 p-2 rounded border border-[hsl(43,60%,30%)]/15 hover:border-[hsl(43,60%,30%)]/40 transition-colors cursor-pointer">
+                <div className="w-10 h-10 rounded bg-[hsl(225,25%,12%)] flex items-center justify-center shrink-0">
+                  <Gamepad className="w-4 h-4 text-[hsl(43,85%,55%)]" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-xs font-medium truncate">{row.title}</div>
+                  <div className="text-[10px] text-[hsl(45,15%,55%)] font-body">
+                    Fleet · {row.playCount} play{row.playCount === 1 ? "" : "s"}
+                  </div>
+                </div>
+                <Badge variant="outline" className="text-[9px] border-[hsl(43,60%,30%)]/30 text-[hsl(43,85%,55%)] uppercase shrink-0">
+                  new
+                </Badge>
+              </div>
+            </a>
+          ))}
+          {retro.slice(0, 6).map((row) => (
             <Link key={row.game.id} href={`/play/${row.game.id}`} onClick={close}>
               <div className="flex items-center gap-3 p-2 rounded border border-[hsl(43,60%,30%)]/15 hover:border-[hsl(43,60%,30%)]/40 transition-colors cursor-pointer">
                 <div className="w-10 h-10 rounded bg-[hsl(225,25%,12%)] overflow-hidden shrink-0">
@@ -448,43 +496,98 @@ function GamesTab() {
 function SocialTab() {
   const { player } = useAuth();
   const { close } = useGrudgePanel();
+  const [chatRoom, setChatRoom] = useState("general");
   const [chatInput, setChatInput] = useState("");
   const [chatMessages, setChatMessages] = useState<any[]>([]);
+  const [chatConnected, setChatConnected] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
+  const roomRef = useRef(chatRoom);
+  const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const intentionalClose = useRef(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const activeChannel = treatyChannelById(chatRoom) ?? TREATY_CHANNELS[0];
+  roomRef.current = chatRoom;
 
-  // Mini Treaty Chat — connects to the same WS as the chat page
+  // Connect once per player — do NOT tear down on room change (that zeroed presence)
   useEffect(() => {
     if (!player) return;
 
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const wsBase = import.meta.env.VITE_WS_URL
-      ? String(import.meta.env.VITE_WS_URL).replace(/\/$/, "")
-      : `${protocol}//${window.location.host}`;
+    const identity = identityFromPlayer(player);
+    intentionalClose.current = false;
+    let closed = false;
 
-    const ws = new WebSocket(`${wsBase}/ws/chat`);
-    wsRef.current = ws;
-
-    ws.onopen = () => {
-      ws.send(JSON.stringify({ type: "join", username: player.displayName || player.username, room: "general" }));
-    };
-
-    ws.onmessage = (event) => {
-      const data = JSON.parse(event.data);
-      if (data.type === "message" || data.type === "system") {
-        setChatMessages((prev) => [...prev.slice(-50), data]);
+    const connect = () => {
+      if (closed) return;
+      if (wsRef.current && (wsRef.current.readyState === WebSocket.OPEN || wsRef.current.readyState === WebSocket.CONNECTING)) {
+        return;
       }
+      let ws: WebSocket;
+      try {
+        ws = new WebSocket(getTreatyWsUrl());
+      } catch {
+        setChatConnected(false);
+        reconnectTimer.current = setTimeout(connect, 3000);
+        return;
+      }
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        if (closed) return;
+        setChatConnected(true);
+        try {
+          ws.send(JSON.stringify(buildJoinPayload(identity, roomRef.current)));
+        } catch {
+          /* */
+        }
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type === "message" || data.type === "system") {
+            setChatMessages((prev) => [...prev.slice(-50), data]);
+          }
+        } catch {
+          /* ignore */
+        }
+      };
+
+      ws.onclose = () => {
+        setChatConnected(false);
+        if (wsRef.current === ws) wsRef.current = null;
+        if (!intentionalClose.current && !closed) {
+          reconnectTimer.current = setTimeout(connect, 2500);
+        }
+      };
     };
 
-    ws.onclose = () => {
-      wsRef.current = null;
-    };
+    connect();
 
     return () => {
-      ws.close();
+      closed = true;
+      intentionalClose.current = true;
+      if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
+      try {
+        wsRef.current?.close();
+      } catch {
+        /* */
+      }
       wsRef.current = null;
     };
   }, [player]);
+
+  // switch_room on open socket — was reconnecting and dropping the roster
+  useEffect(() => {
+    if (!player) return;
+    const ws = wsRef.current;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      try {
+        ws.send(JSON.stringify(buildSwitchRoomPayload(chatRoom)));
+      } catch {
+        /* */
+      }
+    }
+  }, [chatRoom, player]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -492,9 +595,15 @@ function SocialTab() {
 
   const sendChat = () => {
     const text = chatInput.trim();
-    if (!text || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
-    wsRef.current.send(JSON.stringify({ type: "message", message: text }));
-    setChatInput("");
+    if (!text) return;
+    const ws = wsRef.current;
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    try {
+      ws.send(JSON.stringify({ type: "message", message: text }));
+      setChatInput("");
+    } catch {
+      /* keep input so user can retry */
+    }
   };
 
   return (
@@ -505,17 +614,32 @@ function SocialTab() {
           <span className="text-xs font-heading text-[hsl(43,85%,55%)] uppercase tracking-wider">
             <MessageCircle className="w-3 h-3 inline mr-1" />
             Treaty Chat
+            <span className="ml-1.5 text-[9px] font-normal normal-case text-[hsl(45,15%,45%)]">
+              {activeChannel.icon} #{activeChannel.name}
+            </span>
           </span>
-          <Link href="/chat" onClick={close}>
-            <span className="text-[10px] text-[hsl(43,85%,55%)] hover:underline font-body">Full Chat</span>
+          <Link href={`/chat?room=${chatRoom}`} onClick={close}>
+            <span className="text-[10px] text-[hsl(43,85%,55%)] hover:underline font-body">Open full chat</span>
           </Link>
+        </div>
+        <div className="mb-2 overflow-x-auto">
+          <TreatyChannelPicker
+            currentRoom={chatRoom}
+            onSelect={(id) => {
+              setChatMessages([]);
+              setChatRoom(id);
+            }}
+            layout="bar"
+          />
         </div>
         <div
           className="rounded border border-[hsl(225,20%,15%)] bg-[hsl(225,30%,6%)] h-48 flex flex-col"
         >
           <div className="flex-1 overflow-y-auto px-3 py-2 space-y-1 text-xs">
             {chatMessages.length === 0 && (
-              <p className="text-[hsl(45,15%,40%)] font-body text-center pt-6">Listening to #general…</p>
+              <p className="text-[hsl(45,15%,40%)] font-body text-center pt-6">
+                {chatConnected ? `No messages in #${activeChannel.name} yet.` : "Connecting…"}
+              </p>
             )}
             {chatMessages.map((msg, i) =>
               msg.type === "system" ? (
@@ -534,7 +658,7 @@ function SocialTab() {
               value={chatInput}
               onChange={(e) => setChatInput(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && sendChat()}
-              placeholder="Message #general…"
+              placeholder={`Message #${activeChannel.name}…`}
               className="h-7 text-xs bg-[hsl(225,25%,10%)] border-[hsl(43,60%,30%)]/20"
             />
             <Button size="sm" className="h-7 w-7 p-0 dark-button" onClick={sendChat}>
@@ -544,30 +668,83 @@ function SocialTab() {
         </div>
       </div>
 
-      {/* Friends */}
-      <div>
-        <span className="text-xs font-heading text-[hsl(45,15%,50%)] uppercase tracking-wider">
-          <Users className="w-3 h-3 inline mr-1" /> Friends
-        </span>
-        <div className="mt-2 rounded border border-[hsl(225,20%,15%)] bg-[hsl(225,30%,8%)] p-4 text-center">
-          <Users className="w-6 h-6 text-[hsl(45,15%,35%)] mx-auto mb-2" />
-          <p className="text-[11px] text-[hsl(45,15%,45%)] font-body">
-            Friends list coming soon. Challenge players from the PvP Hub to build your network.
-          </p>
-        </div>
-      </div>
+      {/* Friends — live Treaty presence */}
+      <SocialFriendsBlock
+        enabled={!!player}
+        onMessage={(room) => {
+          close();
+          window.location.href = `/chat?room=${encodeURIComponent(room)}`;
+        }}
+      />
 
-      {/* Messages */}
+      {/* DMs shortcut */}
       <div>
         <span className="text-xs font-heading text-[hsl(45,15%,50%)] uppercase tracking-wider">
           <MessageCircle className="w-3 h-3 inline mr-1" /> Messages
         </span>
-        <div className="mt-2 rounded border border-[hsl(225,20%,15%)] bg-[hsl(225,30%,8%)] p-4 text-center">
-          <MessageCircle className="w-6 h-6 text-[hsl(45,15%,35%)] mx-auto mb-2" />
-          <p className="text-[11px] text-[hsl(45,15%,45%)] font-body">
-            Direct messages between Grudge ID holders. Coming soon.
+        <div className="mt-2 rounded border border-[hsl(225,20%,15%)] bg-[hsl(225,30%,8%)] p-3 text-center">
+          <p className="text-[11px] text-[hsl(45,15%,45%)] font-body mb-2">
+            Friends, DMs, and in-game chat live in Treaty.
           </p>
+          <Link href="/chat?tab=dms" onClick={close}>
+            <span className="text-[11px] text-[hsl(43,85%,55%)] hover:underline font-body">Open Treaty DMs →</span>
+          </Link>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function SocialFriendsBlock({
+  enabled,
+  onMessage,
+}: {
+  enabled: boolean;
+  onMessage: (dmRoom: string) => void;
+}) {
+  const friendsQ = useQuery({
+    queryKey: ["/api/treaty/friends"],
+    queryFn: fetchTreatyFriends,
+    enabled,
+    refetchInterval: 20_000,
+  });
+
+  return (
+    <div>
+      <span className="text-xs font-heading text-[hsl(45,15%,50%)] uppercase tracking-wider">
+        <Users className="w-3 h-3 inline mr-1" /> Friends
+      </span>
+      <div className="mt-2 rounded border border-[hsl(225,20%,15%)] bg-[hsl(225,30%,8%)] p-3">
+        {!enabled ? (
+          <p className="text-[11px] text-[hsl(45,15%,45%)] font-body text-center">Sign in to see friends.</p>
+        ) : friendsQ.isLoading ? (
+          <Loader2 className="w-4 h-4 animate-spin mx-auto text-[hsl(43,85%,55%)]" />
+        ) : !(friendsQ.data?.length) ? (
+          <p className="text-[11px] text-[hsl(45,15%,45%)] font-body text-center">
+            No friends yet.{" "}
+            <Link href="/chat">
+              <span className="text-[hsl(43,85%,55%)] hover:underline">Open Treaty</span>
+            </Link>
+          </p>
+        ) : (
+          <ul className="space-y-1.5 max-h-40 overflow-y-auto">
+            {(friendsQ.data as TreatyFriend[]).map((f) => (
+              <li key={f.friendshipId || f.id} className="flex items-center gap-2 text-xs">
+                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${f.isOnline ? "bg-emerald-400" : "bg-[hsl(45,15%,30%)]"}`} />
+                <span className="truncate flex-1 text-[hsl(45,30%,85%)]">{f.displayName || f.username}</span>
+                {f.dmRoom && (
+                  <button
+                    type="button"
+                    className="text-[10px] text-[hsl(43,85%,55%)] hover:underline shrink-0"
+                    onClick={() => onMessage(f.dmRoom!)}
+                  >
+                    DM
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     </div>
   );
@@ -677,6 +854,66 @@ function ActivityTab() {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ── Studio Tab (merged with dash.grudge-studio.com) ──────────────
+
+function StudioTab() {
+  const { player } = useAuth();
+  const { close } = useGrudgePanel();
+  const isAdmin =
+    player?.role === "admin" ||
+    player?.role === "master" ||
+    player?.role === "master_admin" ||
+    player?.role === "owner";
+
+  const links: { href: string; label: string; hint: string }[] = [
+    { href: `${DASH}/`, label: "Dashboard home", hint: "Overview & health" },
+    { href: `${DASH}/accounts`, label: "Accounts admin", hint: "Users · characters · lookup" },
+    { href: `${DASH}/assets`, label: "Assets & SSOT", hint: "R2 · ObjectStore · D1" },
+    { href: `${DASH}/railway`, label: "Railway fleet", hint: "Services · deploys" },
+    { href: `${DASH}/services`, label: "Services health", hint: "Live probes" },
+    { href: `${DASH}/economy`, label: "Economy", hint: "GBUX · wallets" },
+    { href: `${DASH}/?panel=studio`, label: "Open right panel on dash", hint: "Same Grudge Panel UX" },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <p className="text-[11px] text-[hsl(45,15%,55%)] font-body leading-relaxed">
+        Studio admin lives on{" "}
+        <a href={DASH} className="text-[hsl(43,85%,55%)] hover:underline" target="_blank" rel="noreferrer">
+          dash.grudge-studio.com
+        </a>
+        . Same Grudge ID session; dash uses the right-side panel for account + studio nav.
+      </p>
+      {!isAdmin && (
+        <p className="text-[11px] text-[hsl(43,70%,50%)] font-body">
+          Admin role required for full dash. You can still open public dash pages if allowed.
+        </p>
+      )}
+      <ul className="space-y-1.5">
+        {links.map((l) => (
+          <li key={l.href}>
+            <a
+              href={l.href}
+              target="_blank"
+              rel="noreferrer"
+              onClick={close}
+              className="flex items-center gap-2 p-2.5 rounded border border-[hsl(43,60%,30%)]/20 hover:border-[hsl(43,60%,30%)]/50 transition-colors"
+              style={{ background: "hsl(225,30%,8%)" }}
+            >
+              <Globe className="w-3.5 h-3.5 text-[hsl(43,85%,55%)] shrink-0" />
+              <div className="min-w-0 flex-1">
+                <div className="text-xs text-[hsl(45,30%,90%)]">{l.label}</div>
+                <div className="text-[10px] text-[hsl(45,15%,50%)] font-body">{l.hint}</div>
+              </div>
+              <ChevronRight className="w-3 h-3 text-[hsl(45,15%,40%)]" />
+            </a>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

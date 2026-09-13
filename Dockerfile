@@ -1,35 +1,40 @@
 # ── Stage 1: Build ─────────────────────────────────────────────
 FROM node:22-alpine AS build
 WORKDIR /app
+RUN apk add --no-cache git
 
 COPY package.json package-lock.json* ./
-RUN npm ci || npm install
+RUN npm ci --legacy-peer-deps --ignore-scripts || npm install --legacy-peer-deps --ignore-scripts
 
-COPY tsconfig.json drizzle.config.ts vite.config.ts postcss.config.js tailwind.config.ts ./
+COPY tsconfig.json drizzle.config.ts vite.config.ts ./
 COPY server ./server
-COPY client ./client
 COPY shared ./shared
-COPY attached_assets ./attached_assets
+# storage.ts imports catalog JSON via ../api/_games.json
+COPY api ./api
 
-# Build client (Vite → dist/public) and server (esbuild → dist/index.js)
-RUN npm run build
+# API-only Railway image — Vercel serves the Vite client
+RUN npm run build:server
+RUN mkdir -p dist/public
 
 # ── Stage 2: Production ────────────────────────────────────────
 FROM node:22-alpine
 WORKDIR /app
+RUN apk add --no-cache git
 
 COPY package.json package-lock.json* ./
-RUN npm ci --omit=dev || npm install --omit=dev
-# drizzle-kit needed for DB migrations at startup
-RUN npm install drizzle-kit
+RUN npm ci --omit=dev --legacy-peer-deps --ignore-scripts || npm install --omit=dev --legacy-peer-deps --ignore-scripts
+# drizzle-kit needed for DB migrations at startup (must keep legacy-peer-deps — grudge-control peerOptional)
+RUN npm install drizzle-kit --legacy-peer-deps --ignore-scripts
 
 # Copy built client + server
 COPY --from=build /app/dist ./dist
 
 # Copy source for drizzle-kit schema push (needs schema.ts)
 COPY shared ./shared
-COPY attached_assets ./attached_assets
 COPY drizzle.config.ts ./
+# API image is not the asset host (Vercel + CDN). Keep an empty dir so
+# /api/assets readdir does not throw if the folder is railwayignored.
+RUN mkdir -p attached_assets
 
 ENV NODE_ENV=production
 ENV PORT=8080

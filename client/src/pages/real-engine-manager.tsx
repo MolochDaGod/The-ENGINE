@@ -98,7 +98,7 @@ export default function RealEngineManager() {
       'rpgmaker': '/rpg-maker-studio',
       'java-engine': '/puzzle-platformer',
       'construct3': '/puzzle-platformer',
-      'buildbox': '/multiplayer-racing',
+      'buildbox': '/overdrive-racing',
       'gdevelop': '/puzzle-platformer',
       'yahaha': '/yahaha-3d-world'
     };
@@ -117,7 +117,7 @@ export default function RealEngineManager() {
       'rpgmaker': '/rpg-maker-studio',
       'detected': '/super-engine',
       'construct3': '/puzzle-platformer',
-      'buildbox': '/multiplayer-racing',
+      'buildbox': '/overdrive-racing',
       'gdevelop': '/puzzle-platformer',
       'yahaha': '/yahaha-3d-world'
     };

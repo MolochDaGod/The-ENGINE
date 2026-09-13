@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft, Maximize2, Minimize2, Settings } from "lucide-react";
 import { Link } from "wouter";
 import { useAuth } from "@/components/auth-provider";
+import { VOXGRUDGE_GAMES } from "@/lib/voxgrudge-urls";
 
 interface GameSettings {
   crosshairStyle: 'dot' | 'circle' | 'cross' | 'dynamic';
@@ -45,6 +46,11 @@ export default function TerraForge() {
     } catch { return DEFAULT_SETTINGS; }
   });
   const { player } = useAuth();
+
+  useEffect(() => {
+    document.title = "TerraForge — Grudge Studio";
+    return () => { document.title = "Rec0deD:88 — Grudge Studio Gaming Portal"; };
+  }, []);
 
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
@@ -91,9 +97,8 @@ export default function TerraForge() {
   }, [player, settings]);
 
   return (
-    <div className="min-h-screen bg-[hsl(225,30%,6%)] flex flex-col">
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 py-2 bg-[hsl(225,25%,10%)] border-b border-[hsl(43,60%,30%)]/30 z-50">
+    <div className="flex flex-col h-screen bg-[hsl(225,30%,6%)]">
+      <div className="flex items-center justify-between px-4 py-2 bg-[hsl(225,25%,10%)] border-b border-[hsl(43,60%,30%)]/30 shrink-0 z-50">
         <div className="flex items-center gap-3">
           <Link href="/super-engine">
             <Button variant="ghost" size="sm" className="text-[hsl(45,30%,90%)] hover:text-[hsl(43,85%,55%)]">
@@ -193,16 +198,13 @@ export default function TerraForge() {
         </div>
       )}
 
-      {/* Game */}
-      <div className="flex-1 relative">
-        <iframe
-          ref={iframeRef}
-          src="/games/terraforge.html"
-          className="w-full h-full border-0 absolute inset-0"
-          allow="fullscreen; autoplay; pointer-lock"
-          title="TerraForge"
-        />
-      </div>
+      <iframe
+        ref={iframeRef}
+        src={VOXGRUDGE_GAMES.terraforge}
+        className="flex-1 w-full min-h-0 border-0"
+        allow="fullscreen; autoplay; pointer-lock"
+        title="TerraForge"
+      />
     </div>
   );
 }

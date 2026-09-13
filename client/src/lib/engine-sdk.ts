@@ -10,8 +10,17 @@
  *  - Presence tracking
  */
 
-const WS_URL = import.meta.env.VITE_WS_URL || "https://ws.grudge-studio.com";
-const API_BASE = "";  // same origin
+import { WS_URL, apiUrl } from "./api-config";
+import { fleetAuthHeaders } from "./player-auth";
+import {
+  getTreatyWsUrl,
+  gameRoomId,
+  buildJoinPayload,
+  buildSwitchRoomPayload,
+  identityFromPlayer,
+} from "./treaty-chat";
+
+const API_BASE = "";  // same origin on portal; apiUrl() used where needed
 
 // ── Auth helpers (cookie-based, same session as /api/auth/*) ──
 interface CachedPlayer {
@@ -28,7 +37,10 @@ let _cachedPlayer: CachedPlayer | null | undefined = undefined; // undefined = n
 async function resolvePlayer(): Promise<CachedPlayer | null> {
   if (_cachedPlayer !== undefined) return _cachedPlayer;
   try {
-    const resp = await fetch(`${API_BASE}/api/auth/me`, { credentials: "include" });
+    const resp = await fetch(`${API_BASE}/api/auth/me`, {
+      credentials: "include",
+      headers: fleetAuthHeaders(),
+    });
     if (!resp.ok) { _cachedPlayer = null; return null; }
     const data = await resp.json();
     _cachedPlayer = { id: data.id, username: data.username, grudgeId: data.grudgeId, displayName: data.displayName };
@@ -57,7 +69,7 @@ export async function submitScore(
     const resp = await fetch(`${API_BASE}/api/scores`, {
       method: "POST",
       credentials: "include",
-      headers: { "Content-Type": "application/json" },
+      headers: fleetAuthHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({ gameId, score }),
     });
 
@@ -83,7 +95,10 @@ export async function fetchLeaderboard(gameId: number, limit: number = 10) {
 // ── Fetch personal best ───────────────────────────────────────
 export async function fetchPersonalBest(gameId: number) {
   try {
-    const resp = await fetch(`${API_BASE}/api/leaderboards/${gameId}/me`, { credentials: "include" });
+    const resp = await fetch(`${API_BASE}/api/leaderboards/${gameId}/me`, {
+      credentials: "include",
+      headers: fleetAuthHeaders(),
+    });
     if (!resp.ok) return null;
     const data = await resp.json();
     return data.score ?? null;
@@ -148,10 +163,12 @@ export async function connectEngine() {
     const player = await resolvePlayer();
 
     engineSocket = io(`${WS_URL}/engine`, {
+      path: "/socket.io",
       auth: player ? { grudgeId: player.grudgeId, username: player.username } : undefined,
       transports: ["websocket", "polling"],
       reconnection: true,
       reconnectionDelay: 2000,
+      withCredentials: true,
     });
 
     engineSocket.on("engine:presence", (data: any) => {
@@ -181,12 +198,100 @@ export function joinGame(gameId: number, gameTitle: string) {
   if (engineSocket) {
     engineSocket.emit("engine:join_game", { game_id: gameId, game_title: gameTitle });
   }
+  // Also join Treaty per-game chat room (community social layer)
+  void joinTreatyGameChat(gameId, gameTitle);
 }
 
 export function leaveGame(gameId: number) {
   if (engineSocket) {
     engineSocket.emit("engine:leave_game", { game_id: gameId });
   }
+  leaveTreatyGameChat();
+}
+
+// ── Treaty game chat (raw WS /ws/chat room game:{id}) ─────────
+let treatyWs: WebSocket | null = null;
+let treatyRoom: string | null = null;
+const treatyMessageCbs: Array<(data: unknown) => void> = [];
+
+/** Connect / switch into a per-game Treaty room so all fleet games share chat. */
+export async function joinTreatyGameChat(gameKey: string | number, gameTitle?: string) {
+  const room = gameRoomId(gameKey);
+  treatyRoom = room;
+  const player = await resolvePlayer();
+  const identity = identityFromPlayer(
+    player
+      ? ({
+          grudgeId: player.grudgeId,
+          username: player.username,
+          displayName: player.displayName || player.username,
+        } as any)
+      : null,
+  );
+
+  if (treatyWs && treatyWs.readyState === WebSocket.OPEN) {
+    treatyWs.send(JSON.stringify(buildSwitchRoomPayload(room, { gameTitle })));
+    return treatyWs;
+  }
+
+  try {
+    const ws = new WebSocket(getTreatyWsUrl());
+    treatyWs = ws;
+    ws.onopen = () => {
+      ws.send(JSON.stringify(buildJoinPayload(identity, room, { gameTitle })));
+    };
+    ws.onmessage = (ev) => {
+      try {
+        const data = JSON.parse(ev.data);
+        if (data.type === "message" || data.type === "system") {
+          treatyMessageCbs.forEach((cb) => cb(data));
+        }
+      } catch {
+        /* */
+      }
+    };
+    ws.onclose = () => {
+      if (treatyWs === ws) treatyWs = null;
+    };
+    return ws;
+  } catch (err: any) {
+    console.warn("[engine-sdk] Treaty chat connect failed:", err?.message);
+    return null;
+  }
+}
+
+export function leaveTreatyGameChat() {
+  try {
+    treatyWs?.close();
+  } catch {
+    /* */
+  }
+  treatyWs = null;
+  treatyRoom = null;
+}
+
+export function sendTreatyGameMessage(text: string): boolean {
+  if (!treatyWs || treatyWs.readyState !== WebSocket.OPEN) return false;
+  const msg = text.trim().slice(0, 500);
+  if (!msg) return false;
+  try {
+    treatyWs.send(JSON.stringify({ type: "message", message: msg }));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function onTreatyGameMessage(cb: (data: unknown) => void) {
+  treatyMessageCbs.push(cb);
+  return () => {
+    const i = treatyMessageCbs.indexOf(cb);
+    if (i >= 0) treatyMessageCbs.splice(i, 1);
+  };
+}
+
+export function getTreatyGameRoom() {
+  return treatyRoom;
 }
 
 export function onPresenceUpdate(callback: (data: { game_id: string; game_title: string; player_count: number }) => void) {
@@ -206,7 +311,10 @@ export function onActivity(callback: (data: any) => void) {
 // ── Challenge helpers ─────────────────────────────────────────
 export async function fetchOpenChallenges() {
   try {
-    const resp = await fetch(`${API_BASE}/api/challenges`, { credentials: "include" });
+    const resp = await fetch(`${API_BASE}/api/challenges`, {
+      credentials: "include",
+      headers: fleetAuthHeaders(),
+    });
     if (!resp.ok) return [];
     return await resp.json();
   } catch {
@@ -226,7 +334,7 @@ export async function createChallenge(
     const resp = await fetch(`${API_BASE}/api/challenges`, {
       method: "POST",
       credentials: "include",
-      headers: { "Content-Type": "application/json" },
+      headers: fleetAuthHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({ opponentId, gameId, gbuxWager }),
     });
     if (!resp.ok) return null;
@@ -241,7 +349,7 @@ export async function acceptChallenge(challengeId: number) {
     const resp = await fetch(`${API_BASE}/api/challenges/${challengeId}/accept`, {
       method: "POST",
       credentials: "include",
-      headers: { "Content-Type": "application/json" },
+      headers: fleetAuthHeaders({ "Content-Type": "application/json" }),
     });
     if (!resp.ok) return null;
     return await resp.json();

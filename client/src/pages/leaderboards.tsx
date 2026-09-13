@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
@@ -7,6 +7,11 @@ import { Input } from "@/components/ui/input";
 import { Crown, Flame, Loader2, Medal, Play, Trophy } from "lucide-react";
 import type { Game } from "@shared/schema";
 import { GameCover } from "@/components/game-cover";
+import { RetroCompetitiveGrid } from "@/components/retro-competitive-panel";
+import {
+  RETRO_COMPETITIVE_TOP10,
+  type CompetitiveMode,
+} from "@/data/retroCompetitive";
 
 interface TopGame extends Game {
   playerCount: number;
@@ -44,6 +49,25 @@ async function fetchJSON<T>(url: string): Promise<T> {
 export default function LeaderboardsPage() {
   const [selectedGameId, setSelectedGameId] = useState<number | null>(null);
   const [search, setSearch] = useState("");
+  const [tab, setTab] = useState<"competitive" | "global">("competitive");
+  const [retroMode, setRetroMode] = useState<CompetitiveMode | "all">("all");
+
+  useEffect(() => {
+    try {
+      const q = new URLSearchParams(window.location.search);
+      const g = q.get("game");
+      if (g && Number.isFinite(Number(g))) {
+        setSelectedGameId(Number(g));
+        setTab("competitive");
+      }
+      const t = q.get("tab");
+      if (t === "global" || t === "competitive") setTab(t);
+      const m = q.get("mode");
+      if (m === "pvp" || m === "pve" || m === "coop" || m === "all") setRetroMode(m);
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
   const topGamesQuery = useQuery<TopGame[]>({
     queryKey: ["/api/games/top"],
@@ -60,24 +84,46 @@ export default function LeaderboardsPage() {
     queryFn: () => fetchJSON<Game[]>("/api/games"),
   });
 
-  const selectedBoardQuery = useQuery<LeaderboardRow[]>({
-    queryKey: ["/api/leaderboards", selectedGameId],
-    queryFn: () => fetchJSON<LeaderboardRow[]>(`/api/leaderboards/${selectedGameId}?limit=50`),
-    enabled: selectedGameId != null,
-  });
+  const defaultCompetitiveId = RETRO_COMPETITIVE_TOP10[0]?.gameId ?? null;
+  const activeGameId =
+    selectedGameId ??
+    (tab === "competitive" ? defaultCompetitiveId : topGamesQuery.data?.[0]?.id ?? null);
 
-  const activeGameId = selectedGameId ?? topGamesQuery.data?.[0]?.id ?? null;
+  const selectedBoardQuery = useQuery<LeaderboardRow[]>({
+    queryKey: ["/api/leaderboards", activeGameId],
+    queryFn: () => fetchJSON<LeaderboardRow[]>(`/api/leaderboards/${activeGameId}?limit=50`),
+    enabled: activeGameId != null,
+  });
 
   const filteredGames = useMemo(() => {
     const list = gamesListQuery.data || [];
-    if (!search) return list.slice(0, 30);
+    if (!search) {
+      // Prefer competitive roster at top of picker
+      const ids = new Set(RETRO_COMPETITIVE_TOP10.map((g) => g.gameId));
+      return [...list]
+        .sort((a, b) => Number(ids.has(b.id)) - Number(ids.has(a.id)) || a.title.localeCompare(b.title))
+        .slice(0, 40);
+    }
     const q = search.toLowerCase();
     return list.filter((g) => g.title.toLowerCase().includes(q)).slice(0, 30);
   }, [gamesListQuery.data, search]);
 
   const activeGame = useMemo(() => {
     if (activeGameId == null) return null;
-    return gamesListQuery.data?.find((g) => g.id === activeGameId) || topGamesQuery.data?.find((g) => g.id === activeGameId) || null;
+    const fromComp = RETRO_COMPETITIVE_TOP10.find((g) => g.gameId === activeGameId);
+    const found =
+      gamesListQuery.data?.find((g) => g.id === activeGameId) ||
+      topGamesQuery.data?.find((g) => g.id === activeGameId) ||
+      null;
+    if (found) return found;
+    if (fromComp) {
+      return {
+        id: fromComp.gameId,
+        title: fromComp.title,
+        platform: fromComp.platform,
+      } as Game;
+    }
+    return null;
   }, [activeGameId, gamesListQuery.data, topGamesQuery.data]);
 
   return (
@@ -86,13 +132,15 @@ export default function LeaderboardsPage() {
         <header className="flex flex-col md:flex-row md:items-end justify-between gap-4">
           <div>
             <Badge className="mb-3 bg-[hsl(43,85%,55%)]/10 text-[hsl(43,85%,55%)] border border-[hsl(43,60%,30%)]/40">
-              Leaderboards
+              Leaderboards · Rec0deD:88
             </Badge>
             <h1 className="text-3xl md:text-4xl font-heading gold-text" style={{ WebkitTextFillColor: "unset" }}>
-              Top games. Top players. Real scores.
+              Global boards for PvP &amp; PvE
             </h1>
             <p className="text-[hsl(45,15%,60%)] font-body mt-2 max-w-3xl">
-              Pulled live from The ENGINE backend. Play anything in the library to get on the board; PvP challenge winners earn GBUX.
+              Competitive Top 10 first, then the full retro library. Scores come from The ENGINE (
+              <code className="text-[hsl(43,85%,55%)]">POST /api/scores</code>
+              ). Challenge winners on <Link href="/pvp" className="text-[hsl(43,85%,55%)] hover:underline">/pvp</Link> can earn GBUX.
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -108,6 +156,66 @@ export default function LeaderboardsPage() {
             </Link>
           </div>
         </header>
+
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => setTab("competitive")}
+            className={`px-4 py-2 rounded-full text-sm font-heading border ${
+              tab === "competitive"
+                ? "bg-[hsl(43,85%,55%)]/20 border-[hsl(43,85%,55%)] text-[hsl(43,85%,55%)]"
+                : "border-[hsl(43,60%,30%)]/40 text-[hsl(45,15%,70%)]"
+            }`}
+          >
+            Competitive Top 10
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab("global")}
+            className={`px-4 py-2 rounded-full text-sm font-heading border ${
+              tab === "global"
+                ? "bg-[hsl(43,85%,55%)]/20 border-[hsl(43,85%,55%)] text-[hsl(43,85%,55%)]"
+                : "border-[hsl(43,60%,30%)]/40 text-[hsl(45,15%,70%)]"
+            }`}
+          >
+            Global / All games
+          </button>
+        </div>
+
+        {tab === "competitive" && (
+          <section className="space-y-4">
+            <div className="flex flex-wrap gap-2">
+              {(
+                [
+                  ["all", "All modes"],
+                  ["pvp", "PvP"],
+                  ["pve", "PvE"],
+                  ["coop", "Co-op"],
+                ] as const
+              ).map(([id, label]) => (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => setRetroMode(id)}
+                  className={`px-3 py-1.5 rounded-full text-xs font-heading border ${
+                    retroMode === id
+                      ? "bg-[hsl(43,85%,55%)]/15 border-[hsl(43,85%,55%)] text-[hsl(43,85%,55%)]"
+                      : "border-[hsl(43,60%,30%)]/40 text-[hsl(45,15%,70%)]"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <RetroCompetitiveGrid
+              mode={retroMode}
+              compact
+            />
+            <p className="text-xs text-[hsl(45,15%,55%)] font-body">
+              Click <strong>Board</strong> on a card or pick a game below to load its live leaderboard.
+            </p>
+          </section>
+        )}
 
         {/* Top games + Top players */}
         <section className="grid grid-cols-1 lg:grid-cols-[1.4fr_1fr] gap-6">

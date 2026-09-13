@@ -1,0 +1,7 @@
+{
+  "version": "1.0.0",
+  "schema": "grudge6-rts-gear-presets",
+  "description": "Full RTS gear presets: 6 races × worker/warrior/ranger/mage (24). Compatible with D1 gear_presets shape.",
+  "cdn_class_templates": "https://assets.grudge-studio.com/api/v1/grudge6-gear-presets.json",
+  "note": "mesh_ids use race prefixes WK_|BRB_|ELF_|DWF_|ORC_|UD_. Export via exportPresetsAsD1Rows() in rts-gear-presets.ts"
+}

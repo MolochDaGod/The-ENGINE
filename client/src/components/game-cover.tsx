@@ -63,6 +63,34 @@ export interface GameCoverProps extends ImgProps {
  * fallback chain. If all candidates fail (or src is missing) it renders the
  * supplied placeholder, or null.
  */
+function DefaultArtPlaceholder({ alt, className }: { alt: string; className?: string }) {
+  const letter = (alt || "?").trim().charAt(0).toUpperCase() || "?";
+  return (
+    <div
+      className={className}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background:
+          "linear-gradient(145deg, hsl(225,30%,14%) 0%, hsl(43,40%,18%) 50%, hsl(225,30%,10%) 100%)",
+        color: "hsl(43,85%,55%)",
+        fontFamily: "inherit",
+        fontWeight: 700,
+        fontSize: "1.75rem",
+        letterSpacing: "0.04em",
+        width: "100%",
+        height: "100%",
+        minHeight: 48,
+      }}
+      aria-label={alt}
+      role="img"
+    >
+      {letter}
+    </div>
+  );
+}
+
 export function GameCover({ src, alt, placeholder = null, className, loading = 'lazy', ...rest }: GameCoverProps) {
   const candidates = useMemo(() => (src ? buildCoverFallbacks(src) : []), [src]);
   const [idx, setIdx] = useState(0);
@@ -71,7 +99,8 @@ export function GameCover({ src, alt, placeholder = null, className, loading = '
     setIdx(0);
     setFailed(false);
   }, [src]);
-  if (!src || failed) return <>{placeholder}</>;
+  const fallback = placeholder ?? <DefaultArtPlaceholder alt={alt} className={className} />;
+  if (!src || failed) return <>{fallback}</>;
   return (
     <img
       {...rest}

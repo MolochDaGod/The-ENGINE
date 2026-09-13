@@ -1,3 +1,4 @@
+import "dotenv/config";
 import express, { type Request, Response, NextFunction } from "express";
 import compression from "compression";
 import helmet from "helmet";
@@ -8,6 +9,7 @@ import { fileURLToPath } from "url";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { AUTH_PAGE_HTML } from "./auth-page-html";
+import { mountAuthUpstreamProxy } from "./auth-upstream";
 
 const app = express();
 const isProd = process.env.NODE_ENV === "production";
@@ -15,6 +17,8 @@ const isProd = process.env.NODE_ENV === "production";
 const allowedOrigins = (process.env.CORS_ORIGINS || [
   "https://grudge-studio.com",
   "https://grudgewarlords.com",
+  "https://forge.grudge-studio.com",
+  "https://studio-forge.vercel.app",
   "https://id.grudge-studio.com",
   "https://client.grudge-studio.com",
   "https://dash.grudge-studio.com",
@@ -32,17 +36,32 @@ const allowedOrigins = (process.env.CORS_ORIGINS || [
 // ── Trust proxy (Railway / Vercel) ─────────────────────────────
 if (isProd) app.set("trust proxy", 1);
 
-// ── Compression — gzip all responses (huge win for 3D game assets)
-app.use(compression());
+// ── Compression — gzip HTTP responses only (never WebSocket upgrades)
+app.use(
+  compression({
+    filter: (req, res) => {
+      if (req.headers.upgrade && String(req.headers.upgrade).toLowerCase() === "websocket") {
+        return false;
+      }
+      if (req.url?.startsWith("/ws/") || req.url?.startsWith("/socket.io")) {
+        return false;
+      }
+      return compression.filter(req, res);
+    },
+  }),
+);
 
 // ── Security headers via helmet ────────────────────────────────
 app.use(helmet({
   contentSecurityPolicy: false,          // managed per-route by the game
   crossOriginEmbedderPolicy: false,      // required for SharedArrayBuffer / game workers
   crossOriginResourcePolicy: { policy: "cross-origin" },  // allow CDN asset loading
+  // Auth UI is framed by super-engine / fleet portals — CSP frame-ancestors on the gateway
+  frameguard: false,
 }));
 
 // ── CORS ────────────────────────────────────────────────────────
+// Fleet apps + hosted previews (Vercel, Puter, Replit mine-loader / Voxel Realms).
 app.use(cors({
   origin: (origin, cb) => {
     if (!origin) return cb(null, true); // same-origin / server-to-server
@@ -52,15 +71,32 @@ app.use(cors({
       origin.includes("puter.com") ||
       origin.includes("puter.site") ||
       /^https:\/\/.*\.vercel\.app$/.test(origin) ||
+      /^https:\/\/([a-z0-9-]+\.)*replit\.app$/.test(origin) ||
+      /^https:\/\/([a-z0-9-]+\.)*replit\.dev$/.test(origin) ||
       origin.startsWith("http://localhost:")
     ) return cb(null, true);
     cb(null, false);
   },
   credentials: true,
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+  allowedHeaders: [
+    "Content-Type",
+    "Authorization",
+    "X-Requested-With",
+    "X-Session-Token",
+    "X-Grudge-Token",
+    "If-Match",
+    "X-Progress-Revision",
+  ],
 }));
-// ── Grudge ID auth page ──────────────────────────────────────────────────────
+
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: false, limit: "10mb" }));
+
+// id.grudge-studio.com → canonical Grudge API auth (sso-check, login page, tokens)
+mountAuthUpstreamProxy(app);
+
+// ── Grudge ID auth page (non-identity hosts / fallback) ─────────────────────
 // Prefer public/grudge-id.html on disk (no regex-escape corruption in bundles).
 function loadAuthPageHtml(): string {
   const here = path.dirname(fileURLToPath(import.meta.url));
@@ -82,6 +118,73 @@ function sendAuthPage(_req: Request, res: Response) {
 }
 app.get("/api/auth/page", sendAuthPage);
 app.get("/api/auth/popup", sendAuthPage);
+app.get("/account", sendAuthPage);
+
+// Bare /api/auth — discovery JSON for API clients; browsers → sign-in page
+function sendAuthDiscovery(req: Request, res: Response) {
+  const accept = req.get("accept") || "";
+  const wantsHtml = accept.includes("text/html") && !accept.includes("application/json");
+  if (wantsHtml) {
+    const qs = req.url.includes("?") ? req.url.slice(req.url.indexOf("?")) : "";
+    return res.redirect(302, `/api/auth/page${qs}`);
+  }
+  const idHost = process.env.AUTH_POPUP_HOST || "https://id.grudge-studio.com";
+  res.json({
+    success: true,
+    service: "Grudge ID",
+    version: "2.0.0",
+    authPage: `${idHost}/api/auth/page`,
+    accountPage: `${idHost}/account`,
+    embedScript: `${idHost}/embed/auth.js`,
+    endpoints: {
+      register: "POST /api/auth/register",
+      login: "POST /api/auth/login",
+      guest: "POST /api/auth/guest",
+      me: "GET /api/auth/me",
+      logout: "POST /api/auth/logout",
+      puterSso: "POST /api/auth/puter-sso",
+      sessionExchange: "POST /api/auth/session/exchange",
+      popupToken: "POST /api/auth/popup-token",
+      discord: "GET /api/auth/discord/start",
+      google: "GET /api/auth/google/start",
+      github: "GET /api/auth/github/start",
+      solanaNonce: "POST /api/auth/solana/nonce",
+      solanaVerify: "POST /api/auth/solana/verify",
+      phantomNonce: "POST /api/auth/phantom/nonce",
+      phantomVerify: "POST /api/auth/phantom/verify",
+      twilioStart: "POST /api/auth/twilio/start",
+      twilioVerify: "POST /api/auth/twilio/verify",
+    },
+    providers: {
+      password: true,
+      guest: true,
+      puter: true,
+      wallet: true,
+      discord: !!process.env.DISCORD_CLIENT_ID,
+      google: !!process.env.GOOGLE_CLIENT_ID,
+      github: !!process.env.GITHUB_CLIENT_ID,
+      phone: !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_VERIFY_SERVICE_SID),
+    },
+    idDomain: idHost,
+    apiDomain: process.env.GAME_API_HOST || "https://api.grudge-studio.com",
+  });
+}
+app.get("/api/auth", sendAuthDiscovery);
+app.get("/auth", sendAuthDiscovery);
+
+// id.grudge-studio.com root → sign-in (Railway proxy strips Host; use X-Forwarded-Host)
+app.use((req, res, next) => {
+  const host = (req.get("x-forwarded-host") || req.get("host") || "").split(",")[0].trim();
+  if (
+    host === "id.grudge-studio.com" &&
+    (req.path === "/" || req.path === "/index.html")
+  ) {
+    const qs = req.url.includes("?") ? req.url.slice(req.url.indexOf("?")) : "";
+    return res.redirect(302, `/api/auth/page${qs}`);
+  }
+  next();
+});
+
 app.get("/login", (req, res) => {
   const redirect = (req.query.redirect_uri || req.query.redirect || "") as string;
   const origin = (req.query.origin as string) || "";
@@ -100,9 +203,6 @@ app.use((req, _res, next) => {
 
 // ── Favicon ────────────────────────────────────────────────────
 app.get("/favicon.ico", (_req, res) => res.redirect(301, "/favicon.png"));
-
-app.use(express.json({ limit: "10mb" }));
-app.use(express.urlencoded({ extended: false, limit: "10mb" }));
 
 app.use((req, res, next) => {
   const start = Date.now();
@@ -135,6 +235,25 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  // Idempotent columns/indexes for account universe + play settings
+  try {
+    const { ensureAccountSchema } = await import("./db-ensure");
+    const result = await ensureAccountSchema();
+    if (result.ok) log(`db-ensure ok (applied ${result.applied})`);
+    else log(`db-ensure partial: ${result.error}`);
+  } catch (e: any) {
+    log(`db-ensure skipped: ${e?.message || e}`);
+  }
+
+  // Catalog-id aligned competitive games so accounts scores/challenges share game_library.id
+  try {
+    const { storage } = await import("./storage");
+    const games = await storage.ensureCompetitiveGames();
+    log(`competitive games ensured: ${games.length}`);
+  } catch (e: any) {
+    log(`competitive ensure skipped: ${e?.message || e}`);
+  }
+
   const server = await registerRoutes(app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {

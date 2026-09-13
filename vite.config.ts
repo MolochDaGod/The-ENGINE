@@ -1,6 +1,10 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import fs from "fs";
 import path from "path";
+
+/** Local monorepo checkout; on Vercel use the git dependency from node_modules. */
+const localGrudgeControl = path.resolve(import.meta.dirname, "..", "grudgecontrol", "src", "index.ts");
 
 export default defineConfig({
   plugins: [
@@ -11,7 +15,9 @@ export default defineConfig({
       "@": path.resolve(import.meta.dirname, "client", "src"),
       "@shared": path.resolve(import.meta.dirname, "shared"),
       "@assets": path.resolve(import.meta.dirname, "attached_assets"),
+      ...(fs.existsSync(localGrudgeControl) ? { "grudge-control": localGrudgeControl } : {}),
     },
+    dedupe: ["three", "@types/three"],
   },
   root: path.resolve(import.meta.dirname, "client"),
   build: {
@@ -23,10 +29,14 @@ export default defineConfig({
         manualChunks: {
           three: ["three"],
           cannon: ["cannon-es"],
+          phantom: ["@phantom/browser-sdk"],
           vendor: ["react", "react-dom", "wouter", "@tanstack/react-query"],
         },
       },
     },
+  },
+  optimizeDeps: {
+    include: ["@phantom/browser-sdk", "bs58", "socket.io-client"],
   },
   server: {
     fs: {

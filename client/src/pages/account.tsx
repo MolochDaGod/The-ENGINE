@@ -7,7 +7,7 @@
  *   - Warlord-Crafting-Suite/client/src/pages/Settings.tsx (sidebar settings sections)
  *
  * All API calls use The-ENGINE cookie-based routes:
- *   - GET  /api/auth/me          → player profile (incl. provider IDs)
+ *   - GET  /api/auth/me          → player profile (incl. provider IDs); Bearer fleet JWT + cookie
  *   - GET  /api/me/stats         → stats aggregate
  *   - GET  /api/me/scores        → recent scores
  *   - GET  /api/me/games         → games played
@@ -21,13 +21,16 @@
 import { useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Coins, Gamepad, Loader2, LogOut, Settings, Swords, Users, UserCircle, Wallet } from "lucide-react";
+import { Coins, Gamepad, Layers, Loader2, LogOut, Map, Settings, Swords, Users, UserCircle, Wallet } from "lucide-react";
 import { useAuth } from "@/components/auth-provider";
 import { useAuthModal } from "@/components/auth-modal";
 import AccountOverview from "@/components/account/AccountOverview";
 import AccountWallet from "@/components/account/AccountWallet";
 import AccountSettings from "@/components/account/AccountSettings";
 import AccountCharacters from "@/components/account/AccountCharacters";
+import AccountGamesHub from "@/components/account/AccountGamesHub";
+import AccountDecks from "@/components/account/AccountDecks";
+import AccountIslands from "@/components/account/AccountIslands";
 
 export default function AccountPage() {
   const { player, loading, logout } = useAuth();
@@ -71,11 +74,20 @@ export default function AccountPage() {
             <TabsTrigger value="overview" className="data-[state=active]:bg-[hsl(43,85%,55%)]/15 data-[state=active]:text-[hsl(43,85%,55%)] text-[hsl(45,15%,55%)] text-xs font-heading">
               <Gamepad className="w-3.5 h-3.5 mr-1.5" /> Overview
             </TabsTrigger>
+            <TabsTrigger value="games" className="data-[state=active]:bg-[hsl(43,85%,55%)]/15 data-[state=active]:text-[hsl(43,85%,55%)] text-[hsl(45,15%,55%)] text-xs font-heading">
+              <Gamepad className="w-3.5 h-3.5 mr-1.5" /> Games
+            </TabsTrigger>
             <TabsTrigger value="wallet" className="data-[state=active]:bg-[hsl(43,85%,55%)]/15 data-[state=active]:text-[hsl(43,85%,55%)] text-[hsl(45,15%,55%)] text-xs font-heading">
               <Wallet className="w-3.5 h-3.5 mr-1.5" /> Wallet & Web3
             </TabsTrigger>
             <TabsTrigger value="characters" className="data-[state=active]:bg-[hsl(43,85%,55%)]/15 data-[state=active]:text-[hsl(43,85%,55%)] text-[hsl(45,15%,55%)] text-xs font-heading">
               <UserCircle className="w-3.5 h-3.5 mr-1.5" /> Characters
+            </TabsTrigger>
+            <TabsTrigger value="decks" className="data-[state=active]:bg-[hsl(43,85%,55%)]/15 data-[state=active]:text-[hsl(43,85%,55%)] text-[hsl(45,15%,55%)] text-xs font-heading">
+              <Layers className="w-3.5 h-3.5 mr-1.5" /> Decks
+            </TabsTrigger>
+            <TabsTrigger value="islands" className="data-[state=active]:bg-[hsl(43,85%,55%)]/15 data-[state=active]:text-[hsl(43,85%,55%)] text-[hsl(45,15%,55%)] text-xs font-heading">
+              <Map className="w-3.5 h-3.5 mr-1.5" /> Islands
             </TabsTrigger>
             <TabsTrigger value="pvp" className="data-[state=active]:bg-[hsl(43,85%,55%)]/15 data-[state=active]:text-[hsl(43,85%,55%)] text-[hsl(45,15%,55%)] text-xs font-heading">
               <Swords className="w-3.5 h-3.5 mr-1.5" /> PvP
@@ -92,12 +104,24 @@ export default function AccountPage() {
             <AccountOverview player={player} />
           </TabsContent>
 
+          <TabsContent value="games" className="mt-6">
+            <AccountGamesHub />
+          </TabsContent>
+
           <TabsContent value="wallet" className="mt-6">
             <AccountWallet player={player} />
           </TabsContent>
 
           <TabsContent value="characters" className="mt-6">
             <AccountCharacters player={player} />
+          </TabsContent>
+
+          <TabsContent value="decks" className="mt-6">
+            <AccountDecks />
+          </TabsContent>
+
+          <TabsContent value="islands" className="mt-6">
+            <AccountIslands />
           </TabsContent>
 
           <TabsContent value="pvp" className="mt-6">
@@ -194,17 +218,22 @@ function FriendsTab() {
         ) : (
           <ul className="space-y-2">
             {friends.data.map((f: any) => (
-              <li key={f.friendshipId || f.id} className="flex items-center justify-between p-2.5 rounded border border-[hsl(43,60%,30%)]/15">
-                <div className="flex items-center gap-3">
-                  <div className={`w-2 h-2 rounded-full ${f.isOnline ? "bg-[hsl(120,60%,50%)] shadow-[0_0_4px_hsl(120,60%,50%)]" : "bg-[hsl(45,15%,30%)]"}`} />
-                  <div>
-                    <div className="text-sm font-medium">{f.displayName || f.username}</div>
-                    <div className="text-[10px] text-[hsl(45,15%,50%)] font-body">{f.grudgeId}</div>
+              <li key={f.friendshipId || f.id} className="flex items-center justify-between p-2.5 rounded border border-[hsl(43,60%,30%)]/15 gap-2">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className={`w-2 h-2 rounded-full shrink-0 ${f.isOnline ? "bg-[hsl(120,60%,50%)] shadow-[0_0_4px_hsl(120,60%,50%)]" : "bg-[hsl(45,15%,30%)]"}`} />
+                  <div className="min-w-0">
+                    <div className="text-sm font-medium truncate">{f.displayName || f.username}</div>
+                    <div className="text-[10px] text-[hsl(45,15%,50%)] font-body truncate">{f.grudgeId}</div>
                   </div>
                 </div>
-                <Badge variant="outline" className="text-[9px] border-[hsl(43,60%,30%)]/30 text-[hsl(45,15%,55%)]">
-                  {f.isOnline ? "Online" : "Offline"}
-                </Badge>
+                <div className="flex items-center gap-2 shrink-0">
+                  <Link href={`/chat?room=${encodeURIComponent(f.dmRoom || "general")}`}>
+                    <Button size="sm" variant="outline" className="h-7 text-[10px]">Message</Button>
+                  </Link>
+                  <Badge variant="outline" className="text-[9px] border-[hsl(43,60%,30%)]/30 text-[hsl(45,15%,55%)]">
+                    {f.isOnline ? "Online" : "Offline"}
+                  </Badge>
+                </div>
               </li>
             ))}
           </ul>

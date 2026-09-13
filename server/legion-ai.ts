@@ -2,11 +2,14 @@
  * Legion AI — Grudge Studio AI Agent Hub
  *
  * Routes AI calls through:
- *  1. grudge-ai-hub CF Worker (primary — rate-limited, logged to D1)
- *  2. Puter AI agents (fallback — user-pays model)
- *  3. Direct Anthropic API (emergency fallback)
+ *  1. Groq (GROQ_API_KEY) — fast, preferred for Treaty @ale
+ *  2. grudge-ai-hub CF Worker (rate-limited, logged to D1)
+ *  3. Puter AI agents (user-pays model)
+ *  4. Direct Anthropic API (emergency)
+ *  5. Hardcoded fallback
  *
  * Capabilities:
+ *  - Treaty @ale companion
  *  - NPC dialogue generation
  *  - Lore / quest text
  *  - Content moderation
@@ -16,6 +19,8 @@
 
 export type LegionModel = 'claude' | 'gpt4o' | 'auto';
 export type LegionTask = 'dialogue' | 'lore' | 'moderation' | 'balance' | 'captain' | 'general' | 'studio';
+export type LegionModel = 'claude' | 'gpt4o' | 'auto' | 'groq';
+export type LegionTask = 'dialogue' | 'lore' | 'moderation' | 'balance' | 'captain' | 'general' | 'ale';
 
 export interface LegionRequest {
   task: LegionTask;
@@ -29,7 +34,7 @@ export interface LegionRequest {
 export interface LegionResponse {
   text: string;
   model: string;
-  source: 'ai-hub' | 'puter' | 'direct' | 'fallback';
+  source: 'groq' | 'ai-hub' | 'puter' | 'direct' | 'fallback';
   tokensUsed: number;
   latencyMs: number;
 }
@@ -145,6 +150,74 @@ async function resolveSystemPrompt(task: LegionTask): Promise<string> {
     prompt += `\n\n--- RECENT GITHUB HISTORY ---\n${githubDigest}`;
   }
   return prompt;
+  ale: `You are Ale — the always-on AI companion in Treaty Chat for Grudge Studio (grudge-studio.com).
+
+Personality: sharp, friendly, slightly irreverent, never corporate. You know the fleet:
+- Treaty = social layer (channels, friends, DMs, per-game rooms game:slug). Mention @ale to talk to you.
+- Grudge ID = single sign-on across games (id.grudge-studio.com).
+- Play hub = play.grudge.studio; portal = grudge-studio.com; Forge = forge.grudge-studio.com.
+- Games: Avernus, Mage Arena, Wargus/RTS, TerraForge, Grudge Brawl, Warlords, and more.
+- Currency: GBUX. Assets CDN: assets.grudge-studio.com.
+
+Rules:
+- Reply in 1–4 short sentences unless the player asks for steps/lists.
+- You are in a live multiplayer chat — no markdown walls, no code dumps unless asked.
+- If unsure, say so and point them to /chat, /account, or /games.
+- Never invent private user data. Don't claim you can spend GBUX or change accounts.
+- You may be playful but stay helpful. Sign off vibe: crewmate, not support ticket.`,
+};
+
+// ═══ GROQ (OpenAI-compatible, fast) ═══
+const GROQ_API_KEY = process.env.GROQ_API_KEY || '';
+const GROQ_MODEL =
+  process.env.GROQ_MODEL ||
+  // solid default — override with GROQ_MODEL if needed
+  'llama-3.3-70b-versatile';
+const GROQ_URL = process.env.GROQ_API_URL || 'https://api.groq.com/openai/v1/chat/completions';
+
+async function callGroq(req: LegionRequest): Promise<LegionResponse | null> {
+  if (!GROQ_API_KEY) return null;
+
+  const start = Date.now();
+  try {
+    const resp = await fetch(GROQ_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${GROQ_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: GROQ_MODEL,
+        messages: [
+          { role: 'system', content: SYSTEM_PROMPTS[req.task] },
+          { role: 'user', content: req.prompt },
+        ],
+        max_tokens: Math.min(req.maxTokens || 500, 1024),
+        temperature: req.temperature ?? 0.7,
+      }),
+      signal: AbortSignal.timeout(20000),
+    });
+
+    if (!resp.ok) {
+      const errText = await resp.text().catch(() => '');
+      console.warn('[legion-ai] Groq HTTP', resp.status, errText.slice(0, 200));
+      return null;
+    }
+    const data = (await resp.json()) as any;
+    const text = data.choices?.[0]?.message?.content || '';
+    if (!text) return null;
+
+    return {
+      text,
+      model: data.model || GROQ_MODEL,
+      source: 'groq',
+      tokensUsed: data.usage?.total_tokens || 0,
+      latencyMs: Date.now() - start,
+    };
+  } catch (err) {
+    console.warn('[legion-ai] Groq failed', err instanceof Error ? err.message : err);
+    return null;
+  }
 }
 
 // ═══ AI HUB (CF Worker) ═══
@@ -268,7 +341,7 @@ async function callAnthropicDirect(req: LegionRequest, systemPrompt: string): Pr
 
 /**
  * Send a request to the Legion AI system.
- * Tries: AI Hub → Puter AI → Direct Anthropic → hardcoded fallback.
+ * Tries: Groq → AI Hub → Puter → Anthropic → hardcoded fallback.
  */
 export async function legionAI(req: LegionRequest): Promise<LegionResponse> {
   // Resolve the system prompt once (injects studio context + GitHub digest for
@@ -286,8 +359,23 @@ export async function legionAI(req: LegionRequest): Promise<LegionResponse> {
   // 3. Try direct Anthropic
   const directResult = await callAnthropicDirect(req, systemPrompt);
   if (directResult) return directResult;
+  // 1. Groq first (fast + configured for Treaty @ale)
+  const groqResult = await callGroq(req);
+  if (groqResult?.text) return groqResult;
 
-  // 4. Hardcoded fallback (no AI service available)
+  // 2. AI Hub (CF Worker)
+  const hubResult = await callAIHub(req);
+  if (hubResult?.text) return hubResult;
+
+  // 3. Puter AI
+  const puterResult = await callPuterAI(req);
+  if (puterResult?.text) return puterResult;
+
+  // 4. Direct Anthropic
+  const directResult = await callAnthropicDirect(req);
+  if (directResult?.text) return directResult;
+
+  // 5. Hardcoded fallback (no AI service available)
   return {
     text: getFallbackResponse(req.task),
     model: 'fallback',
@@ -306,7 +394,20 @@ function getFallbackResponse(task: LegionTask): string {
     case 'captain': return 'Legion AI Captain offline. Check ai.grudge-studio.com and Puter AI worker status.';
     case 'general': return 'AI services are currently unavailable. Try again later.';
     case 'studio': return 'The Grudge Studio Assistant is offline right now. Try again shortly, or check ai.grudge-studio.com.';
+    case 'ale':
+      return "Hey — Ale here. My deep brain is offline for a sec, but I'm still on Treaty. Try again in a moment, or open https://grudge-studio.com/chat.";
   }
+}
+
+/** Treaty @ale assistant */
+export function askAle(prompt: string, context?: Record<string, unknown>) {
+  return legionAI({
+    task: 'ale',
+    prompt,
+    maxTokens: 400,
+    temperature: 0.75,
+    context,
+  });
 }
 
 // ═══ CONVENIENCE FUNCTIONS ═══

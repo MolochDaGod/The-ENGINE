@@ -12,6 +12,11 @@ interface Obstacle {
 }
 
 export default function Overdrive3D() {
+  useEffect(() => {
+    document.title = "Overdrive Racing 3D — Grudge Studio";
+    return () => { document.title = "Rec0deD:88 — Grudge Studio Gaming Portal"; };
+  }, []);
+
   const containerRef = useRef<HTMLDivElement>(null);
   const [gameStarted, setGameStarted] = useState(false);
   const [gameOver, setGameOver] = useState(false);

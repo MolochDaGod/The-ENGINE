@@ -1,0 +1,13 @@
+# Vercel portal deploy — client + api serverless only (not Railway server)
+extracted_games/
+.local/
+server/
+deploy/
+dist/
+.wrangler/
+.agents/
+docs/
+node_modules/
+*.tar.gz
+*.zip
+The-ENGINE/

@@ -1,0 +1,26 @@
+# Local PostgreSQL for The-ENGINE development.
+# Usage: docker compose -f docker-compose.dev.yml up -d
+# Then set DATABASE_URL=postgresql://grudge:grudge@localhost:5432/the_engine
+# and run: npm run db:push
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: the-engine-postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: grudge
+      POSTGRES_PASSWORD: grudge
+      POSTGRES_DB: the_engine
+    volumes:
+      - the_engine_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U grudge -d the_engine"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  the_engine_pgdata:

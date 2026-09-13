@@ -1,0 +1,32 @@
+{
+  "version": "1.1.0",
+  "schema": "grudge6-rts-gear-presets",
+  "description": "Full RTS gear presets: 6 races × worker/warrior/ranger/mage (24). D1-compatible mesh_ids.",
+  "cdn_class_templates": "https://assets.grudge-studio.com/api/v1/grudge6-gear-presets.json",
+  "presets": [
+    {"id":"human_worker","race_id":"human","class_id":"worker","label":"Human Worker","anim_pack":"unarmed","mesh_ids":["WK_Units_Body_A","WK_Units_Arms_A","WK_Units_Legs_A","WK_Units_head_A"]},
+    {"id":"human_warrior","race_id":"human","class_id":"warrior","label":"Human Warrior","anim_pack":"sword_shield","mesh_ids":["WK_Units_Body_C","WK_Units_Arms_C","WK_Units_Legs_C","WK_Units_head_D","WK_Units_shoulderpads_B","WK_Units_sword_A","WK_Shield_A"]},
+    {"id":"human_ranger","race_id":"human","class_id":"ranger","label":"Human Ranger","anim_pack":"longbow","mesh_ids":["WK_Units_Body_A","WK_Units_Arms_A","WK_Units_Legs_A","WK_Units_head_A","WK_Units_bow_A","WK_Xtra_quiver"]},
+    {"id":"human_mage","race_id":"human","class_id":"mage","label":"Human Mage","anim_pack":"magic","mesh_ids":["WK_Units_Body_D","WK_Units_Arms_D","WK_Units_Legs_C","WK_Units_head_E","WK_Units_staff_A"]},
+    {"id":"barbarian_worker","race_id":"barbarian","class_id":"worker","label":"Barbarian Worker","anim_pack":"unarmed","mesh_ids":["BRB_Units_Body_A","BRB_Units_Arms_A","BRB_Units_Legs_A","BRB_Units_head_A"]},
+    {"id":"barbarian_warrior","race_id":"barbarian","class_id":"warrior","label":"Barbarian Warrior","anim_pack":"sword_shield","mesh_ids":["BRB_Units_Body_C","BRB_Units_Arms_C","BRB_Units_Legs_C","BRB_Units_head_D","BRB_Units_shoulderpads_B","BRB_Units_sword_A","BRB_Shield_A"]},
+    {"id":"barbarian_ranger","race_id":"barbarian","class_id":"ranger","label":"Barbarian Ranger","anim_pack":"longbow","mesh_ids":["BRB_Units_Body_A","BRB_Units_Arms_A","BRB_Units_Legs_A","BRB_Units_head_A","BRB_Units_bow_A","BRB_Xtra_quiver"]},
+    {"id":"barbarian_mage","race_id":"barbarian","class_id":"mage","label":"Barbarian Mage","anim_pack":"magic","mesh_ids":["BRB_Units_Body_D","BRB_Units_Arms_D","BRB_Units_Legs_C","BRB_Units_head_E","BRB_Units_staff_A"]},
+    {"id":"elf_worker","race_id":"elf","class_id":"worker","label":"Elf Worker","anim_pack":"unarmed","mesh_ids":["ELF_Units_Body_A","ELF_Units_Arms_A","ELF_Units_Legs_A","ELF_Units_head_A"]},
+    {"id":"elf_warrior","race_id":"elf","class_id":"warrior","label":"Elf Warrior","anim_pack":"sword_shield","mesh_ids":["ELF_Units_Body_C","ELF_Units_Arms_C","ELF_Units_Legs_C","ELF_Units_head_D","ELF_Units_shoulderpads_B","ELF_Units_sword_A","ELF_Shield_A"]},
+    {"id":"elf_ranger","race_id":"elf","class_id":"ranger","label":"Elf Ranger","anim_pack":"longbow","mesh_ids":["ELF_Units_Body_A","ELF_Units_Arms_A","ELF_Units_Legs_A","ELF_Units_head_A","ELF_Units_bow_A","ELF_Xtra_quiver"]},
+    {"id":"elf_mage","race_id":"elf","class_id":"mage","label":"Elf Mage","anim_pack":"magic","mesh_ids":["ELF_Units_Body_D","ELF_Units_Arms_D","ELF_Units_Legs_C","ELF_Units_head_E","ELF_Units_staff_A"]},
+    {"id":"dwarf_worker","race_id":"dwarf","class_id":"worker","label":"Dwarf Worker","anim_pack":"unarmed","mesh_ids":["DWF_Units_Body_A","DWF_Units_Arms_A","DWF_Units_Legs_A","DWF_Units_head_A"]},
+    {"id":"dwarf_warrior","race_id":"dwarf","class_id":"warrior","label":"Dwarf Warrior","anim_pack":"sword_shield","mesh_ids":["DWF_Units_Body_C","DWF_Units_Arms_C","DWF_Units_Legs_C","DWF_Units_head_D","DWF_Units_shoulderpads_B","DWF_Units_sword_A","DWF_Shield_A"]},
+    {"id":"dwarf_ranger","race_id":"dwarf","class_id":"ranger","label":"Dwarf Ranger","anim_pack":"longbow","mesh_ids":["DWF_Units_Body_A","DWF_Units_Arms_A","DWF_Units_Legs_A","DWF_Units_head_A","DWF_Units_bow_A","DWF_Xtra_quiver"]},
+    {"id":"dwarf_mage","race_id":"dwarf","class_id":"mage","label":"Dwarf Mage","anim_pack":"magic","mesh_ids":["DWF_Units_Body_D","DWF_Units_Arms_D","DWF_Units_Legs_C","DWF_Units_head_E","DWF_Units_staff_A"]},
+    {"id":"orc_worker","race_id":"orc","class_id":"worker","label":"Orc Worker","anim_pack":"unarmed","mesh_ids":["ORC_Units_Body_A","ORC_Units_Arms_A","ORC_Units_Legs_A","ORC_Units_head_A"]},
+    {"id":"orc_warrior","race_id":"orc","class_id":"warrior","label":"Orc Warrior","anim_pack":"sword_shield","mesh_ids":["ORC_Units_Body_C","ORC_Units_Arms_C","ORC_Units_Legs_C","ORC_Units_head_D","ORC_Units_shoulderpads_B","ORC_Units_sword_A","ORC_Shield_A"]},
+    {"id":"orc_ranger","race_id":"orc","class_id":"ranger","label":"Orc Ranger","anim_pack":"longbow","mesh_ids":["ORC_Units_Body_A","ORC_Units_Arms_A","ORC_Units_Legs_A","ORC_Units_head_A","ORC_Units_bow_A","ORC_Xtra_quiver"]},
+    {"id":"orc_mage","race_id":"orc","class_id":"mage","label":"Orc Mage","anim_pack":"magic","mesh_ids":["ORC_Units_Body_D","ORC_Units_Arms_D","ORC_Units_Legs_C","ORC_Units_head_E","ORC_Units_staff_A"]},
+    {"id":"undead_worker","race_id":"undead","class_id":"worker","label":"Undead Worker","anim_pack":"unarmed","mesh_ids":["UD_Units_Body_A","UD_Units_Arms_A","UD_Units_Legs_A","UD_Units_head_A"]},
+    {"id":"undead_warrior","race_id":"undead","class_id":"warrior","label":"Undead Warrior","anim_pack":"sword_shield","mesh_ids":["UD_Units_Body_C","UD_Units_Arms_C","UD_Units_Legs_C","UD_Units_head_D","UD_Units_shoulderpads_B","UD_Units_sword_A","UD_Shield_A"]},
+    {"id":"undead_ranger","race_id":"undead","class_id":"ranger","label":"Undead Ranger","anim_pack":"longbow","mesh_ids":["UD_Units_Body_A","UD_Units_Arms_A","UD_Units_Legs_A","UD_Units_head_A","UD_Units_bow_A","UD_Xtra_quiver"]},
+    {"id":"undead_mage","race_id":"undead","class_id":"mage","label":"Undead Mage","anim_pack":"magic","mesh_ids":["UD_Units_Body_D","UD_Units_Arms_D","UD_Units_Legs_C","UD_Units_head_E","UD_Units_staff_A"]}
+  ]
+}

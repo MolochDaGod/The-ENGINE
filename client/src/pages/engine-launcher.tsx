@@ -232,7 +232,7 @@ export default function EngineLauncher() {
     // Map engines to their in-browser pages
     const engineRoutes: { [key: string]: string } = {
       'construct3': '/puzzle-platformer',
-      'buildbox': '/multiplayer-racing',
+      'buildbox': '/overdrive-racing',
       'gdevelop': '/puzzle-platformer',
       'stencyl': '/tower-defense',
       'rpgmaker': '/rpg-maker-studio',
@@ -258,7 +258,7 @@ export default function EngineLauncher() {
 
     const engineRoutes: { [key: string]: string } = {
       'construct3': '/puzzle-platformer',
-      'buildbox': '/multiplayer-racing',
+      'buildbox': '/overdrive-racing',
       'gdevelop': '/puzzle-platformer',
       'stencyl': '/tower-defense',
       'rpgmaker': '/rpg-maker-studio',

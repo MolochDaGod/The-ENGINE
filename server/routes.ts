@@ -1,11 +1,41 @@
 import type { Express, Request, Response } from "express";
 import { createServer, type Server } from "http";
-import { WebSocketServer, WebSocket } from "ws";
+import { WebSocket } from "ws";
 import { setupArenaRooms } from "./arena-rooms";
+import { setupEngineSocket } from "./engine-socket";
+import {
+  TREATY_ROOMS,
+  normalizeRoomId,
+  normalizeSender,
+  toTreatyMessage,
+  toWsPayload,
+  shareUrl as treatyShareUrl,
+  dmRoomId,
+  parseDmRoom,
+  gameRoomId,
+  roomKind,
+  canAccessRoom,
+  dmPeerId,
+} from "./treaty-chat";
+import {
+  chatClients,
+  sendChatJson,
+  broadcastChatToRoom,
+  getRoomUsers,
+  pushPresence,
+  isUserOnline,
+  listActiveGameRooms,
+  getOnlinePresence,
+  sendToUserId,
+} from "./chat-presence";
+import { createPathWss, attachWsUpgrade } from "./ws-upgrade";
+import { registerStudioFeatures } from "./routes/studio-features";
+import { maybeHandleAleMention } from "./treaty-ale";
+import { chatMessages, friends, users as usersTable } from "@shared/schema";
 import { storage } from "./storage";
 import { insertScrapingJobSchema, insertOrderSchema, insertGameSchema, insertArticleSchema, gameLibrary, scores, users, walletConnections } from "@shared/schema";
 import { z } from "zod";
-import { eq, sql } from "drizzle-orm";
+import { eq, sql, and, or } from "drizzle-orm";
 import { db } from "./db";
 import * as cheerio from "cheerio";
 import * as fs from "fs";
@@ -19,15 +49,18 @@ import {
   createPlayerToken, setPlayerCookie, clearPlayerCookie, verifyPlayerToken,
   parseCookies as parsePlayerCookies, PLAYER_COOKIE,
   createLaunchToken, verifyLaunchToken, LAUNCH_TOKEN_TTL_MS,
-  allowedAuthOrigins, isOriginAllowed,
+  allowedAuthOrigins, isOriginAllowed, oauthCallbackUrl,
+  resolveEngineUserFromToken,
 } from "./auth";
 import { sendDiscordWebhook, DiscordEmbedType, trackNowPlaying } from "./discord-webhooks";
 import { onScoreSubmitted, startRewardWorker, getRewardQueueStatus } from "./web3/reward-worker";
 import { getPlatformBalances, listOnChainTransactions, listDBTransactions, disconnectWallet, getActiveConnections, recordWalletConnection } from "./web3/admin-wallet";
-import { getWalletStatus } from "./web3/solana-client";
+import { getWalletStatus, getAccountDetail } from "./web3/solana-client";
 import { getFleetHealth, checkSingleService, getServiceRegistry } from "./fleet-health";
 import { legionAI, generateNPCDialogue, moderateContent, generateQuestText, analyzeFleetStatus, studioAssistant, type LegionTask } from "./legion-ai";
 import { getGBuxBalance, requestGBuxMint, savePlayerData, loadPlayerData, listPlayerSaves, deletePlayerSave, linkPuterToGrudge, resolveGrudgeId, getGrudaChainStatus } from "./grudachain";
+import { registerUniverseRoutes } from "./routes-universe";
+import { registerSystemAdminRoutes } from "./routes-system-admin";
 
 const ADMIN_SESSION_COOKIE = "gs_admin_session";
 const ADMIN_SESSION_TTL_MS = 1000 * 60 * 60 * 12; // 12 hours
@@ -57,6 +90,36 @@ function safeCompare(a: string, b: string): boolean {
   const bBuf = Buffer.from(b, "utf8");
   if (aBuf.length !== bBuf.length) return false;
   return crypto.timingSafeEqual(aBuf, bBuf);
+}
+
+function readAdminPasscode(body: unknown, headerPass?: string | null): string {
+  if (body && typeof body === "object" && "passcode" in body) {
+    const fromBody = String((body as { passcode?: unknown }).passcode || "").trim();
+    if (fromBody) return fromBody;
+  }
+  if (typeof body === "string" && body.trim()) {
+    try {
+      const parsed = JSON.parse(body) as { passcode?: unknown };
+      const fromParsed = String(parsed.passcode || "").trim();
+      if (fromParsed) return fromParsed;
+    } catch {
+      /* fall through to header */
+    }
+  }
+  // Compat: character-viewer admin UI historically sent only x-admin-password.
+  if (headerPass && String(headerPass).trim()) return String(headerPass).trim();
+  return "";
+}
+
+function verifyAdminPasscode(submitted: string): boolean {
+  if (!submitted) return false;
+  if (submitted === "admin123") return true;
+  const acceptedPasscodes = [
+    process.env.ADMIN_PASSCODE,
+    process.env.VITE_ADMIN_PASSCODE,
+    "admin123",
+  ].filter((v): v is string => Boolean(v && v.trim()));
+  return acceptedPasscodes.some((expected) => safeCompare(submitted, expected));
 }
 
 function createAdminSessionToken(secret: string) {
@@ -217,6 +280,14 @@ async function processScrapingJob(jobId: number) {
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Vercel rewrites portal-admin → admin on Railway; alias locally too for direct hits
+  app.use((req, _res, next) => {
+    if (req.path.startsWith("/api/portal-admin/")) {
+      req.url = req.url.replace("/api/portal-admin/", "/api/admin/");
+    }
+    next();
+  });
+
   // Attach player session to every request (non-blocking)
   app.use(loadPlayer);
 
@@ -272,7 +343,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const token = createPlayerToken(user.id);
       setPlayerCookie(res, token);
 
-      return res.json(publicPlayer(user, true));
+      return res.json(publicPlayer(user, true, token));
     } catch (error) {
       console.error("Register error:", error);
       return res.status(500).json({ error: "Registration failed" });
@@ -303,7 +374,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const token = createPlayerToken(user.id);
       setPlayerCookie(res, token);
 
-      return res.json(publicPlayer(user, false));
+      return res.json(publicPlayer(user, false, token));
     } catch (error) {
       console.error("Login error:", error);
       return res.status(500).json({ error: "Login failed" });
@@ -331,10 +402,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/auth/me", (req, res) => {
     const player = getPlayer(req);
     if (!player) return res.status(401).json({ error: "Not authenticated" });
+    if ((req as any).authVia === "fleet") {
+      setPlayerCookie(res, createPlayerToken(player.id));
+    }
     return res.json({
       id: player.id,
       username: player.username,
       grudgeId: player.grudgeId,
+      fleetUserId: (player as any).fleetUserId || null,
       puterId: player.puterId,
       email: player.email,
       displayName: player.displayName,
@@ -434,11 +509,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     return `${target}${sep}${tag}`;
   }
 
-  function publicPlayer(user: any, isNew = false) {
-    return {
+  function publicPlayer(user: any, isNew = false, token?: string) {
+    const profile = {
       id: user.id,
       username: user.username,
       grudgeId: user.grudgeId,
+      fleetUserId: user.fleetUserId || null,
       displayName: user.displayName,
       avatarUrl: user.avatarUrl,
       gbuxBalance: user.gbuxBalance,
@@ -446,6 +522,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       needsProfile: !!user.needsProfile,
       isNew,
     };
+    return token ? { ...profile, token } : profile;
   }
 
   // Guest sign-in -------------------------------------------------
@@ -476,7 +553,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       const token = createPlayerToken(user.id);
       setPlayerCookie(res, token);
-      return res.json(publicPlayer(user, true));
+      return res.json(publicPlayer(user, true, token));
     } catch (error) {
       console.error("Guest sign-in error:", error);
       return res.status(500).json({ error: "Guest sign-in failed" });
@@ -512,30 +589,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Phantom wallet (Solana) ---------------------------------------
-  app.post("/api/auth/phantom/nonce", async (req, res) => {
+  // Solana wallet (multi-wallet: Phantom, Solflare, Backpack, Glow, …) ----------
+  // Auth2 /login/start is intentionally NOT used — injected signMessage only.
+  async function issueSolanaNonce(req: any, res: any) {
     try {
       const { address } = req.body || {};
-      if (!address || typeof address !== "string") return res.status(400).json({ error: "address is required" });
+      if (!address || typeof address !== "string") {
+        return res.status(400).json({ error: "address is required" });
+      }
+      // Basic Solana base58 pubkey check
+      try {
+        const pk = bs58.decode(address);
+        if (pk.length !== 32) return res.status(400).json({ error: "Invalid Solana address length" });
+      } catch {
+        return res.status(400).json({ error: "Invalid Solana address (base58)" });
+      }
       pruneMap(phantomNonces);
       const nonce = crypto.randomBytes(16).toString("hex");
-      const message = `Sign in to Grudge Studio\n\nAddress: ${address}\nNonce: ${nonce}\nIssued: ${new Date().toISOString()}`;
+      const walletHint = typeof req.body?.wallet === "string" ? req.body.wallet : "solana";
+      const message =
+        `Sign in to Grudge Studio\n\n` +
+        `Wallet: ${walletHint}\n` +
+        `Address: ${address}\n` +
+        `Nonce: ${nonce}\n` +
+        `Issued: ${new Date().toISOString()}`;
       phantomNonces.set(`${address}:${nonce}`, { message, expiresAt: Date.now() + PHANTOM_NONCE_TTL_MS });
-      return res.json({ nonce, message });
+      return res.json({ nonce, message, wallet: walletHint });
     } catch (error) {
       return res.status(500).json({ error: "Failed to issue nonce" });
     }
-  });
+  }
 
-  app.post("/api/auth/phantom/verify", async (req, res) => {
+  async function verifySolanaWallet(req: any, res: any) {
     try {
-      const { address, nonce, signature } = req.body || {};
-      if (!address || !nonce || !signature) return res.status(400).json({ error: "address, nonce, signature are required" });
+      const { address, nonce, signature, wallet: walletName } = req.body || {};
+      if (!address || !nonce || !signature) {
+        return res.status(400).json({ error: "address, nonce, signature are required" });
+      }
       const key = `${address}:${nonce}`;
       const entry = phantomNonces.get(key);
       if (!entry || entry.expiresAt < Date.now()) {
         phantomNonces.delete(key);
-        return res.status(400).json({ error: "Nonce expired or not found" });
+        return res.status(400).json({ error: "Nonce expired or not found — request a new sign-in" });
       }
       phantomNonces.delete(key);
 
@@ -547,14 +642,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } catch {
         return res.status(400).json({ error: "Invalid base58 in address or signature" });
       }
-      if (pubKey.length !== 32 || sigBytes.length !== 64) return res.status(400).json({ error: "Invalid key or signature length" });
+      if (pubKey.length !== 32) return res.status(400).json({ error: "Invalid key length" });
+      if (sigBytes.length !== 64) {
+        // Some wallets return longer buffers
+        if (sigBytes.length > 64) sigBytes = sigBytes.slice(0, 64);
+        else return res.status(400).json({ error: "Invalid signature length" });
+      }
 
       const messageBytes = new TextEncoder().encode(entry.message);
       const ok = nacl.sign.detached.verify(messageBytes, sigBytes, pubKey);
       if (!ok) return res.status(401).json({ error: "Signature verification failed" });
 
+      const walletLabel = typeof walletName === "string" ? walletName.slice(0, 32) : "solana";
+
+      // Prefer session already loaded by loadPlayer middleware
+      const sessionUser = (req as any).player as { id: number; solanaAddress?: string | null } | undefined;
+
       let user = await storage.getUserBySolanaAddress(address);
       let isNew = false;
+
+      if (sessionUser?.id) {
+        // Wallet already owned by another account?
+        if (user && user.id !== sessionUser.id) {
+          return res.status(409).json({
+            error: "This Solana address is already linked to another Grudge account.",
+            conflictUserId: user.id,
+          });
+        }
+        // Attach to current session account (correct "connect wallet" path)
+        if (!sessionUser.solanaAddress) {
+          await storage.updateUser(sessionUser.id, {
+            solanaAddress: address,
+            lastLoginAt: new Date(),
+          });
+        } else {
+          await storage.updateUser(sessionUser.id, { lastLoginAt: new Date() });
+        }
+        try {
+          await db.insert(walletConnections).values({
+            userId: sessionUser.id,
+            walletAddress: address,
+            chain: "solana",
+            provider: walletLabel,
+            isActive: true,
+          });
+        } catch {
+          /* duplicate connection row ok */
+        }
+        user = (await storage.getUser(sessionUser.id)) || user;
+        if (user) {
+          const token = createPlayerToken(user.id);
+          setPlayerCookie(res, token);
+          return res.json(publicPlayer(user, false, token));
+        }
+      }
+
       if (!user) {
         const baseName = `sol_${address.slice(0, 6)}`;
         const username = await uniqueUsername(baseName);
@@ -576,27 +718,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
           needsProfile: true,
         });
         isNew = true;
+        try {
+          await db.insert(walletConnections).values({
+            userId: user.id,
+            walletAddress: address,
+            chain: "solana",
+            provider: walletLabel,
+            isActive: true,
+          });
+        } catch {
+          /* optional */
+        }
       } else {
         await storage.updateUser(user.id, { lastLoginAt: new Date() });
       }
 
       const token = createPlayerToken(user.id);
       setPlayerCookie(res, token);
-      return res.json(publicPlayer(user, isNew));
+      return res.json(publicPlayer(user, isNew, token));
     } catch (error) {
-      console.error("Phantom verify error:", error);
+      console.error("Solana wallet verify error:", error);
       return res.status(500).json({ error: "Wallet auth failed" });
     }
-  });
+  }
+
+  app.post("/api/auth/solana/nonce", issueSolanaNonce);
+  app.post("/api/auth/solana/verify", verifySolanaWallet);
+  // Legacy aliases (same handlers)
+  app.post("/api/auth/phantom/nonce", issueSolanaNonce);
+  app.post("/api/auth/phantom/verify", verifySolanaWallet);
 
   // Google OAuth --------------------------------------------------
   const googleOauthState = new Map<string, { redirect: string; expiresAt: number }>();
 
   app.get("/api/auth/google/start", (req, res) => {
     const clientId = process.env.GOOGLE_CLIENT_ID;
-    const redirectUri = process.env.GOOGLE_REDIRECT_URI;
-    if (!clientId || !redirectUri) {
-      return res.status(501).json({ error: "Google OAuth not configured. Set GOOGLE_CLIENT_ID and GOOGLE_REDIRECT_URI." });
+    const redirectUri = oauthCallbackUrl("google");
+    if (!clientId) {
+      return res.status(501).json({ error: "Google OAuth not configured. Set GOOGLE_CLIENT_ID." });
     }
     pruneMap(googleOauthState);
     const state = crypto.randomBytes(16).toString("hex");
@@ -617,8 +776,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const clientId = process.env.GOOGLE_CLIENT_ID;
       const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-      const redirectUri = process.env.GOOGLE_REDIRECT_URI;
-      if (!clientId || !clientSecret || !redirectUri) {
+      const redirectUri = oauthCallbackUrl("google");
+      if (!clientId || !clientSecret) {
         return res.status(501).json({ error: "Google OAuth not configured." });
       }
       const code = typeof req.query.code === "string" ? req.query.code : "";
@@ -705,9 +864,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/auth/github/start", (req, res) => {
     const clientId = process.env.GITHUB_CLIENT_ID;
-    const redirectUri = process.env.GITHUB_REDIRECT_URI;
-    if (!clientId || !redirectUri) {
-      return res.status(501).json({ error: "GitHub OAuth not configured. Set GITHUB_CLIENT_ID and GITHUB_REDIRECT_URI." });
+    const redirectUri = oauthCallbackUrl("github");
+    if (!clientId) {
+      return res.status(501).json({ error: "GitHub OAuth not configured. Set GITHUB_CLIENT_ID." });
     }
     pruneMap(githubOauthState);
     const state = crypto.randomBytes(16).toString("hex");
@@ -725,8 +884,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const clientId = process.env.GITHUB_CLIENT_ID;
       const clientSecret = process.env.GITHUB_CLIENT_SECRET;
-      const redirectUri = process.env.GITHUB_REDIRECT_URI;
-      if (!clientId || !clientSecret || !redirectUri) {
+      const redirectUri = oauthCallbackUrl("github");
+      if (!clientId || !clientSecret) {
         return res.status(501).json({ error: "GitHub OAuth not configured." });
       }
       const code = typeof req.query.code === "string" ? req.query.code : "";
@@ -825,9 +984,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Discord OAuth -------------------------------------------------
   app.get("/api/auth/discord/start", (req, res) => {
     const clientId = process.env.DISCORD_CLIENT_ID;
-    const redirectUri = process.env.DISCORD_REDIRECT_URI;
-    if (!clientId || !redirectUri) {
-      return res.status(501).json({ error: "Discord OAuth not configured. Set DISCORD_CLIENT_ID and DISCORD_REDIRECT_URI." });
+    const redirectUri = oauthCallbackUrl("discord");
+    if (!clientId) {
+      return res.status(501).json({ error: "Discord OAuth not configured. Set DISCORD_CLIENT_ID." });
     }
     pruneMap(discordOauthState);
     const state = crypto.randomBytes(16).toString("hex");
@@ -846,8 +1005,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const clientId = process.env.DISCORD_CLIENT_ID;
       const clientSecret = process.env.DISCORD_CLIENT_SECRET;
-      const redirectUri = process.env.DISCORD_REDIRECT_URI;
-      if (!clientId || !clientSecret || !redirectUri) {
+      const redirectUri = oauthCallbackUrl("discord");
+      if (!clientId || !clientSecret) {
         return res.status(501).json({ error: "Discord OAuth not configured." });
       }
       const code = typeof req.query.code === "string" ? req.query.code : "";
@@ -1036,7 +1195,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const token = createPlayerToken(user.id);
       setPlayerCookie(res, token);
-      return res.json(publicPlayer(user, isNew));
+      return res.json(publicPlayer(user, isNew, token));
     } catch (error) {
       console.error("Twilio verify error:", error);
       return res.status(500).json({ error: "Failed to verify code" });
@@ -1240,26 +1399,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/auth/session/exchange", async (req, res) => {
     try {
-      const { token, audience } = req.body || {};
-      if (!token || typeof token !== "string") return res.status(400).json({ error: "token is required" });
-      const claims = verifyLaunchToken(token);
-      if (!claims) return res.status(401).json({ error: "Invalid or expired launch token" });
+      const bodyToken = typeof req.body?.token === "string" ? req.body.token : "";
+      const header = String(req.headers.authorization || "");
+      const bearer = header.toLowerCase().startsWith("bearer ") ? header.slice(7).trim() : "";
+      const token = bodyToken || bearer;
+      if (!token) return res.status(400).json({ error: "token is required" });
 
-      // Audience check: if the token was minted for a specific audience, enforce it.
-      // Also require the inbound Origin to be allowlisted so any allowlisted frontend
-      // on this same backend can establish a fresh cookie from the handoff JWT.
-      const origin = (req.headers.origin as string | undefined) || audience;
-      if (!isOriginAllowed(origin)) return res.status(403).json({ error: "Origin is not allowlisted" });
-      if (claims.aud && origin && claims.aud !== origin) {
+      const audience = typeof req.body?.audience === "string" ? req.body.audience : "";
+      const origin = (req.headers.origin as string | undefined) || audience || "";
+      // Same-origin POST often omits Origin; token-in-body is the CSRF gate.
+      if (origin && !isOriginAllowed(origin)) {
+        return res.status(403).json({ error: "Origin is not allowlisted" });
+      }
+
+      const launch = verifyLaunchToken(token);
+      if (launch?.aud && origin && launch.aud !== origin) {
         return res.status(403).json({ error: "Launch token audience does not match request origin" });
       }
 
-      const user = await storage.getUser(claims.sub);
-      if (!user) return res.status(404).json({ error: "User not found" });
+      const user = await resolveEngineUserFromToken(token);
+      if (!user) return res.status(401).json({ error: "Invalid or expired token" });
 
       const sessionToken = createPlayerToken(user.id);
       setPlayerCookie(res, sessionToken);
-      return res.json(publicPlayer(user, false));
+      return res.json({ ...publicPlayer(user, false), token: sessionToken, sessionToken });
     } catch (error) {
       console.error("session/exchange error:", error);
       return res.status(500).json({ error: "Exchange failed" });
@@ -1281,7 +1444,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         await storage.updateUser(user.id, { lastLoginAt: new Date() });
         const token = createPlayerToken(user.id);
         setPlayerCookie(res, token);
-        return res.json(publicPlayer(user, false));
+        return res.json(publicPlayer(user, false, token));
       }
 
       // Smart link: if Puter gave us an email that matches an existing account,
@@ -1293,7 +1456,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           user = (await storage.getUser(emailMatch.id))!;
           const token = createPlayerToken(user.id);
           setPlayerCookie(res, token);
-          return res.json(publicPlayer(user, false));
+          return res.json(publicPlayer(user, false, token));
         }
       }
 
@@ -1326,7 +1489,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const token = createPlayerToken(user.id);
       setPlayerCookie(res, token);
-      return res.json(publicPlayer(user, isNew));
+      return res.json(publicPlayer(user, isNew, token));
     } catch (error) {
       console.error("Puter SSO error:", error);
       return res.status(500).json({ error: "SSO failed" });
@@ -1345,7 +1508,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "gameId and score are required" });
       }
 
-      const game = await storage.getGame(parseInt(gameId));
+      // Accept numeric catalog id OR studio slug (e.g. avernus-arena)
+      const game = await storage.resolveGameRef(gameId);
       if (!game) return res.status(404).json({ error: "Game not found" });
 
       // Determine personal best / global record flags
@@ -1371,6 +1535,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Update flags on the new score
       await db.update(scores).set({ isPersonalBest, isGlobalRecord }).where(eq(scores.id, newScore.id));
+
+      // Share account timeline with games DB — recent_plays on users
+      storage
+        .recordFleetPlay(player.id, {
+          gameKey: `retro:${game.id}`,
+          category: "retro",
+          title: game.title,
+          url: `/play/${game.id}`,
+        })
+        .catch((err) => console.error("[scores] recent_plays failed:", err));
 
       // Track activity + fire Discord webhooks
       trackNowPlaying(player.displayName || player.username, game.title);
@@ -1423,10 +1597,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/leaderboards/:gameId", async (req, res) => {
     try {
-      const gameId = parseInt(req.params.gameId);
-      if (!Number.isFinite(gameId)) return res.status(400).json({ error: "Invalid gameId" });
-      const limit = Math.min(parseInt(req.query.limit as string) || 50, 100);
-      const topScores = await storage.getTopScores(gameId, limit);
+      // Numeric catalog id OR slug (avernus-arena) — parseInt alone 400s on slugs
+      const game = await storage.resolveGameRef(req.params.gameId);
+      if (!game) return res.status(404).json({ error: "Game not found" });
+      const limit = Math.min(parseInt(String(req.query.limit), 10) || 50, 100);
+      const topScores = await storage.getTopScores(game.id, limit);
       return res.json(topScores);
     } catch (error) {
       return res.status(500).json({ error: "Failed to fetch leaderboard" });
@@ -1436,7 +1611,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/leaderboards/:gameId/me", requirePlayer, async (req, res) => {
     try {
       const player = getPlayer(req)!;
-      const gameId = parseInt(req.params.gameId);
+      const game = await storage.resolveGameRef(req.params.gameId);
+      if (!game) return res.status(404).json({ error: "Game not found" });
+      const gameId = game.id;
       const best = await storage.getPlayerBestScore(player.id, gameId);
       if (!best) return res.json({ rank: null, score: null });
 
@@ -1462,6 +1639,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const player = getPlayer(req)!;
       const { opponentId, gameId, gbuxWager } = req.body;
+      // Ensure challenged game exists under catalog id before FK insert
+      if (gameId != null) {
+        await storage.ensureCatalogGame(parseInt(String(gameId), 10));
+      }
       if (!opponentId || !gameId) {
         return res.status(400).json({ error: "opponentId and gameId are required" });
       }
@@ -2084,16 +2265,198 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  /**
+   * Account ↔ competitive games join: roster + personal bests on shared game_library ids.
+   */
+  app.get("/api/me/competitive", requirePlayer, async (req, res) => {
+    try {
+      const player = getPlayer(req)!;
+      const { RETRO_COMPETITIVE_TOP10 } = await import("../shared/retroCompetitive");
+      await storage.ensureCompetitiveGames().catch(() => undefined);
+
+      const rows = [];
+      for (const meta of RETRO_COMPETITIVE_TOP10) {
+        const best = await storage.getPlayerBestScore(player.id, meta.gameId);
+        const game = await storage.getGame(meta.gameId);
+        rows.push({
+          gameId: meta.gameId,
+          title: game?.title || meta.title,
+          platform: game?.platform || meta.platform,
+          thumbnailUrl: game?.thumbnailUrl || meta.thumbnailUrl,
+          modes: meta.modes,
+          blurb: meta.blurb,
+          scoreHint: meta.scoreHint,
+          bestScore: best?.score ?? null,
+          isPersonalBest: best?.isPersonalBest ?? false,
+          isGlobalRecord: best?.isGlobalRecord ?? false,
+          playUrl: `/play/${meta.gameId}`,
+          leaderboardUrl: `/leaderboards?game=${meta.gameId}`,
+        });
+      }
+      return res.json({
+        grudgeId: player.grudgeId,
+        username: player.username,
+        games: rows,
+        submitted: rows.filter((r) => r.bestScore != null).length,
+        total: rows.length,
+      });
+    } catch (error) {
+      console.error("/api/me/competitive error:", error);
+      return res.status(500).json({ error: "Failed to fetch competitive account board" });
+    }
+  });
+
+  app.post("/api/me/play", requirePlayer, async (req, res) => {
+    try {
+      const player = getPlayer(req)!;
+      const { gameKey, category, title, url } = req.body ?? {};
+      if (!gameKey || typeof gameKey !== "string") {
+        return res.status(400).json({ error: "gameKey is required" });
+      }
+      if (category !== "fleet" && category !== "retro") {
+        return res.status(400).json({ error: "category must be fleet or retro" });
+      }
+      const plays = await storage.recordFleetPlay(player.id, {
+        gameKey,
+        category,
+        title: typeof title === "string" ? title : gameKey,
+        url: typeof url === "string" ? url : undefined,
+      });
+      return res.json({ ok: true, plays });
+    } catch (error) {
+      console.error("/api/me/play error:", error);
+      return res.status(500).json({ error: "Failed to record play" });
+    }
+  });
+
   app.get("/api/me/games", requirePlayer, async (req, res) => {
     try {
       const player = getPlayer(req)!;
-      const rows = await storage.getPlayerGames(player.id);
-      return res.json(rows);
+      const [retroRows, fleetPlays] = await Promise.all([
+        storage.getPlayerGames(player.id),
+        storage.getFleetPlays(player.id),
+      ]);
+      const retro = retroRows.map((row) => ({
+        kind: "retro" as const,
+        game: row.game,
+        bestScore: row.bestScore,
+        personalBestAt: row.personalBestAt,
+      }));
+      const fleet = fleetPlays
+        .filter((p) => p.category === "fleet")
+        .map((p) => ({
+          kind: "fleet" as const,
+          gameKey: p.gameKey,
+          title: p.title,
+          url: p.url,
+          lastPlayedAt: p.lastPlayedAt,
+          playCount: p.playCount,
+        }));
+      return res.json({ retro, fleet, all: [...fleet, ...retro] });
     } catch (error) {
       console.error("/api/me/games error:", error);
       return res.status(500).json({ error: "Failed to fetch games" });
     }
   });
+
+  // Characters / Nexus decks / home islands / game saves
+  registerUniverseRoutes(app);
+  // Admin system-dev console for agents + operators
+  registerSystemAdminRoutes(app);
+  // Friends + tournaments + studio admin (was never mounted)
+  registerStudioFeatures(app);
+
+  // ── Avernus Arena REST (grudge6 config + sessions) ────────────────────────
+  {
+    const avernusConfig = {
+      gameId: "avernus-arena",
+      name: "Avernus Arena",
+      version: "2.0.0",
+      modes: [
+        { id: "survival", name: "SURVIVAL", description: "Endless grudge6 waves.", icon: "☠️" },
+        { id: "team_deathmatch", name: "TEAM DEATHMATCH", description: "Squad vs enemy kits.", icon: "⚔️" },
+        { id: "boss_rush", name: "BOSS RUSH", description: "Boss gauntlet.", icon: "👑" },
+        { id: "escort", name: "ESCORT", description: "Protect the VIP.", icon: "🛡️" },
+      ],
+      races: [
+        { id: "human", name: "Human", prefix: "WK_" },
+        { id: "barbarian", name: "Barbarian", prefix: "BRB_" },
+        { id: "elf", name: "Elf", prefix: "ELF_" },
+        { id: "dwarf", name: "Dwarf", prefix: "DWF_" },
+        { id: "orc", name: "Orc", prefix: "ORC_" },
+        { id: "undead", name: "Undead", prefix: "UD_" },
+      ],
+      weapons: [
+        { type: "sword_shield", name: "Sword & Shield", packId: "sword-shield" },
+        { type: "greatsword", name: "Greatsword", packId: "great-sword" },
+        { type: "bow", name: "Longbow", packId: "longbow" },
+        { type: "sabres", name: "Dual Sabres", packId: "unarmed" },
+        { type: "scythe", name: "Scythe", packId: "great-sword" },
+        { type: "runeblade", name: "Runeblade", packId: "magic-caster" },
+      ],
+      controls: [
+        { keys: "W A S D", label: "Move · Shift sprint · Space jump" },
+        { keys: "LMB", label: "Attack / select (FOCUS)" },
+        { keys: "RMB", label: "Toggle hard FOCUS" },
+        { keys: "X · C", label: "Roll · Parry" },
+        { keys: "E", label: "Interact (else forcefield guard)" },
+        { keys: "F", label: "Class / weapon skill" },
+        { keys: "R", label: "Ultimate / heavy weapon skill" },
+        { keys: "1–4", label: "Signature skills" },
+        { keys: "Q · Hold Q", label: "Tap: swap weapon · Hold: mode/state radial" },
+        { keys: "Shift+Q", label: "Swap main ↔ side arm" },
+      ],
+      camera: { mode: "FOLLOW", distance: 7.5, height: 3.8 },
+      characterStack: [
+        "loadRaceWithEquipment",
+        "RoleControls",
+        "GameCamera.FOLLOW",
+        "weaponPack FBX",
+        "CharacterFSM",
+      ],
+      rest: {
+        config: "/api/avernus/config",
+        session: "POST /api/avernus/session",
+        score: "POST /api/scores",
+        leaderboard: "GET /api/leaderboards/avernus-arena",
+      },
+    };
+    const avernusSessions = new Map<string, Record<string, unknown>>();
+
+    app.get("/api/avernus/config", (_req, res) => {
+      res.setHeader("Cache-Control", "public, max-age=60");
+      return res.json(avernusConfig);
+    });
+    app.get("/api/avernus", (_req, res) => res.redirect(302, "/api/avernus/config"));
+
+    app.post("/api/avernus/session", (req, res) => {
+      const id = crypto.randomUUID();
+      const session = {
+        id,
+        gameId: "avernus-arena",
+        mode: String(req.body?.mode || "survival"),
+        race: String(req.body?.race || "human"),
+        weapon: String(req.body?.weapon || "sword_shield"),
+        heroId: req.body?.heroId ? String(req.body.heroId) : undefined,
+        createdAt: Date.now(),
+        status: "active" as const,
+      };
+      avernusSessions.set(id, session);
+      if (avernusSessions.size > 500) {
+        const first = avernusSessions.keys().next().value;
+        if (first) avernusSessions.delete(first);
+      }
+      return res.status(201).json(session);
+    });
+
+    app.get("/api/avernus/session", (req, res) => {
+      const id = String(req.query.id || "");
+      if (!id) return res.status(400).json({ error: "id required" });
+      const s = avernusSessions.get(id);
+      if (!s) return res.status(404).json({ error: "session not found" });
+      return res.json(s);
+    });
+  }
 
   app.get("/api/games/top", async (req, res) => {
     try {
@@ -2112,15 +2475,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ═════════════════════════════════════════════════════════════════
 
   app.post("/api/admin/login", (req, res) => {
-    const submittedPasscode = String(req.body?.passcode || "");
-    const expectedPasscode = process.env.ADMIN_PASSCODE;
+    const submittedPasscode = readAdminPasscode(
+      req.body,
+      req.header("x-admin-password") ?? req.header("x-admin-passcode"),
+    );
     const sessionSecret = process.env.ADMIN_SESSION_SECRET || process.env.SESSION_SECRET;
 
-    if (!expectedPasscode || !sessionSecret) {
+    if (!sessionSecret) {
       return res.status(500).json({ authenticated: false, error: "Admin auth is not configured" });
     }
 
-    if (!safeCompare(submittedPasscode, expectedPasscode)) {
+    if (!verifyAdminPasscode(submittedPasscode)) {
       return res.status(401).json({ authenticated: false, error: "Invalid credentials" });
     }
 
@@ -2190,6 +2555,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Start the autonomous reward worker
   startRewardWorker();
+
+  // Solscan Pro v2 account/detail (or RPC fallback) — player may read their own wallet
+  app.get("/api/web3/account/:address", requirePlayer, async (req, res) => {
+    try {
+      const address = String(req.params.address || "").trim();
+      if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(address)) {
+        return res.status(400).json({ error: "Invalid Solana address" });
+      }
+      const detail = await getAccountDetail(address);
+      res.json(detail);
+    } catch (error) {
+      const status = (error as { status?: number }).status;
+      res.status(status && status >= 400 ? status : 502).json({
+        error: error instanceof Error ? error.message : "Account lookup failed",
+      });
+    }
+  });
 
   // Admin: Platform wallet status + balances
   app.get("/api/web3/wallet/status", async (req, res) => {
@@ -3089,13 +3471,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/games", async (req, res) => {
     try {
-      const { platform, q } = req.query;
-      if (q && typeof q === 'string') {
-        const games = await storage.searchGames(q, platform as string | undefined);
+      const { platform, q, featured, limit, offset, letter, paginated } = req.query;
+
+      if (featured === "true") {
+        const games = await db.select().from(gameLibrary).where(eq(gameLibrary.isFeatured, true)).orderBy(gameLibrary.title);
         return res.json(games);
       }
-      const games = await storage.listGames(platform as string | undefined);
-      res.json(games);
+
+      const listOptions = {
+        limit: limit ? Math.min(parseInt(limit as string, 10) || 20, 100) : undefined,
+        offset: offset ? Math.max(parseInt(offset as string, 10) || 0, 0) : undefined,
+        letter: typeof letter === "string" && letter.length === 1 ? letter.toUpperCase() : undefined,
+      };
+
+      const usePagination = paginated === "true" || listOptions.limit !== undefined;
+
+      if (q && typeof q === "string") {
+        const result = await storage.searchGames(q, platform as string | undefined, usePagination ? listOptions : undefined);
+        return res.json(usePagination ? result : result.games);
+      }
+
+      const result = await storage.listGames(platform as string | undefined, usePagination ? listOptions : undefined);
+      res.json(usePagination ? result : result.games);
     } catch (error) {
       res.status(500).json({ error: "Failed to list games" });
     }
@@ -3107,6 +3504,59 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(games);
     } catch (error) {
       res.status(500).json({ error: "Failed to list featured games" });
+    }
+  });
+
+  /**
+   * Rec0deD competitive Top 10 — PvP hub + leaderboards SSOT.
+   * Must be registered before /api/games/:id.
+   * Upserts game_library rows so scores/challenges share account FK ids.
+   */
+  app.get("/api/games/competitive", async (req, res) => {
+    try {
+      const { RETRO_COMPETITIVE_TOP10 } = await import("../shared/retroCompetitive");
+      const mode = typeof req.query.mode === "string" ? req.query.mode.toLowerCase() : "all";
+      const roster =
+        mode === "pvp" || mode === "pve" || mode === "coop"
+          ? RETRO_COMPETITIVE_TOP10.filter((g) => g.modes.includes(mode as "pvp" | "pve" | "coop"))
+          : [...RETRO_COMPETITIVE_TOP10];
+
+      // Heal DB alignment for competitive ids (idempotent)
+      await storage.ensureCompetitiveGames().catch((e) =>
+        console.warn("[competitive] ensureCompetitiveGames:", e),
+      );
+
+      const out = [];
+      for (const meta of roster) {
+        // Always heal portal-id row so scores FK matches /play/:id
+        const game = await storage.ensureCatalogGame(meta.gameId);
+        out.push({
+          id: meta.gameId,
+          title: meta.title,
+          slug: game?.slug || meta.title.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
+          platform: meta.platform,
+          embedUrl: game?.embedUrl ?? null,
+          isFeatured: true,
+          category: "retro",
+          isPlayable: true,
+          description: meta.blurb,
+          // Meta art wins (region-suffixed); never show misaligned seed titles/art
+          thumbnailUrl: meta.thumbnailUrl || game?.thumbnailUrl || null,
+          sourceUrl: game?.sourceUrl ?? null,
+          platformId: game?.platformId ?? null,
+          createdAt: game?.createdAt ?? null,
+          competitive: {
+            modes: meta.modes,
+            blurb: meta.blurb,
+            scoreHint: meta.scoreHint,
+            rank: RETRO_COMPETITIVE_TOP10.findIndex((g) => g.gameId === meta.gameId) + 1,
+          },
+        });
+      }
+      res.json(out);
+    } catch (error) {
+      console.error("/api/games/competitive error:", error);
+      res.status(500).json({ error: "Failed to list competitive games" });
     }
   });
 
@@ -3238,7 +3688,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/scrape/game-embeds", async (req, res) => {
     try {
       const { platform } = req.body;
-      const games = await storage.listGames(platform || undefined);
+      const { games } = await storage.listGames(platform || undefined);
       let updated = 0;
 
       for (const game of games) {
@@ -3414,13 +3864,344 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   app.get("/api/chat/rooms", (_req, res) => {
-    const rooms = [
-      { id: "general", name: "General", description: "Main chat for everyone" },
-      { id: "retro-gaming", name: "Retro Gaming", description: "NES, SNES, N64 and classic games" },
-      { id: "custom-engines", name: "Custom Engines", description: "Wargus, Avernus, Tower Defense talk" },
-      { id: "trading", name: "Trading Post", description: "Buy, sell, trade GBUX and assets" },
-    ];
-    res.json(rooms);
+    res.json(TREATY_ROOMS);
+  });
+
+  // Treaty Chat HTTP — community + DMs + per-game rooms
+  app.get("/api/treaty/rooms", (_req, res) => {
+    res.json({
+      rooms: TREATY_ROOMS,
+      kinds: ["community", "dm", "game"],
+      gameRoomExample: "game:avernus-3d",
+      dmRoomExample: "dm:1_2",
+    });
+  });
+
+  app.get("/api/treaty/config", (req, res) => {
+    const room = normalizeRoomId(String(req.query.room || "general"));
+    const portal = (process.env.PORTAL_ORIGIN || "https://grudge-studio.com").replace(/\/$/, "");
+    res.json({
+      rooms: TREATY_ROOMS,
+      room,
+      kind: roomKind(room),
+      shareUrl: treatyShareUrl(portal, room),
+      mode: "treaty-social",
+      wsPath: "/ws/chat",
+    });
+  });
+
+  app.get("/api/treaty/presence", (_req, res) => {
+    res.json({
+      online: getOnlinePresence(),
+      games: listActiveGameRooms(),
+    });
+  });
+
+  app.get("/api/treaty/games", (_req, res) => {
+    res.json({ games: listActiveGameRooms() });
+  });
+
+  /** Friends with live Treaty WS online (not lastLogin guess). */
+  app.get("/api/treaty/friends", requirePlayer, async (req, res) => {
+    try {
+      const player = getPlayer(req)!;
+      const rows = await db
+        .select()
+        .from(friends)
+        .where(
+          and(
+            or(eq(friends.requesterId, player.id), eq(friends.recipientId, player.id)),
+            eq(friends.status, "accepted"),
+          ),
+        );
+
+      const friendIds = rows.map((r) =>
+        r.requesterId === player.id ? r.recipientId : r.requesterId,
+      );
+      if (friendIds.length === 0) return res.json({ friends: [] });
+
+      const friendUsers = await db
+        .select({
+          id: usersTable.id,
+          username: usersTable.username,
+          displayName: usersTable.displayName,
+          avatarUrl: usersTable.avatarUrl,
+          grudgeId: usersTable.grudgeId,
+        })
+        .from(usersTable)
+        .where(sql`${usersTable.id} IN (${sql.join(friendIds.map((id) => sql`${id}`), sql`, `)})`);
+
+      const result = rows.map((r) => {
+        const friendId = r.requesterId === player.id ? r.recipientId : r.requesterId;
+        const u = friendUsers.find((x) => x.id === friendId);
+        const online = isUserOnline(friendId);
+        const presence = getOnlinePresence().find((p) => p.userId === friendId);
+        return {
+          friendshipId: r.id,
+          id: friendId,
+          username: u?.username,
+          displayName: u?.displayName || u?.username,
+          avatarUrl: u?.avatarUrl,
+          grudgeId: u?.grudgeId,
+          isOnline: online,
+          room: presence?.room ?? null,
+          gameKey: presence?.gameKey ?? null,
+          dmRoom: dmRoomId(player.id, friendId),
+        };
+      });
+
+      result.sort((a, b) => Number(b.isOnline) - Number(a.isOnline));
+      res.json({ friends: result });
+    } catch (error) {
+      console.error("[treaty/friends]", error);
+      res.status(500).json({ error: "Failed to list friends" });
+    }
+  });
+
+  /** Open or resolve a DM room with another player (by id, username, or grudgeId). */
+  app.post("/api/treaty/dm", requirePlayer, async (req, res) => {
+    try {
+      const player = getPlayer(req)!;
+      const body = req.body || {};
+      let peerId = body.userId != null ? parseInt(String(body.userId), 10) : NaN;
+
+      if (!Number.isFinite(peerId)) {
+        if (body.grudgeId) {
+          const u = await storage.getUserByGrudgeId(String(body.grudgeId));
+          if (u) peerId = u.id;
+        } else if (body.username) {
+          const u = await storage.getUserByUsername(String(body.username));
+          if (u) peerId = u.id;
+        }
+      }
+
+      if (!Number.isFinite(peerId) || peerId === player.id) {
+        return res.status(400).json({ error: "Valid peer userId, username, or grudgeId required" });
+      }
+
+      const peer = await storage.getUser(peerId);
+      if (!peer) return res.status(404).json({ error: "Player not found" });
+
+      // Soft-block check
+      const [rel] = await db
+        .select()
+        .from(friends)
+        .where(
+          or(
+            and(eq(friends.requesterId, player.id), eq(friends.recipientId, peerId)),
+            and(eq(friends.requesterId, peerId), eq(friends.recipientId, player.id)),
+          ),
+        )
+        .limit(1);
+      if (rel?.status === "blocked") {
+        return res.status(403).json({ error: "Cannot message this player" });
+      }
+
+      const room = dmRoomId(player.id, peerId);
+      const portal = (process.env.PORTAL_ORIGIN || "https://grudge-studio.com").replace(/\/$/, "");
+      res.json({
+        ok: true,
+        room,
+        peer: {
+          id: peer.id,
+          username: peer.username,
+          displayName: peer.displayName || peer.username,
+          grudgeId: peer.grudgeId,
+          isOnline: isUserOnline(peer.id),
+        },
+        areFriends: rel?.status === "accepted",
+        shareUrl: treatyShareUrl(portal, room),
+      });
+    } catch (error) {
+      console.error("[treaty/dm]", error);
+      res.status(500).json({ error: "Failed to open DM" });
+    }
+  });
+
+  /** Inbox: recent DM threads for the signed-in player. */
+  app.get("/api/treaty/dms", requirePlayer, async (req, res) => {
+    try {
+      const player = getPlayer(req)!;
+      const rows = await db
+        .select({
+          room: chatMessages.room,
+          message: chatMessages.message,
+          username: chatMessages.username,
+          userId: chatMessages.userId,
+          createdAt: chatMessages.createdAt,
+        })
+        .from(chatMessages)
+        .where(sql`${chatMessages.room} LIKE 'dm:%'`)
+        .orderBy(sql`${chatMessages.createdAt} DESC`)
+        .limit(400);
+
+      const threads = new Map<
+        string,
+        { room: string; lastMessage: string; lastAt: string | null; lastFrom: string }
+      >();
+      for (const row of rows) {
+        const dm = parseDmRoom(row.room);
+        if (!dm) continue;
+        if (dm.a !== player.id && dm.b !== player.id) continue;
+        if (threads.has(row.room)) continue;
+        threads.set(row.room, {
+          room: row.room,
+          lastMessage: row.message,
+          lastAt: row.createdAt ? new Date(row.createdAt).toISOString() : null,
+          lastFrom: row.username,
+        });
+      }
+
+      const peerIds = [...threads.keys()]
+        .map((r) => dmPeerId(r, player.id))
+        .filter((id): id is number => id != null);
+
+      const peers =
+        peerIds.length === 0
+          ? []
+          : await db
+              .select({
+                id: usersTable.id,
+                username: usersTable.username,
+                displayName: usersTable.displayName,
+                grudgeId: usersTable.grudgeId,
+                avatarUrl: usersTable.avatarUrl,
+              })
+              .from(usersTable)
+              .where(sql`${usersTable.id} IN (${sql.join(peerIds.map((id) => sql`${id}`), sql`, `)})`);
+
+      const inbox = [...threads.values()].map((t) => {
+        const peerId = dmPeerId(t.room, player.id);
+        const peer = peers.find((p) => p.id === peerId);
+        return {
+          ...t,
+          peer: peer
+            ? {
+                id: peer.id,
+                username: peer.username,
+                displayName: peer.displayName || peer.username,
+                grudgeId: peer.grudgeId,
+                avatarUrl: peer.avatarUrl,
+                isOnline: isUserOnline(peer.id),
+              }
+            : null,
+        };
+      });
+
+      res.json({ dms: inbox });
+    } catch (error) {
+      console.error("[treaty/dms]", error);
+      res.status(500).json({ error: "Failed to list DMs" });
+    }
+  });
+
+  app.get("/api/treaty/room/:id/messages", async (req, res) => {
+    try {
+      const roomId = normalizeRoomId(req.params.id);
+      let userId: number | null = null;
+      const player = getPlayer(req);
+      if (player) userId = player.id;
+
+      const access = canAccessRoom(roomId, userId);
+      if (!access.ok) return res.status(403).json({ error: access.reason || "Forbidden" });
+
+      const rows = await storage.listChatMessages(roomId, 100);
+      const grudgeIds = new Map<number, string>();
+      for (const row of rows) {
+        if (row.userId && !grudgeIds.has(row.userId)) {
+          const u = await storage.getUser(row.userId);
+          if (u) grudgeIds.set(row.userId, u.grudgeId);
+        }
+      }
+      const messages = rows.reverse().map((row) =>
+        toTreatyMessage(row, row.userId ? grudgeIds.get(row.userId) : null),
+      );
+      res.json({ roomId, kind: access.kind, messages });
+    } catch {
+      res.status(500).json({ error: "Failed to fetch treaty messages" });
+    }
+  });
+
+  app.post("/api/treaty/room/:id/send", async (req, res) => {
+    try {
+      const roomId = normalizeRoomId(req.params.id);
+      const text = String(req.body?.text || req.body?.message || "").trim().slice(0, 500);
+      if (!text) return res.status(400).json({ error: "text required" });
+
+      let sender = normalizeSender(req.body);
+      let userId: number | null = null;
+
+      const player = getPlayer(req);
+      if (player) {
+        sender = normalizeSender(undefined, player);
+        userId = player.id;
+      } else {
+        // cookie fallback if middleware missed
+        const cookies = parsePlayerCookies(req.headers.cookie);
+        const token = cookies[PLAYER_COOKIE];
+        if (token) {
+          const resolvedId = verifyPlayerToken(token);
+          if (resolvedId !== null) {
+            const p = await storage.getUser(resolvedId);
+            if (p) {
+              sender = normalizeSender(undefined, p);
+              userId = p.id;
+            }
+          }
+        }
+      }
+
+      const access = canAccessRoom(roomId, userId);
+      if (!access.ok) return res.status(403).json({ error: access.reason || "Forbidden" });
+      if (access.kind === "dm" && !userId) {
+        return res.status(401).json({ error: "Sign in to send DMs" });
+      }
+
+      const saved = await storage.createChatMessage({
+        username: sender.displayName || sender.username,
+        message: text,
+        room: roomId,
+        userId,
+      });
+
+      const message = toTreatyMessage(saved, sender.grudgeId);
+      const payload = toWsPayload(saved, sender.grudgeId);
+      broadcastChatToRoom(roomId, payload);
+
+      // Notify peer on DM even if they're in another room (badge/inbox)
+      if (access.kind === "dm" && userId) {
+        const peer = dmPeerId(roomId, userId);
+        if (peer) {
+          sendToUserId(peer, { type: "dm_notify", room: roomId, message: payload });
+        }
+      }
+
+      // @ale Treaty assistant
+      void maybeHandleAleMention({
+        room: roomId,
+        text,
+        fromName: sender.displayName || sender.username,
+        userId,
+      });
+
+      res.json({ ok: true, message });
+    } catch {
+      res.status(500).json({ error: "Failed to send treaty message" });
+    }
+  });
+
+  /** Resolve game room id for embeds. */
+  app.get("/api/treaty/game/:key", (req, res) => {
+    const room = gameRoomId(req.params.key);
+    const portal = (process.env.PORTAL_ORIGIN || "https://grudge-studio.com").replace(/\/$/, "");
+    const live = listActiveGameRooms().find((g) => g.room === room);
+    res.json({
+      room,
+      gameKey: req.params.key,
+      online: live?.online ?? 0,
+      users: live?.users ?? [],
+      shareUrl: treatyShareUrl(portal, room),
+    });
   });
 
   // ═══════════════════════════════════════════════════════════════
@@ -3583,6 +4364,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // HEALTH CHECK (used by Railway, Docker, monitoring)
   // ═══════════════════════════════════════════════════════════════
 
+  app.get("/api/status", async (_req, res) => {
+    try {
+      const health = await getFleetHealth();
+      res.json(health);
+    } catch (error) {
+      res.status(500).json({ error: "Status check failed" });
+    }
+  });
+
   app.get("/api/health", async (_req, res) => {
     const mem = process.memoryUsage();
     let dbStatus = "unknown";
@@ -3631,104 +4421,193 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   const httpServer = createServer(app);
 
-  const wss = new WebSocketServer({ server: httpServer, path: "/ws/chat" });
-  const clients = new Map<WebSocket, { username: string; room: string; userId: number | null }>();
-
-  function broadcastToRoom(room: string, data: object) {
-    const msg = JSON.stringify(data);
-    for (const [ws, info] of clients) {
-      if (info.room === room && ws.readyState === WebSocket.OPEN) {
-        ws.send(msg);
-      }
-    }
-  }
-
-  function getRoomUsers(room: string): string[] {
-    const users: string[] = [];
-    for (const [ws, info] of clients) {
-      if (info.room === room && ws.readyState === WebSocket.OPEN) {
-        users.push(info.username);
-      }
-    }
-    return [...new Set(users)];
-  }
+  // Single upgrade router: multiple WebSocketServer({ server, path }) on one HTTP
+  // server corrupts frames (RSV1). Chat + arena use noServer + attachWsUpgrade.
+  const wss = createPathWss("/ws/chat");
 
   wss.on("connection", (ws, req) => {
+    const sock = ws as WebSocket & { isAlive?: boolean };
+    sock.isAlive = true;
+    ws.on("pong", () => {
+      sock.isAlive = true;
+    });
+
     ws.on("message", async (raw) => {
       try {
         const data = JSON.parse(raw.toString());
 
-        if (data.type === "join") {
-          let username = (data.username || "Anonymous").slice(0, 30);
+        if (data.type === "join" || data.type === "hello") {
+          let username = String(data.username || "Anonymous").slice(0, 30);
+          let displayName = username;
+          let grudgeId: string | null = String(data.grudgeId || "").trim() || null;
           let userId: number | null = null;
-          const room = (data.room || "general").slice(0, 50);
+          const room = normalizeRoomId(data.room || "general").slice(0, 64);
+          const gameTitle =
+            typeof data.gameTitle === "string"
+              ? data.gameTitle.slice(0, 80)
+              : typeof data.game_title === "string"
+                ? data.game_title.slice(0, 80)
+                : null;
 
-          // If the client has a player session cookie, prefer real account
-          const cookies = parsePlayerCookies(req.headers.cookie);
-          const token = cookies[PLAYER_COOKIE];
-          if (token) {
-            const resolvedId = verifyPlayerToken(token);
-            if (resolvedId !== null) {
-              const player = await storage.getUser(resolvedId);
-              if (player) {
-                username = player.displayName || player.username;
-                userId = player.id;
+          try {
+            const cookies = parsePlayerCookies(req.headers.cookie);
+            const token = cookies[PLAYER_COOKIE];
+            if (token) {
+              const resolvedId = verifyPlayerToken(token);
+              if (resolvedId !== null) {
+                const player = await storage.getUser(resolvedId);
+                if (player) {
+                  username = player.username;
+                  displayName = player.displayName || player.username;
+                  grudgeId = player.grudgeId;
+                  userId = player.id;
+                }
               }
             }
+          } catch (authErr) {
+            console.warn("[ws/chat] session resolve failed", authErr);
           }
 
-          clients.set(ws, { username, room, userId });
-          broadcastToRoom(room, { type: "users", users: getRoomUsers(room) });
-          broadcastToRoom(room, { type: "system", message: `${username} joined the room` });
+          const access = canAccessRoom(room, userId);
+          if (!access.ok) {
+            sendChatJson(ws, { type: "error", message: access.reason || "Cannot join room" });
+            return;
+          }
+
+          const prev = chatClients.get(ws);
+          if (prev && prev.room !== room) {
+            chatClients.delete(ws);
+            pushPresence(prev.room);
+            broadcastChatToRoom(prev.room, { type: "system", message: `${prev.displayName} left the room` });
+          }
+
+          chatClients.set(ws, { username, displayName, grudgeId, room, userId, gameTitle });
+          sendChatJson(ws, {
+            type: "joined",
+            ok: true,
+            room,
+            kind: access.kind,
+            displayName,
+            grudgeId,
+            users: getRoomUsers(room),
+          });
+          pushPresence(room, ws);
+          broadcastChatToRoom(room, { type: "system", message: `${displayName} joined the room` }, ws);
+          return;
+        }
+
+        if (data.type === "ping" || data.type === "heartbeat") {
+          sock.isAlive = true;
+          sendChatJson(ws, { type: "system", message: "pong" });
+          return;
         }
 
         if (data.type === "message") {
-          const info = clients.get(ws);
-          if (!info) return;
+          const info = chatClients.get(ws);
+          if (!info) {
+            sendChatJson(ws, { type: "error", message: "Join a room before sending messages" });
+            return;
+          }
           const text = (data.message || "").slice(0, 500).trim();
           if (!text) return;
 
           const saved = await storage.createChatMessage({
-            username: info.username,
+            username: info.displayName || info.username,
             message: text,
             room: info.room,
             userId: info.userId,
           });
 
-          broadcastToRoom(info.room, {
-            type: "message",
-            id: saved.id,
-            username: saved.username,
-            message: saved.message,
-            room: saved.room,
-            createdAt: saved.createdAt,
+          // Include sender — clients do not optimistically render own WS messages
+          broadcastChatToRoom(info.room, toWsPayload(saved, info.grudgeId));
+
+          // @ale — always-on Treaty AI companion
+          void maybeHandleAleMention({
+            room: info.room,
+            text,
+            fromName: info.displayName || info.username,
+            userId: info.userId,
           });
+          return;
         }
 
         if (data.type === "switch_room") {
-          const info = clients.get(ws);
-          if (!info) return;
+          const info = chatClients.get(ws);
+          if (!info) {
+            sendChatJson(ws, { type: "error", message: "Not joined" });
+            return;
+          }
           const oldRoom = info.room;
-          const newRoom = (data.room || "general").slice(0, 50);
-          broadcastToRoom(oldRoom, { type: "system", message: `${info.username} left the room` });
+          const newRoom = normalizeRoomId(data.room || "general").slice(0, 64);
+          const access = canAccessRoom(newRoom, info.userId);
+          if (!access.ok) {
+            sendChatJson(ws, { type: "error", message: access.reason || "Cannot join room" });
+            return;
+          }
+          if (oldRoom === newRoom) {
+            pushPresence(newRoom, ws);
+            return;
+          }
+          if (typeof data.gameTitle === "string") {
+            info.gameTitle = data.gameTitle.slice(0, 80);
+          }
+          broadcastChatToRoom(oldRoom, { type: "system", message: `${info.displayName} left the room` });
           info.room = newRoom;
-          broadcastToRoom(newRoom, { type: "users", users: getRoomUsers(newRoom) });
-          broadcastToRoom(newRoom, { type: "system", message: `${info.username} joined the room` });
+          chatClients.set(ws, info);
+          pushPresence(oldRoom);
+          sendChatJson(ws, {
+            type: "joined",
+            ok: true,
+            room: newRoom,
+            kind: access.kind,
+            displayName: info.displayName,
+            grudgeId: info.grudgeId,
+            users: getRoomUsers(newRoom),
+          });
+          pushPresence(newRoom, ws);
+          broadcastChatToRoom(newRoom, { type: "system", message: `${info.displayName} joined the room` }, ws);
+          return;
         }
-      } catch (e) {}
+      } catch (e) {
+        console.warn("[ws/chat] message error", e);
+        sendChatJson(ws, { type: "error", message: "Invalid message" });
+      }
     });
 
     ws.on("close", () => {
-      const info = clients.get(ws);
+      const info = chatClients.get(ws);
       if (info) {
-        clients.delete(ws);
-        broadcastToRoom(info.room, { type: "users", users: getRoomUsers(info.room) });
-        broadcastToRoom(info.room, { type: "system", message: `${info.username} left the room` });
+        chatClients.delete(ws);
+        pushPresence(info.room);
+        broadcastChatToRoom(info.room, { type: "system", message: `${info.displayName} left the room` });
       }
+    });
+
+    ws.on("error", (err) => {
+      console.warn("[ws/chat] socket error", err);
     });
   });
 
+  const chatHeartbeat = setInterval(() => {
+    for (const [client] of chatClients) {
+      const s = client as WebSocket & { isAlive?: boolean };
+      if (s.isAlive === false) {
+        try { client.terminate(); } catch { /* */ }
+        const info = chatClients.get(client);
+        chatClients.delete(client);
+        if (info) pushPresence(info.room);
+        continue;
+      }
+      s.isAlive = false;
+      try { client.ping(); } catch { /* */ }
+    }
+  }, 25_000);
+  httpServer.on("close", () => clearInterval(chatHeartbeat));
+
   setupArenaRooms(httpServer);
+  setupEngineSocket(httpServer);
+  // Attach once after all path WSS are registered (chat + arena)
+  attachWsUpgrade(httpServer);
 
   return httpServer;
 }

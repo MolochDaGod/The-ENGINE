@@ -1,13 +1,20 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { CheckCircle, Loader2, Save, User } from "lucide-react";
+import { CheckCircle, Gamepad2, Loader2, Save, User } from "lucide-react";
 import type { PlayerProfile } from "@/lib/player-auth";
 import { useAuth } from "@/components/auth-provider";
+
+type PlaySettings = {
+  graphics?: { quality?: string; shadows?: boolean; maxDpr?: number };
+  audio?: { master?: number; music?: number; sfx?: number; muted?: boolean };
+  controls?: { mouseSensitivity?: number; mouseInvertY?: boolean };
+  accessibility?: { reduceMotion?: boolean; subtitles?: boolean };
+};
 
 interface Connections {
   discord: string | null;
@@ -81,6 +88,35 @@ export default function AccountSettings({ player }: { player: PlayerProfile }) {
     window.location.href = `/api/auth/${provider}/start?redirect=/account`;
   };
 
+  const playQ = useQuery<{ settings: PlaySettings }>({
+    queryKey: ["/api/me/play-settings"],
+    queryFn: () => fetchJSON("/api/me/play-settings"),
+  });
+
+  const [play, setPlay] = useState<PlaySettings>({});
+  useEffect(() => {
+    if (playQ.data?.settings) setPlay(playQ.data.settings);
+  }, [playQ.data]);
+
+  const playMutation = useMutation({
+    mutationFn: async (settings: PlaySettings) => {
+      const res = await fetch("/api/me/play-settings", {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ settings }),
+      });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        throw new Error(json.error || "Failed to save play settings");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/me/play-settings"] });
+    },
+  });
+
   const conn = connectionsQuery.data;
 
   return (
@@ -143,6 +179,138 @@ export default function AccountSettings({ player }: { player: PlayerProfile }) {
             <span className="text-xs text-[hsl(0,70%,60%)] ml-3">{(profileMutation.error as Error).message}</span>
           )}
         </div>
+      </section>
+
+      {/* Cross-game play settings */}
+      <section className="fantasy-panel p-6">
+        <h3 className="font-heading text-base text-[hsl(45,30%,92%)] mb-2" style={{ WebkitTextFillColor: "unset" }}>
+          <Gamepad2 className="w-4 h-4 inline mr-2 text-[hsl(43,85%,55%)]" />
+          Gameplay Settings
+        </h3>
+        <p className="text-xs text-[hsl(45,15%,55%)] font-body mb-4">
+          Stored on your Grudge account — fleet games can hydrate via{" "}
+          <code className="text-[hsl(43,85%,55%)]">GET /api/me/play-settings</code>.
+        </p>
+        {playQ.isLoading ? (
+          <Loader2 className="w-5 h-5 animate-spin text-[hsl(43,85%,55%)]" />
+        ) : (
+          <div className="grid sm:grid-cols-2 gap-4">
+            <div>
+              <Label className="text-[hsl(45,15%,60%)] text-xs uppercase tracking-wider">Graphics quality</Label>
+              <select
+                className="mt-1 w-full h-10 rounded-md bg-[hsl(225,25%,12%)] border border-[hsl(43,60%,30%)]/25 text-sm px-2"
+                value={play.graphics?.quality ?? "high"}
+                onChange={(e) =>
+                  setPlay((p) => ({ ...p, graphics: { ...p.graphics, quality: e.target.value } }))
+                }
+              >
+                {["low", "medium", "high", "ultra"].map((q) => (
+                  <option key={q} value={q}>
+                    {q}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <Label className="text-[hsl(45,15%,60%)] text-xs uppercase tracking-wider">
+                Mouse sensitivity ({(play.controls?.mouseSensitivity ?? 1).toFixed(1)})
+              </Label>
+              <input
+                type="range"
+                min={0.3}
+                max={2.5}
+                step={0.1}
+                className="mt-3 w-full"
+                value={play.controls?.mouseSensitivity ?? 1}
+                onChange={(e) =>
+                  setPlay((p) => ({
+                    ...p,
+                    controls: { ...p.controls, mouseSensitivity: parseFloat(e.target.value) },
+                  }))
+                }
+              />
+            </div>
+            <div>
+              <Label className="text-[hsl(45,15%,60%)] text-xs uppercase tracking-wider">
+                Master volume ({Math.round((play.audio?.master ?? 0.8) * 100)}%)
+              </Label>
+              <input
+                type="range"
+                min={0}
+                max={1}
+                step={0.05}
+                className="mt-3 w-full"
+                value={play.audio?.master ?? 0.8}
+                onChange={(e) =>
+                  setPlay((p) => ({
+                    ...p,
+                    audio: { ...p.audio, master: parseFloat(e.target.value) },
+                  }))
+                }
+              />
+            </div>
+            <div className="flex flex-col gap-2 justify-end">
+              <label className="flex items-center gap-2 text-sm text-[hsl(45,15%,70%)]">
+                <input
+                  type="checkbox"
+                  checked={!!play.graphics?.shadows}
+                  onChange={(e) =>
+                    setPlay((p) => ({ ...p, graphics: { ...p.graphics, shadows: e.target.checked } }))
+                  }
+                />
+                Shadows
+              </label>
+              <label className="flex items-center gap-2 text-sm text-[hsl(45,15%,70%)]">
+                <input
+                  type="checkbox"
+                  checked={!!play.controls?.mouseInvertY}
+                  onChange={(e) =>
+                    setPlay((p) => ({
+                      ...p,
+                      controls: { ...p.controls, mouseInvertY: e.target.checked },
+                    }))
+                  }
+                />
+                Invert mouse Y
+              </label>
+              <label className="flex items-center gap-2 text-sm text-[hsl(45,15%,70%)]">
+                <input
+                  type="checkbox"
+                  checked={!!play.accessibility?.reduceMotion}
+                  onChange={(e) =>
+                    setPlay((p) => ({
+                      ...p,
+                      accessibility: { ...p.accessibility, reduceMotion: e.target.checked },
+                    }))
+                  }
+                />
+                Reduce motion
+              </label>
+            </div>
+            <div className="sm:col-span-2">
+              <Button
+                className="gilded-button"
+                disabled={playMutation.isPending}
+                onClick={() => playMutation.mutate(play)}
+              >
+                {playMutation.isPending ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Save className="w-4 h-4 mr-2" />
+                )}
+                Save gameplay settings
+              </Button>
+              {playMutation.isSuccess && (
+                <span className="text-xs text-[hsl(120,60%,60%)] ml-3">✓ Saved to account</span>
+              )}
+              {playMutation.isError && (
+                <span className="text-xs text-[hsl(0,70%,60%)] ml-3">
+                  {(playMutation.error as Error).message}
+                </span>
+              )}
+            </div>
+          </div>
+        )}
       </section>
 
       {/* Connected Accounts — based on GrudgeBuilder connector list + WCS connector section */}

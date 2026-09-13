@@ -1,29 +1,13 @@
 /**
  * Grudge Engine — RoleControls
  *
- * Grudge-standard control scheme (shared across all Grudge Studio playable
- * characters; ported from gonnavis/annihilate/src/RoleControls.js with the
- * keymap remapped from J/K/I/U/L/O to mouse + WASD + Space/Shift + 1-4).
+ * Grudge-standard control scheme for selected grudge6 / Warlords heroes
+ * (ported from gonnavis/annihilate, remapped to mouse + WASD + Space/Shift + 1–4).
  *
- * Controls:
- *   WASD / Arrows           — movement direction
- *   LMB  (Mouse0)           — light attack       (FSM: attack / keyJUp)
- *   RMB  (Mouse2)           — heavy attack/bash  (FSM: bash   / keyUUp)
- *   Space                   — jump               (FSM: jump)
- *   Shift (L/R)             — dash / dodge       (FSM: dash)
- *   Ctrl  (L/R, hold)       — block              (FSM: block  / keyLUp)
- *   1                       — dash attack        (FSM: dashAttack)
- *   2                       — launch (uppercut)  (FSM: launch / keyOUp)
- *   3                       — bash (kbd-only)    (FSM: bash   / keyUUp)
- *   4                       — pop / special      (calls role.pop.pop())
+ * HOTKEYS_SSOT below is the single truth — keep annihilate-demo UI in sync.
  *
- * Combo detection (only while in 'block' state, 150ms window):
- *   ↓→LMB   → hadouken
- *   →↓→LMB  → shoryuken
- *   ↓←Space → ajejebloken
- *
- * Movement uses velocity-based approach (body.velocity) so Cannon-ES
- * resolves slope/wall/terrain contacts and gravity is preserved.
+ * Movement uses Cannon-ES velocity so slopes/walls/gravity stay consistent.
+ * Animation: CharacterFSM → BaseCharacter.mixer crossfades (not CSS).
  */
 
 import { BaseCharacter } from './BaseCharacter';
@@ -32,6 +16,23 @@ import { GrudgeEngine, Updatable } from '../core/GrudgeEngine';
 // Synthetic event codes used to unify mouse + keyboard in holdKey/tickKey/seqKey.
 const CODE_LMB = 'Mouse0';
 const CODE_RMB = 'Mouse2';
+
+/** Single source of truth for annihilate / RoleControls hotkeys. */
+export const ROLE_HOTKEYS: ReadonlyArray<{ keys: string; label: string; fsm?: string }> = [
+  { keys: 'WASD / Arrows', label: 'Move (camera-relative)' },
+  { keys: 'LMB', label: 'Light attack / combo', fsm: 'attack' },
+  { keys: 'RMB', label: 'Heavy / bash / whirlwind', fsm: 'bash' },
+  { keys: 'Space', label: 'Jump / double jump', fsm: 'jump' },
+  { keys: 'Shift', label: 'Dash / dodge', fsm: 'dash' },
+  { keys: 'Ctrl (hold)', label: 'Block (opens combo window)', fsm: 'block' },
+  { keys: '1', label: 'Dash attack', fsm: 'dashAttack' },
+  { keys: '2', label: 'Launch (uppercut)', fsm: 'launch' },
+  { keys: '3', label: 'Bash (keyboard)', fsm: 'bash' },
+  { keys: '4', label: 'Special / pop', fsm: 'pop' },
+  { keys: 'Block + ↓→ LMB', label: 'Hadouken', fsm: 'hadouken' },
+  { keys: 'Block + →↓→ LMB', label: 'Shoryuken', fsm: 'shoryuken' },
+  { keys: 'Block + ↓← Space', label: 'Ajejebloken', fsm: 'ajejebloken' },
+] as const;
 
 export class RoleControls implements Updatable {
   role: BaseCharacter;

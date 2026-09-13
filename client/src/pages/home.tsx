@@ -25,6 +25,7 @@ import type { Game } from "@shared/schema";
 import { GameCover } from "@/components/game-cover";
 import { EraCarousel } from "@/components/era-carousel";
 import { ProductCard } from "@/components/product-card";
+import { WarlordsHeroCards } from "@/components/warlords-hero-cards";
 
 interface TopGame extends Game {
   playerCount: number;
@@ -86,7 +87,7 @@ const ERAS: { key: EraKey; name: string; tagline: string; description: string; i
     bgImage: "/assets/store/dark_fantasy_scenes.png",
     accent: "hsl(43,85%,55%)",
     accentBorder: "hsl(43,60%,30%)",
-    productIds: ["warlords", "grudge-crafting", "grudge-angler", "match-3-grudge", "mage-arena", "avernus-arena", "tower-defense"],
+    productIds: ["warlords", "warlord-genesis", "grudge-crafting", "grudge-angler", "match-3-grudge", "mage-arena", "avernus-arena", "tower-defense"],
   },
   {
     key: "nexus",
@@ -97,7 +98,7 @@ const ERAS: { key: EraKey; name: string; tagline: string; description: string; i
     bgImage: "/assets/store/mmo_development.png",
     accent: "hsl(0,70%,55%)",
     accentBorder: "hsl(0,60%,35%)",
-    productIds: ["betta-warlords", "nemesis-tcg", "wargus", "multiplayer-racing", "annihilate-demo", "grudge-fighter", "grudge-brawl", "voxel-sandbox", "terraforge"],
+    productIds: ["super-engine", "betta-warlords", "nemesis-tcg", "grudge-arena", "rts-grudge", "wargus", "multiplayer-racing", "annihilate-demo", "grudge-fighter", "grudge-brawl", "voxel-sandbox", "terraforge"],
   },
   {
     key: "armada",
@@ -108,7 +109,7 @@ const ERAS: { key: EraKey; name: string; tagline: string; description: string; i
     bgImage: "/assets/store/scifi_environment.png",
     accent: "hsl(200,70%,55%)",
     accentBorder: "hsl(200,60%,30%)",
-    productIds: ["starway-gruda", "rts-star-armada", "mech-armada", "star-rts", "survival-game"],
+    productIds: ["survival-game", "grim-armada", "grudge-space-rts", "starway-gruda", "rts-star-armada", "mech-armada", "star-rts"],
   },
 ];
 
@@ -215,14 +216,7 @@ function EraSection({ era }: { era: typeof ERAS[number] }) {
             <p className="text-[hsl(45,15%,70%)] font-body leading-relaxed">
               {era.description}
             </p>
-            {era.key === "warlords" && (
-              <div className="flex gap-3 mt-6">
-                <img src="/assets/heroes/death_mage.png" alt="Death Mage" className="w-16 h-20 rounded-lg object-cover border border-[hsl(43,60%,30%)]/40" />
-                <img src="/assets/heroes/holy_paladin.png" alt="Holy Paladin" className="w-16 h-20 rounded-lg object-cover border border-[hsl(43,60%,30%)]/40" />
-                <img src="/assets/heroes/orc_shaman.png" alt="Orc Shaman" className="w-16 h-20 rounded-lg object-cover border border-[hsl(43,60%,30%)]/40" />
-                <img src="/assets/heroes/stone_guardian.png" alt="Stone Guardian" className="w-16 h-20 rounded-lg object-cover border border-[hsl(43,60%,30%)]/40" />
-              </div>
-            )}
+            {era.key === "warlords" && <WarlordsHeroCards />}
           </div>
           <div className="lg:w-3/5">
             {eraProducts.length > 0 ? (

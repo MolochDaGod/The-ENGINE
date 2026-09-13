@@ -7,7 +7,11 @@ const ADMIN_ROLES = ['admin', 'master_admin', 'master'] as const;
 export async function checkAdminSession(): Promise<boolean> {
   // 1. Preferred: check player role from Grudge ID auth
   try {
-    const meRes = await fetch("/api/auth/me", { credentials: "include" });
+    const { fleetAuthHeaders } = await import("./player-auth");
+    const meRes = await fetch("/api/auth/me", {
+      credentials: "include",
+      headers: fleetAuthHeaders(),
+    });
     if (meRes.ok) {
       const player = await meRes.json();
       if (player?.role && ADMIN_ROLES.includes(player.role)) {
@@ -20,7 +24,7 @@ export async function checkAdminSession(): Promise<boolean> {
 
   // 2. Fallback: legacy admin passcode cookie
   try {
-    const response = await fetch("/api/admin/session", {
+    const response = await fetch("/api/portal-admin/session", {
       method: "GET",
       credentials: "include",
     });
@@ -35,7 +39,7 @@ export async function checkAdminSession(): Promise<boolean> {
 /** Legacy passcode login — kept for backward compat */
 export async function loginAdmin(passcode: string) {
   try {
-    const response = await fetch("/api/admin/login", {
+    const response = await fetch("/api/portal-admin/login", {
       method: "POST",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
@@ -51,7 +55,7 @@ export async function loginAdmin(passcode: string) {
 
 export async function logoutAdmin() {
   try {
-    await fetch("/api/admin/logout", { method: "POST", credentials: "include" });
+    await fetch("/api/portal-admin/logout", { method: "POST", credentials: "include" });
   } catch {
     // ignore
   }

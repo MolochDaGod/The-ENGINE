@@ -3,38 +3,410 @@
   "installCommand": "npm install --legacy-peer-deps",
   "buildCommand": "npm run build:client",
   "outputDirectory": "dist/public",
+  "build": {
+    "env": {
+      "NODE_OPTIONS": "--max-old-space-size=6144"
+    }
+  },
+  "redirects": [
+    {
+      "source": "/library",
+      "destination": "/games",
+      "permanent": false
+    },
+    {
+      "source": "/games/nexus-nemesis",
+      "destination": "https://nemesis.grudge-studio.com",
+      "permanent": false
+    },
+    {
+      "source": "/games/nexus-nemesis/",
+      "destination": "https://nemesis.grudge-studio.com",
+      "permanent": false
+    },
+    {
+      "source": "/games/nexus-nemesis/:path*",
+      "destination": "https://nemesis.grudge-studio.com/:path*",
+      "permanent": false
+    },
+    {
+      "source": "/nexus-nemesis",
+      "destination": "https://nemesis.grudge-studio.com",
+      "permanent": false
+    },
+    {
+      "source": "/nexus-nemesis/:path*",
+      "destination": "https://nemesis.grudge-studio.com/:path*",
+      "permanent": false
+    },
+    {
+      "source": "/warlords",
+      "destination": "https://grudgewarlords.com",
+      "permanent": false
+    },
+    {
+      "source": "/warstrat",
+      "destination": "https://warstrat.grudge-studio.com",
+      "permanent": false
+    },
+    {
+      "source": "/engine",
+      "destination": "https://grudge.studio",
+      "permanent": false
+    },
+    {
+      "source": "/arena",
+      "destination": "https://arena.grudge-studio.com",
+      "permanent": false
+    },
+    {
+      "source": "/profile",
+      "destination": "/account",
+      "permanent": false
+    },
+    {
+      "source": "/settings",
+      "destination": "/account",
+      "permanent": false
+    },
+    {
+      "source": "/leaderboard",
+      "destination": "/leaderboards",
+      "permanent": false
+    },
+    {
+      "source": "/survival",
+      "destination": "https://grudges.grudge-studio.com",
+      "permanent": false
+    },
+    {
+      "source": "/island",
+      "destination": "https://grudgewarlords.com/island",
+      "permanent": false
+    },
+    {
+      "source": "/island/:path*",
+      "destination": "https://grudgewarlords.com/island/:path*",
+      "permanent": false
+    },
+    {
+      "source": "/forge",
+      "destination": "https://forge.grudge-studio.com",
+      "permanent": false
+    },
+    {
+      "source": "/forge/:path*",
+      "destination": "https://forge.grudge-studio.com/:path*",
+      "permanent": false
+    },
+    {
+      "source": "/grudges",
+      "destination": "https://grudges.grudge-studio.com",
+      "permanent": false
+    },
+    {
+      "source": "/grudges/:path*",
+      "destination": "https://grudges.grudge-studio.com/:path*",
+      "permanent": false
+    },
+    {
+      "source": "/arpg-game",
+      "destination": "https://arpg.grudge-studio.com/",
+      "permanent": false
+    },
+    {
+      "source": "/arpg-game/",
+      "destination": "https://arpg.grudge-studio.com/",
+      "permanent": false
+    },
+    {
+      "source": "/arpg-game/:path*",
+      "destination": "https://arpg.grudge-studio.com/:path*",
+      "permanent": false
+    },
+    {
+      "source": "/warlords-shipwreck",
+      "destination": "https://grudox.grudge-studio.com/warlords-shipwreck.html",
+      "permanent": false
+    },
+    {
+      "source": "/warlords-shipwreck.html",
+      "destination": "https://grudox.grudge-studio.com/warlords-shipwreck.html",
+      "permanent": false
+    },
+    {
+      "source": "/annihilate-demo",
+      "destination": "https://open.grudge-studio.com/annihilate-demo",
+      "permanent": false
+    },
+    {
+      "source": "/annihilate-demo/",
+      "destination": "https://open.grudge-studio.com/annihilate-demo",
+      "permanent": false
+    },
+    {
+      "source": "/annihilate-demo/:path*",
+      "destination": "https://open.grudge-studio.com/annihilate-demo/:path*",
+      "permanent": false
+    },
+    {
+      "source": "/annihilate",
+      "destination": "https://open.grudge-studio.com/annihilate-demo",
+      "permanent": false
+    },
+    {
+      "source": "/annihilate/",
+      "destination": "https://open.grudge-studio.com/annihilate-demo",
+      "permanent": false
+    }
+  ],
   "rewrites": [
     {
-      "source": "/(.*)",
+      "source": "/gst",
+      "destination": "https://grudge-studio-tool.vercel.app/gst"
+    },
+    {
+      "source": "/gst/",
+      "destination": "https://grudge-studio-tool.vercel.app/gst/"
+    },
+    {
+      "source": "/gst/:path*",
+      "destination": "https://grudge-studio-tool.vercel.app/gst/:path*"
+    },
+    {
+      "source": "/",
       "has": [{ "type": "host", "value": "fleet.grudge-studio.com" }],
-      "destination": "/admin-harbor.html"
+      "destination": "https://grudge-fleet-harbor.grudge.workers.dev/"
+    },
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "fleet.grudge-studio.com" }],
+      "destination": "https://grudge-fleet-harbor.grudge.workers.dev/:path*"
+    },
+    {
+      "source": "/",
+      "has": [{ "type": "host", "value": "conan.grudge-studio.com" }],
+      "destination": "/conan"
+    },
+    {
+      "source": "/",
+      "has": [{ "type": "host", "value": "character.grudge-studio.com" }],
+      "destination": "/roster"
+    },
+    {
+      "source": "/",
+      "has": [{ "type": "host", "value": "characters.grudge-studio.com" }],
+      "destination": "/viewer"
+    },
+    {
+      "source": "/",
+      "has": [{ "type": "host", "value": "grudge6.grudge-studio.com" }],
+      "destination": "/viewer"
+    },
+    {
+      "source": "/",
+      "has": [{ "type": "host", "value": "id.grudge.studio" }],
+      "destination": "https://the-engine.up.railway.app/api/auth/page"
+    },
+    {
+      "source": "/",
+      "has": [{ "type": "host", "value": "id.grudge-studio.com" }],
+      "destination": "https://the-engine.up.railway.app/api/auth/page"
+    },
+    {
+      "source": "/api/auth",
+      "destination": "/api/auth/page"
     },
     {
       "source": "/api/auth/:path*",
-      "destination": "https://id.grudge-studio.com/auth/:path*"
+      "has": [{ "type": "host", "value": "id.grudge.studio" }],
+      "destination": "https://the-engine.up.railway.app/api/auth/:path*"
+    },
+    {
+      "source": "/api/auth/:path*",
+      "has": [{ "type": "host", "value": "id.grudge-studio.com" }],
+      "destination": "https://the-engine.up.railway.app/api/auth/:path*"
+    },
+    {
+      "source": "/api/auth/:path*",
+      "destination": "https://the-engine.up.railway.app/api/auth/:path*"
+    },
+    {
+      "source": "/login",
+      "has": [{ "type": "host", "value": "id.grudge.studio" }],
+      "destination": "https://the-engine.up.railway.app/login"
+    },
+    {
+      "source": "/login",
+      "has": [{ "type": "host", "value": "id.grudge-studio.com" }],
+      "destination": "https://the-engine.up.railway.app/login"
+    },
+    {
+      "source": "/auth/:path*",
+      "has": [{ "type": "host", "value": "id.grudge.studio" }],
+      "destination": "https://the-engine.up.railway.app/api/auth/:path*"
+    },
+    {
+      "source": "/auth/:path*",
+      "has": [{ "type": "host", "value": "id.grudge-studio.com" }],
+      "destination": "https://the-engine.up.railway.app/api/auth/:path*"
+    },
+    {
+      "source": "/api/me",
+      "destination": "https://the-engine.up.railway.app/api/me"
+    },
+    {
+      "source": "/api/me/:path*",
+      "destination": "https://the-engine.up.railway.app/api/me/:path*"
+    },
+    {
+      "source": "/api/scores",
+      "destination": "https://the-engine.up.railway.app/api/scores"
+    },
+    {
+      "source": "/api/scores/:path*",
+      "destination": "https://the-engine.up.railway.app/api/scores/:path*"
+    },
+    {
+      "source": "/api/leaderboards",
+      "destination": "https://the-engine.up.railway.app/api/leaderboards"
+    },
+    {
+      "source": "/api/leaderboards/:path*",
+      "destination": "https://the-engine.up.railway.app/api/leaderboards/:path*"
+    },
+    {
+      "source": "/api/web3/:path*",
+      "destination": "https://the-engine.up.railway.app/api/web3/:path*"
+    },
+    {
+      "source": "/api/challenges",
+      "destination": "https://the-engine.up.railway.app/api/challenges"
+    },
+    {
+      "source": "/api/challenges/:path*",
+      "destination": "https://the-engine.up.railway.app/api/challenges/:path*"
+    },
+    {
+      "source": "/api/friends/:path*",
+      "destination": "https://the-engine.up.railway.app/api/friends/:path*"
+    },
+    {
+      "source": "/api/transactions",
+      "destination": "https://the-engine.up.railway.app/api/transactions"
+    },
+    {
+      "source": "/api/chat/:path*",
+      "destination": "https://the-engine.up.railway.app/api/chat/:path*"
+    },
+    {
+      "source": "/api/treaty/:path*",
+      "destination": "https://the-engine.up.railway.app/api/treaty/:path*"
+    },
+    {
+      "source": "/api/portal-admin/:path*",
+      "destination": "https://the-engine.up.railway.app/api/admin/:path*"
+    },
+    {
+      "source": "/api/admin/:path*",
+      "destination": "https://the-engine.up.railway.app/api/admin/:path*"
+    },
+
+    {
+      "source": "/health",
+      "has": [{ "type": "host", "value": "id.grudge.studio" }],
+      "destination": "https://the-engine.up.railway.app/api/health"
+    },
+    {
+      "source": "/health",
+      "has": [{ "type": "host", "value": "id.grudge-studio.com" }],
+      "destination": "https://the-engine.up.railway.app/api/health"
+    },
+    {
+      "source": "/health",
+      "has": [{ "type": "host", "value": "api.grudge.studio" }],
+      "destination": "https://the-engine.up.railway.app/api/health"
+    },
+    {
+      "source": "/health",
+      "has": [{ "type": "host", "value": "api.grudge-studio.com" }],
+      "destination": "https://the-engine.up.railway.app/api/health"
+    },
+    {
+      "source": "/api/status",
+      "destination": "https://the-engine.up.railway.app/api/fleet/health"
+    },
+    {
+      "source": "/api/characters",
+      "destination": "https://grudge-api-production-0d46.up.railway.app/api/characters"
     },
     {
       "source": "/api/characters/:path*",
-      "destination": "https://api.grudge-studio.com/api/characters/:path*"
+      "destination": "https://grudge-api-production-0d46.up.railway.app/api/characters/:path*"
+    },
+    {
+      "source": "/api/account",
+      "destination": "https://grudge-api-production-0d46.up.railway.app/api/account"
+    },
+    {
+      "source": "/api/account/:path*",
+      "destination": "https://grudge-api-production-0d46.up.railway.app/api/account/:path*"
     },
     {
       "source": "/api/assets/:path*",
       "destination": "https://assets.grudge-studio.com/:path*"
     },
     {
-      "source": "/api/:path*",
-      "destination": "https://api.grudge-studio.com/api/:path*"
+      "source": "/api/avernus",
+      "destination": "/api/avernus/config"
+    },
+    {
+      "source": "/api/:path((?!games$|games/|platforms$|rom-proxy$|health$|admin/|portal-admin/|avernus$|avernus/).*)",
+      "destination": "https://the-engine.up.railway.app/api/:path"
     },
     {
       "source": "/ws/:path*",
-      "destination": "https://ws.grudge-studio.com/ws/:path*"
+      "destination": "https://the-engine.up.railway.app/ws/:path*"
     },
     {
-      "source": "/((?!api/|ws/).*)",
+      "source": "/((?!api/|embed/).*)",
+      "has": [{ "type": "host", "value": "id.grudge.studio" }],
+      "destination": "/api/auth/page"
+    },
+    {
+      "source": "/((?!api/|embed/).*)",
+      "has": [{ "type": "host", "value": "id.grudge-studio.com" }],
+      "destination": "/api/auth/page"
+    },
+    {
+      "source": "/",
+      "has": [{ "type": "host", "value": "forge.grudge-studio.com" }],
+      "destination": "/studio-forge"
+    },
+    {
+      "source": "/((?!api/|ws/|emulator\\.html|catalog/|assets/|games/|models/|embed/|voxgrudge/|vendor/|favicon|apple-touch|grudge-sso|grudge-auth|grudge-game-bootstrap|sw\\.js|manifest).*)",
       "destination": "/index.html"
     }
   ],
   "headers": [
+    {
+      "source": "/catalog/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=3600, stale-while-revalidate=86400" }
+      ]
+    },
+    {
+      "source": "/api/games",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, s-maxage=3600, stale-while-revalidate=86400" }
+      ]
+    },
+    {
+      "source": "/api/platforms",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, s-maxage=3600, stale-while-revalidate=86400" }
+      ]
+    },
     {
       "source": "/assets/(.*)",
       "headers": [
@@ -53,7 +425,7 @@
         { "key": "X-Content-Type-Options", "value": "nosniff" },
         { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
         { "key": "Cross-Origin-Resource-Policy", "value": "cross-origin" },
-        { "key": "Content-Security-Policy", "value": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.puter.com https://*.grudge-studio.com https://*.vercel.app https://vercel.live; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https: http:; connect-src 'self' https: wss:; frame-src 'self' https://*.puter.com https://*.grudge-studio.com https://*.vercel.app; media-src 'self' https://assets.grudge-studio.com blob:; worker-src 'self' blob:" }
+        { "key": "Content-Security-Policy", "value": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://js.puter.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://static.cloudflareinsights.com https://*.grudge.studio https://*.grudge-studio.com https://grudachain-rho.vercel.app https://*.vercel.app https://vercel.live https://phantom.app https://*.phantom.app; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://vercel.live; font-src 'self' https://fonts.gstatic.com https://vercel.live data:; img-src 'self' data: blob: https: http:; connect-src 'self' https: wss: data: blob: https://api.phantom.app https://*.phantom.app https://static.cloudflareinsights.com https://cloudflareinsights.com https://vercel.live https://assets.grudge-studio.com https://assets.grudge.studio; frame-src 'self' https://*.puter.com https://*.puter.site https://grudge.studio https://grudge-studio.com https://grudgewarlords.com https://browse.grudge-studio.com https://*.grudge.studio https://*.grudge-studio.com https://*.vercel.app https://vercel.live https://phantom.app https://*.phantom.app; media-src 'self' https://assets.grudge.studio https://assets.grudge-studio.com blob:; worker-src 'self' blob:" }
       ]
     }
   ]

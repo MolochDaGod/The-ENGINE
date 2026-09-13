@@ -17,6 +17,55 @@ import {
 import { db } from "./db";
 import { eq, ilike, desc, asc, sql, and, or } from "drizzle-orm";
 import { CATALOG } from "./catalog-data";
+import GAMES_JSON from "../api/_games.json" with { type: "json" };
+import {
+  RETRO_COMPETITIVE_TOP10,
+  getCompetitiveMeta,
+  libretroBoxartUrl,
+} from "@shared/retroCompetitive";
+
+/** Fleet `GRUDGE_…` and portal `GRUDGE-…` are the same account stamp. */
+function grudgeIdLookupVariants(grudgeId: string): string[] {
+  const raw = String(grudgeId || "").trim();
+  if (!raw) return [];
+  const out = new Set<string>([raw]);
+  if (raw.startsWith("GRUDGE_")) out.add("GRUDGE-" + raw.slice("GRUDGE_".length));
+  if (raw.startsWith("GRUDGE-")) out.add("GRUDGE_" + raw.slice("GRUDGE-".length));
+  return [...out];
+}
+
+/** Portal play SSOT — same ids as /play/:id and api/games on Vercel */
+type PortalGameRow = {
+  id: number;
+  title: string;
+  slug?: string;
+  platform: string;
+  embedUrl?: string | null;
+  thumbnailUrl?: string | null;
+  isFeatured?: boolean;
+  description?: string | null;
+};
+const PORTAL_GAMES = GAMES_JSON as PortalGameRow[];
+
+export interface GameListOptions {
+  limit?: number;
+  offset?: number;
+  letter?: string;
+}
+
+export interface GameListResult {
+  games: Game[];
+  total: number;
+}
+
+export type FleetPlayRecord = {
+  gameKey: string;
+  category: "fleet" | "retro";
+  title: string;
+  url?: string;
+  lastPlayedAt: string;
+  playCount: number;
+};
 
 export interface IStorage {
   getUser(id: number): Promise<User | undefined>;
@@ -43,10 +92,24 @@ export interface IStorage {
   getPlatform(id: number): Promise<GamePlatform | undefined>;
   createPlatform(platform: InsertGamePlatform): Promise<GamePlatform>;
 
-  listGames(platform?: string): Promise<Game[]>;
+  listGames(platform?: string, options?: GameListOptions): Promise<GameListResult>;
   getGame(id: number): Promise<Game | undefined>;
+  /** Lookup by slug (e.g. avernus-arena) for string gameId leaderboard paths. */
+  getGameBySlug(slug: string): Promise<Game | undefined>;
+  /**
+   * Resolve numeric catalog id OR string slug to a game_library row.
+   * Ensures first-party studio games exist when missing.
+   */
+  resolveGameRef(ref: string | number): Promise<Game | undefined>;
+  /**
+   * Ensure game_library row uses **catalog id** (portal /play/:id / scores FK).
+   * Seed historically ignored catalog ids — this heals competitive + score path.
+   */
+  ensureCatalogGame(catalogId: number): Promise<Game | undefined>;
+  /** Upsert all competitive Top 10 into game_library with art + correct ids. */
+  ensureCompetitiveGames(): Promise<Game[]>;
   createGame(game: InsertGame): Promise<Game>;
-  searchGames(query: string, platform?: string): Promise<Game[]>;
+  searchGames(query: string, platform?: string, options?: GameListOptions): Promise<GameListResult>;
 
   listArticles(category?: string): Promise<Article[]>;
   getArticle(id: number): Promise<Article | undefined>;
@@ -59,6 +122,7 @@ export interface IStorage {
   getUserByEmail(email: string): Promise<User | undefined>;
   getUserByPuterId(puterId: string): Promise<User | undefined>;
   getUserByGrudgeId(grudgeId: string): Promise<User | undefined>;
+  getUserByFleetUserId(fleetUserId: string): Promise<User | undefined>;
   getUserBySolanaAddress(address: string): Promise<User | undefined>;
   getUserByDiscordId(discordId: string): Promise<User | undefined>;
   getUserByGithubId(githubId: string): Promise<User | undefined>;
@@ -75,7 +139,11 @@ export interface IStorage {
   // Portal aggregates
   getPlayerStats(userId: number): Promise<{
     gamesPlayed: number;
+    retroGamesPlayed: number;
+    fleetGamesPlayed: number;
     totalScores: number;
+    retroScores: number;
+    fleetPlays: number;
     personalBests: number;
     globalRecords: number;
     challengesWon: number;
@@ -83,6 +151,8 @@ export interface IStorage {
   }>;
   getRecentPlayerScores(userId: number, limit?: number): Promise<Array<Score & { gameTitle: string; platform: string; thumbnailUrl: string | null }>>;
   getPlayerGames(userId: number): Promise<Array<{ game: Game; bestScore: number; personalBestAt: Date | null }>>;
+  getFleetPlays(userId: number): Promise<FleetPlayRecord[]>;
+  recordFleetPlay(userId: number, play: Omit<FleetPlayRecord, "playCount" | "lastPlayedAt"> & { lastPlayedAt?: string }): Promise<FleetPlayRecord[]>;
   getTopGames(limit?: number, windowDays?: number): Promise<Array<Game & { playerCount: number; scoreCount: number }>>;
   getGlobalTopPlayers(limit?: number): Promise<Array<{ userId: number; username: string; displayName: string | null; avatarUrl: string | null; totalScore: number; personalBests: number; globalRecords: number }>>;
 
@@ -232,21 +302,31 @@ export class DatabaseStorage implements IStorage {
     const BATCH = 50;
     for (let i = 0; i < CATALOG.length; i += BATCH) {
       const batch = CATALOG.slice(i, i + BATCH);
-      const values = batch.map(([, title, slug, platform, embedUrl, isFeatured]) => ({
-        title,
-        slug,
-        platform,
-        platformId: null,
-        description: `Play ${title} online`,
-        thumbnailUrl: null,
-        sourceUrl: null,
-        embedUrl,
-        category: "retro",
-        isPlayable: true,
-        isFeatured,
-      }));
+      // Preserve catalog id so portal /play/:id matches scores.game_id FK.
+      const values = batch.map(([catalogId, title, slug, platform, embedUrl, isFeatured]) => {
+        const comp = getCompetitiveMeta(catalogId);
+        return {
+          id: catalogId,
+          title,
+          slug,
+          platform,
+          platformId: null,
+          description: comp?.blurb || `Play ${title} online`,
+          thumbnailUrl: comp?.thumbnailUrl || null,
+          sourceUrl: null,
+          embedUrl,
+          category: "retro",
+          isPlayable: true,
+          isFeatured: isFeatured || Boolean(comp),
+        };
+      });
       await db.insert(gameLibrary).values(values);
     }
+
+    // Keep serial sequence ahead of max explicit id
+    await db.execute(
+      sql`SELECT setval(pg_get_serial_sequence('game_library', 'id'), COALESCE((SELECT MAX(id) FROM game_library), 1))`,
+    );
 
     // Update platform game counts
     const platformSlugs = ["nes", "snes", "genesis", "n64", "neogeo", "playstation", "gameboy", "gba", "nds"];
@@ -347,11 +427,29 @@ export class DatabaseStorage implements IStorage {
     return p;
   }
 
-  async listGames(platform?: string): Promise<Game[]> {
-    if (platform) {
-      return await db.select().from(gameLibrary).where(eq(gameLibrary.platform, platform)).orderBy(gameLibrary.title);
+  async listGames(platform?: string, options?: GameListOptions): Promise<GameListResult> {
+    const conditions = [];
+    if (platform) conditions.push(eq(gameLibrary.platform, platform));
+    if (options?.letter) {
+      if (options.letter === "#") {
+        conditions.push(sql`${gameLibrary.title} !~ '^[A-Za-z]'`);
+      } else {
+        conditions.push(ilike(gameLibrary.title, `${options.letter}%`));
+      }
     }
-    return await db.select().from(gameLibrary).orderBy(gameLibrary.title);
+    const whereClause = conditions.length ? and(...conditions) : undefined;
+
+    const [{ count }] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(gameLibrary)
+      .where(whereClause);
+
+    let query = db.select().from(gameLibrary).where(whereClause).orderBy(gameLibrary.title).$dynamic();
+    if (options?.limit) query = query.limit(options.limit);
+    if (options?.offset) query = query.offset(options.offset);
+
+    const games = await query;
+    return { games, total: count };
   }
 
   async getGame(id: number): Promise<Game | undefined> {
@@ -359,15 +457,183 @@ export class DatabaseStorage implements IStorage {
     return g || undefined;
   }
 
+  async getGameBySlug(slug: string): Promise<Game | undefined> {
+    const s = String(slug || "").trim().toLowerCase();
+    if (!s) return undefined;
+    const [g] = await db.select().from(gameLibrary).where(eq(gameLibrary.slug, s)).limit(1);
+    return g || undefined;
+  }
+
+  /**
+   * First-party studio games that score by slug (not retro catalog int ids).
+   * Kept small — only games that call /api/leaderboards/:slug.
+   */
+  private static readonly STUDIO_SLUG_GAMES: Record<
+    string,
+    { title: string; platform: string; thumbnailUrl?: string }
+  > = {
+    "avernus-arena": {
+      title: "Avernus Arena",
+      platform: "custom",
+      thumbnailUrl: "/assets/games/game_avernus_arena.png",
+    },
+    "avernus-3d": {
+      title: "Avernus 3D",
+      platform: "custom",
+      thumbnailUrl: "/assets/games/game_avernus_3d.png",
+    },
+  };
+
+  async resolveGameRef(ref: string | number): Promise<Game | undefined> {
+    if (typeof ref === "number" || /^\d+$/.test(String(ref))) {
+      const id = typeof ref === "number" ? ref : parseInt(String(ref), 10);
+      return (await this.ensureCatalogGame(id)) || (await this.getGame(id));
+    }
+
+    const slug = String(ref).trim().toLowerCase();
+    if (!slug) return undefined;
+
+    let game = await this.getGameBySlug(slug);
+    if (game) return game;
+
+    const meta = DatabaseStorage.STUDIO_SLUG_GAMES[slug];
+    if (!meta) return undefined;
+
+    try {
+      const [inserted] = await db
+        .insert(gameLibrary)
+        .values({
+          title: meta.title,
+          slug,
+          platform: meta.platform,
+          thumbnailUrl: meta.thumbnailUrl ?? null,
+          isFeatured: true,
+          isPlayable: true,
+          embedUrl: `/${slug}`,
+          description: `${meta.title} — Grudge Studio first-party game`,
+        })
+        .returning();
+      return inserted;
+    } catch {
+      // race / unique slug — re-read
+      return this.getGameBySlug(slug);
+    }
+  }
+
+  async ensureCatalogGame(catalogId: number): Promise<Game | undefined> {
+    if (!Number.isFinite(catalogId) || catalogId <= 0) return undefined;
+
+    const existing = await this.getGame(catalogId);
+    // Prefer portal _games.json (play URL ids), then catalog-data, then competitive meta
+    const portal = PORTAL_GAMES.find((g) => g.id === catalogId);
+    const catalog = CATALOG.find((row) => row[0] === catalogId);
+    const comp = getCompetitiveMeta(catalogId);
+
+    if (!portal && !catalog && !comp && !existing) return undefined;
+
+    const title =
+      portal?.title || catalog?.[1] || comp?.title || existing?.title || `Game ${catalogId}`;
+    const slug =
+      portal?.slug ||
+      catalog?.[2] ||
+      title
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-|-$/g, "");
+    const platform =
+      portal?.platform || catalog?.[3] || comp?.platform || existing?.platform || "nes";
+    const embedUrl = portal?.embedUrl || catalog?.[4] || existing?.embedUrl || null;
+    const isFeatured =
+      portal?.isFeatured || catalog?.[5] || Boolean(comp) || existing?.isFeatured || false;
+    const thumbnailUrl =
+      comp?.thumbnailUrl ||
+      portal?.thumbnailUrl ||
+      existing?.thumbnailUrl ||
+      (title ? libretroBoxartUrl(platform, `${title} (USA).png`) : null);
+
+    const row = {
+      id: catalogId,
+      title,
+      slug,
+      platform,
+      platformId: existing?.platformId ?? null,
+      description: comp?.blurb || portal?.description || existing?.description || `Play ${title} online`,
+      thumbnailUrl,
+      sourceUrl: existing?.sourceUrl ?? null,
+      embedUrl,
+      category: existing?.category || "retro",
+      isPlayable: true,
+      isFeatured: Boolean(isFeatured),
+    };
+
+    if (existing) {
+      const [updated] = await db
+        .update(gameLibrary)
+        .set({
+          title: row.title,
+          slug: row.slug,
+          platform: row.platform,
+          description: row.description,
+          thumbnailUrl: row.thumbnailUrl,
+          embedUrl: row.embedUrl,
+          isPlayable: true,
+          isFeatured: row.isFeatured,
+        })
+        .where(eq(gameLibrary.id, catalogId))
+        .returning();
+      return updated;
+    }
+
+    try {
+      const [inserted] = await db.insert(gameLibrary).values(row).returning();
+      await db.execute(
+        sql`SELECT setval(pg_get_serial_sequence('game_library', 'id'), COALESCE((SELECT MAX(id) FROM game_library), 1))`,
+      );
+      return inserted;
+    } catch (err) {
+      // Race: another request inserted — re-read
+      console.warn("[ensureCatalogGame] insert race", catalogId, err);
+      return this.getGame(catalogId);
+    }
+  }
+
+  async ensureCompetitiveGames(): Promise<Game[]> {
+    const out: Game[] = [];
+    for (const meta of RETRO_COMPETITIVE_TOP10) {
+      const g = await this.ensureCatalogGame(meta.gameId);
+      if (g) out.push(g);
+    }
+    return out;
+  }
+
   async createGame(game: InsertGame): Promise<Game> {
     const [g] = await db.insert(gameLibrary).values(game).returning();
     return g;
   }
 
-  async searchGames(query: string, platform?: string): Promise<Game[]> {
+  async searchGames(query: string, platform?: string, options?: GameListOptions): Promise<GameListResult> {
     const conditions = [ilike(gameLibrary.title, `%${query}%`)];
     if (platform) conditions.push(eq(gameLibrary.platform, platform));
-    return await db.select().from(gameLibrary).where(and(...conditions)).orderBy(gameLibrary.title);
+    if (options?.letter) {
+      if (options.letter === "#") {
+        conditions.push(sql`${gameLibrary.title} !~ '^[A-Za-z]'`);
+      } else {
+        conditions.push(ilike(gameLibrary.title, `${options.letter}%`));
+      }
+    }
+    const whereClause = and(...conditions);
+
+    const [{ count }] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(gameLibrary)
+      .where(whereClause);
+
+    let q = db.select().from(gameLibrary).where(whereClause).orderBy(gameLibrary.title).$dynamic();
+    if (options?.limit) q = q.limit(options.limit);
+    if (options?.offset) q = q.offset(options.offset);
+
+    const games = await q;
+    return { games, total: count };
   }
 
   async listArticles(category?: string): Promise<Article[]> {
@@ -412,8 +678,21 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getUserByGrudgeId(grudgeId: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.grudgeId, grudgeId));
+    const variants = grudgeIdLookupVariants(grudgeId);
+    if (variants.length === 0) return undefined;
+    const [user] = await db.select().from(users).where(or(...variants.map((v) => eq(users.grudgeId, v))));
     return user || undefined;
+  }
+
+  async getUserByFleetUserId(fleetUserId: string): Promise<User | undefined> {
+    const id = String(fleetUserId || "").trim();
+    if (!id) return undefined;
+    try {
+      const [user] = await db.select().from(users).where(eq(users.fleetUserId, id));
+      return user || undefined;
+    } catch {
+      return undefined;
+    }
   }
 
   async getUserBySolanaAddress(address: string): Promise<User | undefined> {
@@ -536,7 +815,38 @@ export class DatabaseStorage implements IStorage {
 
   // ── Portal aggregates ────────────────────────────────────────
 
+  async getFleetPlays(userId: number): Promise<FleetPlayRecord[]> {
+    const [user] = await db.select({ recentPlays: users.recentPlays }).from(users).where(eq(users.id, userId)).limit(1);
+    const plays = user?.recentPlays;
+    return Array.isArray(plays) ? plays : [];
+  }
+
+  async recordFleetPlay(
+    userId: number,
+    play: Omit<FleetPlayRecord, "playCount" | "lastPlayedAt"> & { lastPlayedAt?: string },
+  ): Promise<FleetPlayRecord[]> {
+    const existing = await this.getFleetPlays(userId);
+    const now = play.lastPlayedAt ?? new Date().toISOString();
+    const hit = existing.find((p) => p.gameKey === play.gameKey);
+    const next: FleetPlayRecord[] = hit
+      ? existing.map((p) =>
+          p.gameKey === play.gameKey
+            ? { ...p, ...play, playCount: p.playCount + 1, lastPlayedAt: now }
+            : p,
+        )
+      : [{ ...play, playCount: 1, lastPlayedAt: now }, ...existing];
+    const trimmed = next.slice(0, 48);
+    await db.update(users).set({ recentPlays: trimmed }).where(eq(users.id, userId));
+    return trimmed;
+  }
+
   async getPlayerStats(userId: number) {
+    const fleetPlays = await this.getFleetPlays(userId);
+    const fleetGameCount = new Set(
+      fleetPlays.filter((p) => p.category === "fleet").map((p) => p.gameKey),
+    ).size;
+    const fleetPlayCount = fleetPlays.reduce((sum, p) => sum + (p.playCount ?? 1), 0);
+
     const [[gamesPlayedRow], [totalScoresRow], [personalBestsRow], [globalRecordsRow], [challengesWonRow], [challengesLostRow]] = await Promise.all([
       db.select({ count: sql<number>`cast(count(distinct ${scores.gameId}) as int)` })
         .from(scores)
@@ -562,9 +872,14 @@ export class DatabaseStorage implements IStorage {
         )),
     ]);
 
+    const retroGamesPlayed = gamesPlayedRow?.count ?? 0;
     return {
-      gamesPlayed: gamesPlayedRow?.count ?? 0,
-      totalScores: totalScoresRow?.count ?? 0,
+      gamesPlayed: retroGamesPlayed + fleetGameCount,
+      retroGamesPlayed,
+      fleetGamesPlayed: fleetGameCount,
+      totalScores: (totalScoresRow?.count ?? 0) + fleetPlayCount,
+      retroScores: totalScoresRow?.count ?? 0,
+      fleetPlays: fleetPlayCount,
       personalBests: personalBestsRow?.count ?? 0,
       globalRecords: globalRecordsRow?.count ?? 0,
       challengesWon: challengesWonRow?.count ?? 0,
@@ -678,11 +993,44 @@ export class DatabaseStorage implements IStorage {
 
 const storage = new DatabaseStorage();
 
-(async () => {
-  await storage.initializeStoreProducts();
-  await storage.initializeHydraProducts();
-  await storage.initializePlatforms();
-  await storage.initializeGames();
-})();
+async function ensureStoreProductColumns() {
+  try {
+    await db.execute(
+      sql`ALTER TABLE store_products ADD COLUMN IF NOT EXISTS gbux_price INTEGER`,
+    );
+  } catch (err) {
+    console.warn("[storage] gbux_price column ensure skipped:", err);
+  }
+}
+
+async function ensureRecentPlaysColumn() {
+  try {
+    await db.execute(
+      sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS recent_plays JSONB DEFAULT '[]'::jsonb`,
+    );
+  } catch (err) {
+    console.warn("[storage] recent_plays column ensure skipped:", err);
+  }
+}
+
+async function bootstrapStorage() {
+  await ensureStoreProductColumns();
+  await ensureRecentPlaysColumn();
+  const steps: Array<[string, () => Promise<void>]> = [
+    ["store products", () => storage.initializeStoreProducts()],
+    ["hydra products", () => storage.initializeHydraProducts()],
+    ["platforms", () => storage.initializePlatforms()],
+    ["games", () => storage.initializeGames()],
+  ];
+  for (const [label, fn] of steps) {
+    try {
+      await fn();
+    } catch (err) {
+      console.error(`[storage] initialize ${label} failed:`, err);
+    }
+  }
+}
+
+void bootstrapStorage();
 
 export { storage };

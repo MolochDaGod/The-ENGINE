@@ -1,43 +1,83 @@
-import { FormEvent, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { checkAdminSession, loginAdmin } from "@/lib/admin-auth";
+
+const FLEET_OPERATORS = new Set(["grudachain", "molochdadev"]);
+const FLEET_OPERATOR_EMAILS = new Set(["grugedev@gmail.com", "jonbemmons@gmail.com"]);
+
+declare global {
+  interface Window {
+    puter?: {
+      auth: {
+        isSignedIn: () => boolean;
+        getUser: () => Promise<{ username?: string; email?: string; uuid?: string }>;
+        signIn: () => Promise<{ success?: boolean } | void>;
+        signOut: () => Promise<void>;
+      };
+    };
+  }
+}
+
+function isFleetOperator(user: { username?: string; email?: string } | null | undefined) {
+  if (!user) return false;
+  const username = String(user.username || "").toLowerCase();
+  const email = String(user.email || "").toLowerCase();
+  return FLEET_OPERATORS.has(username) || FLEET_OPERATOR_EMAILS.has(email);
+}
 
 function getRedirectTarget() {
   const params = new URLSearchParams(window.location.search);
-  return params.get("redirect") || "/analytics-dashboard";
+  return params.get("redirect") || "https://dash.grudge-studio.com/";
 }
 
 export default function AdminLogin() {
   const [, setLocation] = useLocation();
-  const [passcode, setPasscode] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    const checkExistingSession = async () => {
-      const isAuthenticated = await checkAdminSession();
-      if (isAuthenticated) setLocation(getRedirectTarget());
-    };
-    checkExistingSession();
+    const dash = getRedirectTarget();
+    if (dash.startsWith("http")) {
+      window.location.replace(dash);
+      return;
+    }
+    setLocation(dash);
   }, [setLocation]);
 
-  const onSubmit = async (event: FormEvent) => {
-    event.preventDefault();
+  const onPuterSignIn = async () => {
     setSubmitting(true);
+    setError("");
     try {
-      const authenticated = await loginAdmin(passcode);
-      if (!authenticated) {
-        setError("Invalid credentials");
+      const puter = window.puter;
+      if (!puter?.auth) {
+        setError("Puter SDK not loaded");
         return;
       }
-
-      setError("");
-      setLocation(getRedirectTarget());
-    } catch (_error) {
-      setError("Unable to reach admin auth service");
+      let user;
+      if (puter.auth.isSignedIn()) {
+        user = await puter.auth.getUser();
+      } else {
+        const result = await puter.auth.signIn();
+        if (result && "success" in result && result.success === false) {
+          setError("Puter sign-in cancelled");
+          return;
+        }
+        user = await puter.auth.getUser();
+      }
+      if (!isFleetOperator(user)) {
+        try {
+          await puter.auth.signOut();
+        } catch {
+          // ignore
+        }
+        setError("Only grudachain and molochdadev fleet operators may access the console.");
+        return;
+      }
+      window.location.href = getRedirectTarget();
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "Puter sign-in failed";
+      setError(message);
     } finally {
       setSubmitting(false);
     }
@@ -48,25 +88,20 @@ export default function AdminLogin() {
       <div className="mx-auto max-w-md">
         <Card className="border-[hsl(43,60%,30%)] bg-[hsl(225,25%,10%)]">
           <CardHeader>
-            <CardTitle className="text-[hsl(43,85%,55%)]">Admin Login</CardTitle>
+            <CardTitle className="text-[hsl(43,85%,55%)]">Fleet Console</CardTitle>
             <CardDescription className="text-[hsl(45,15%,60%)]">
-              Sign in with your admin credentials to access protected routes.
+              Sign in with Puter as <strong>grudachain</strong> or <strong>molochdadev</strong>.
+              Passcode admin login has been removed.
             </CardDescription>
           </CardHeader>
-          <CardContent>
-            <form onSubmit={onSubmit} className="space-y-4">
-              <Input
-                type="password"
-                value={passcode}
-                onChange={(e) => setPasscode(e.target.value)}
-                placeholder="Enter admin credentials"
-                className="border-[hsl(43,60%,30%)] bg-[hsl(225,25%,12%)]"
-              />
-              {error && <p className="text-sm text-red-400">{error}</p>}
-              <Button type="submit" className="w-full gilded-button" disabled={submitting}>
-                {submitting ? "Signing in..." : "Continue"}
-              </Button>
-            </form>
+          <CardContent className="space-y-4">
+            <Button type="button" className="w-full gilded-button" disabled={submitting} onClick={onPuterSignIn}>
+              {submitting ? "Connecting…" : "☁️ Sign in with Puter"}
+            </Button>
+            <Button type="button" variant="outline" className="w-full" onClick={() => { window.location.href = "https://dash.grudge-studio.com/"; }}>
+              Open Harbor Map
+            </Button>
+            {error && <p className="text-sm text-red-400">{error}</p>}
           </CardContent>
         </Card>
       </div>
