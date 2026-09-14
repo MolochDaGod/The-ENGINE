@@ -59,6 +59,7 @@ import { getWalletStatus, getAccountDetail } from "./web3/solana-client";
 import { getFleetHealth, checkSingleService, getServiceRegistry } from "./fleet-health";
 import { legionAI, generateNPCDialogue, moderateContent, generateQuestText, analyzeFleetStatus, studioAssistant, type LegionTask } from "./legion-ai";
 import { getGBuxBalance, requestGBuxMint, savePlayerData, loadPlayerData, listPlayerSaves, deletePlayerSave, linkPuterToGrudge, resolveGrudgeId, getGrudaChainStatus } from "./grudachain";
+import { getFleetBearer, fetchGrudaWalletStatus, ensureGrudaWallet, grudaLinks } from "./gruda-wallet";
 import { registerUniverseRoutes } from "./routes-universe";
 import { registerSystemAdminRoutes } from "./routes-system-admin";
 
@@ -2231,6 +2232,57 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.json({ success: true });
     } catch (error) {
       return res.status(500).json({ error: "Failed to remove wallet" });
+    }
+  });
+
+  /** Gruda / Crossmint game wallet — Railway 0d46, check first. */
+  app.get("/api/me/gruda-wallet", requirePlayer, async (req, res) => {
+    try {
+      const player = getPlayer(req)!;
+      const token = getFleetBearer(req);
+      const links = grudaLinks();
+      if (!token) {
+        return res.json({
+          hasWallet: false,
+          needsGrudgeId: true,
+          error: "grudge_id login required for Gruda wallet",
+          grudgeId: player.grudgeId || null,
+          ...links,
+        });
+      }
+      const st = await fetchGrudaWalletStatus(token);
+      return res.status(st.ok ? 200 : st.status).json({
+        hasWallet: Boolean(st.body?.hasWallet && st.body?.walletAddress),
+        walletAddress: st.body?.walletAddress || null,
+        walletType: st.body?.walletType || null,
+        gbuxBalance: st.body?.gbuxBalance ?? null,
+        grudgeId: st.body?.grudgeId || player.grudgeId || null,
+        ...links,
+        ...(st.ok ? {} : { error: st.body?.error || "wallet_status_failed" }),
+      });
+    } catch (error) {
+      console.error("GET /api/me/gruda-wallet", error);
+      return res.status(502).json({ error: "Failed to reach game-data wallet" });
+    }
+  });
+
+  app.post("/api/me/gruda-wallet", requirePlayer, async (req, res) => {
+    try {
+      const player = getPlayer(req)!;
+      const token = getFleetBearer(req);
+      if (!token) {
+        return res.status(401).json({ error: "grudge_id login required for Gruda wallet" });
+      }
+      const email =
+        (typeof req.body?.email === "string" && req.body.email) ||
+        player.email ||
+        null;
+      const out = await ensureGrudaWallet(token, email || undefined);
+      if (!out.ok) return res.status(out.status || 400).json(out);
+      return res.json({ ...out, ...grudaLinks() });
+    } catch (error) {
+      console.error("POST /api/me/gruda-wallet", error);
+      return res.status(502).json({ error: "Failed to create Gruda wallet" });
     }
   });
 

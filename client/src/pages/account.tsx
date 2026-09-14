@@ -13,7 +13,9 @@
  *   - GET  /api/me/games         → games played
  *   - GET  /api/me/connections   → linked providers + wallets
  *   - GET  /api/me/wallets       → wallet_connections rows
- *   - PATCH /api/me/profile      → update displayName, bio, avatarUrl
+ *   - GET/POST /api/me/gruda-wallet → Railway 0d46 Crossmint (check first)
+ *   - PATCH /api/me/profile      → update username (Puter handle), displayName, bio, avatarUrl
+ *   - POST /api/auth/puter-link  → attach Puter uuid + username to this session
  *   - GET  /api/transactions     → GBUX ledger
  *   - GET  /api/friends          → friend list
  *   - GET  /api/challenges/*     → PvP
