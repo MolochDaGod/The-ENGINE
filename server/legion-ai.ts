@@ -17,10 +17,8 @@
  *  - Fleet diagnosis (AI Captain)
  */
 
-export type LegionModel = 'claude' | 'gpt4o' | 'auto';
-export type LegionTask = 'dialogue' | 'lore' | 'moderation' | 'balance' | 'captain' | 'general' | 'studio';
 export type LegionModel = 'claude' | 'gpt4o' | 'auto' | 'groq';
-export type LegionTask = 'dialogue' | 'lore' | 'moderation' | 'balance' | 'captain' | 'general' | 'ale';
+export type LegionTask = 'dialogue' | 'lore' | 'moderation' | 'balance' | 'captain' | 'general' | 'studio' | 'ale';
 
 export interface LegionRequest {
   task: LegionTask;
@@ -54,6 +52,22 @@ const SYSTEM_PROMPTS: Record<LegionTask, string> = {
   general: `You are an AI assistant for Grudge Studio. Answer questions about the game systems, infrastructure, or development.`,
 
   studio: `You are the Grudge Studio Assistant — the studio-wide AI that knows the whole operation, not just the Grudge Warlords game. Grudge Studio is created by "Racalvin The Pirate King". You understand the fleet of games, the deployment topology (Cloudflare Workers + Vercel + Railway), the data layer (D1, R2, KV, Puter), how every app connects to the backend, and the recent GitHub history. Use the STUDIO CONTEXT and RECENT GITHUB HISTORY provided below to answer questions about the studio, the game fleet, deployments, infrastructure, and what changed recently. Be accurate and concrete: cite the relevant domain, repo, or service. If something is not in the provided context, say so rather than guessing.`,
+
+  ale: `You are Ale — the always-on AI companion in Treaty Chat for Grudge Studio (grudge-studio.com).
+
+Personality: sharp, friendly, slightly irreverent, never corporate. You know the fleet:
+- Treaty = social layer (channels, friends, DMs, per-game rooms game:slug). Mention @ale to talk to you.
+- Grudge ID = single sign-on across games (id.grudge-studio.com).
+- Play hub = play.grudge.studio; portal = grudge-studio.com; Forge = forge.grudge-studio.com.
+- Games: Avernus, Mage Arena, Wargus/RTS, TerraForge, Grudge Brawl, Warlords, and more.
+- Currency: GBUX. Assets CDN: assets.grudge-studio.com.
+
+Rules:
+- Reply in 1–4 short sentences unless the player asks for steps/lists.
+- You are in a live multiplayer chat — no markdown walls, no code dumps unless asked.
+- If unsure, say so and point them to /chat, /account, or /games.
+- Never invent private user data. Don't claim you can spend GBUX or change accounts.
+- You may be playful but stay helpful. Sign off vibe: crewmate, not support ticket.`,
 };
 
 // ═══ STUDIO CONTEXT + GITHUB DIGEST (shared context layer) ═══
@@ -150,22 +164,7 @@ async function resolveSystemPrompt(task: LegionTask): Promise<string> {
     prompt += `\n\n--- RECENT GITHUB HISTORY ---\n${githubDigest}`;
   }
   return prompt;
-  ale: `You are Ale — the always-on AI companion in Treaty Chat for Grudge Studio (grudge-studio.com).
-
-Personality: sharp, friendly, slightly irreverent, never corporate. You know the fleet:
-- Treaty = social layer (channels, friends, DMs, per-game rooms game:slug). Mention @ale to talk to you.
-- Grudge ID = single sign-on across games (id.grudge-studio.com).
-- Play hub = play.grudge.studio; portal = grudge-studio.com; Forge = forge.grudge-studio.com.
-- Games: Avernus, Mage Arena, Wargus/RTS, TerraForge, Grudge Brawl, Warlords, and more.
-- Currency: GBUX. Assets CDN: assets.grudge-studio.com.
-
-Rules:
-- Reply in 1–4 short sentences unless the player asks for steps/lists.
-- You are in a live multiplayer chat — no markdown walls, no code dumps unless asked.
-- If unsure, say so and point them to /chat, /account, or /games.
-- Never invent private user data. Don't claim you can spend GBUX or change accounts.
-- You may be playful but stay helpful. Sign off vibe: crewmate, not support ticket.`,
-};
+}
 
 // ═══ GROQ (OpenAI-compatible, fast) ═══
 const GROQ_API_KEY = process.env.GROQ_API_KEY || '';
@@ -348,31 +347,20 @@ export async function legionAI(req: LegionRequest): Promise<LegionResponse> {
   // studio-aware tasks) so every provider sees the same instructions.
   const systemPrompt = await resolveSystemPrompt(req.task);
 
-  // 1. Try AI Hub (CF Worker)
-  const hubResult = await callAIHub(req, systemPrompt);
-  if (hubResult) return hubResult;
-
-  // 2. Try Puter AI
-  const puterResult = await callPuterAI(req, systemPrompt);
-  if (puterResult) return puterResult;
-
-  // 3. Try direct Anthropic
-  const directResult = await callAnthropicDirect(req, systemPrompt);
-  if (directResult) return directResult;
   // 1. Groq first (fast + configured for Treaty @ale)
   const groqResult = await callGroq(req);
   if (groqResult?.text) return groqResult;
 
   // 2. AI Hub (CF Worker)
-  const hubResult = await callAIHub(req);
+  const hubResult = await callAIHub(req, systemPrompt);
   if (hubResult?.text) return hubResult;
 
   // 3. Puter AI
-  const puterResult = await callPuterAI(req);
+  const puterResult = await callPuterAI(req, systemPrompt);
   if (puterResult?.text) return puterResult;
 
   // 4. Direct Anthropic
-  const directResult = await callAnthropicDirect(req);
+  const directResult = await callAnthropicDirect(req, systemPrompt);
   if (directResult?.text) return directResult;
 
   // 5. Hardcoded fallback (no AI service available)
