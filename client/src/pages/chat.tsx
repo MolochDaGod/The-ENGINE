@@ -123,6 +123,7 @@ export default function Chat() {
   const wsRef = useRef<WebSocket | null>(null);
   const intentionalClose = useRef(false);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reconnectAttempts = useRef(0);
   const hasJoinedRef = useRef(hasJoined);
   const roomRef = useRef(currentRoom);
   const identityRef = useRef(identity);
@@ -240,6 +241,12 @@ export default function Chat() {
       return;
     }
 
+    const MAX_RECONNECT_ATTEMPTS = 10;
+    if (reconnectAttempts.current >= MAX_RECONNECT_ATTEMPTS) {
+      setWsError(`Chat connection failed after ${MAX_RECONNECT_ATTEMPTS} attempts. Please refresh the page.`);
+      return;
+    }
+
     clearReconnect();
     intentionalClose.current = false;
     setWsError(null);
@@ -256,16 +263,19 @@ export default function Chat() {
     try {
       ws = new WebSocket(url);
     } catch (e) {
-      setWsError(`WebSocket create failed: ${e instanceof Error ? e.message : String(e)}`);
+      reconnectAttempts.current += 1;
+      const backoffDelay = Math.min(2000 * Math.pow(2, reconnectAttempts.current - 1), 32000);
+      setWsError(`WebSocket create failed: ${e instanceof Error ? e.message : String(e)} (attempt ${reconnectAttempts.current}/${MAX_RECONNECT_ATTEMPTS})`);
       reconnectTimer.current = setTimeout(() => {
         if (hasJoinedRef.current) connectWs();
-      }, 3000);
+      }, backoffDelay);
       return;
     }
 
     wsRef.current = ws;
 
     ws.onopen = () => {
+      reconnectAttempts.current = 0;
       setConnected(true);
       setWsError(null);
       const id = identityRef.current;
@@ -316,9 +326,16 @@ export default function Chat() {
       setOnlineUsers((prev) => (prev.length ? prev : self ? [self] : []));
       wsRef.current = null;
       if (!intentionalClose.current && hasJoinedRef.current) {
-        reconnectTimer.current = setTimeout(() => {
-          if (hasJoinedRef.current) connectWs();
-        }, 2500);
+        const MAX_RECONNECT_ATTEMPTS = 10;
+        if (reconnectAttempts.current < MAX_RECONNECT_ATTEMPTS) {
+          reconnectAttempts.current += 1;
+          const backoffDelay = Math.min(2000 * Math.pow(2, reconnectAttempts.current - 1), 32000);
+          reconnectTimer.current = setTimeout(() => {
+            if (hasJoinedRef.current) connectWs();
+          }, backoffDelay);
+        } else {
+          setWsError(`Chat connection failed after ${MAX_RECONNECT_ATTEMPTS} attempts. Please refresh the page.`);
+        }
       }
     };
   }, [queryClient]);
