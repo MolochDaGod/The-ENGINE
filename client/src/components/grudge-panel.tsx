@@ -536,20 +536,19 @@ function SocialTab() {
         ws = new WebSocket(getTreatyWsUrl());
       } catch {
         reconnectAttempts.current += 1;
-        const backoffDelay = Math.min(2000 * Math.pow(2, reconnectAttempts.current - 1), 32000);
         setChatConnected(false);
-        if (reconnectAttempts.current < MAX_RECONNECT_ATTEMPTS) {
-          reconnectTimer.current = setTimeout(connect, backoffDelay);
-        } else {
+        if (reconnectAttempts.current >= MAX_RECONNECT_ATTEMPTS) {
           setChatError(`Chat connection failed after ${MAX_RECONNECT_ATTEMPTS} attempts.`);
+          return;
         }
+        const backoffDelay = Math.min(2000 * Math.pow(2, reconnectAttempts.current - 1), 32000);
+        reconnectTimer.current = setTimeout(connect, backoffDelay);
         return;
       }
       wsRef.current = ws;
 
       ws.onopen = () => {
         if (closed) return;
-        reconnectAttempts.current = 0;
         setChatConnected(true);
         setChatError(null);
         try {
@@ -562,6 +561,7 @@ function SocialTab() {
       ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
+          reconnectAttempts.current = 0;
           if (data.type === "message" || data.type === "system") {
             setChatMessages((prev) => [...prev.slice(-50), data]);
           }
@@ -575,12 +575,12 @@ function SocialTab() {
         if (wsRef.current === ws) wsRef.current = null;
         if (!intentionalClose.current && !closed) {
           reconnectAttempts.current += 1;
-          const backoffDelay = Math.min(2000 * Math.pow(2, reconnectAttempts.current - 1), 32000);
-          if (reconnectAttempts.current < MAX_RECONNECT_ATTEMPTS) {
-            reconnectTimer.current = setTimeout(connect, backoffDelay);
-          } else {
+          if (reconnectAttempts.current >= MAX_RECONNECT_ATTEMPTS) {
             setChatError(`Chat connection failed after ${MAX_RECONNECT_ATTEMPTS} attempts.`);
+            return;
           }
+          const backoffDelay = Math.min(2000 * Math.pow(2, reconnectAttempts.current - 1), 32000);
+          reconnectTimer.current = setTimeout(connect, backoffDelay);
         }
       };
     };

@@ -248,6 +248,10 @@ export default function Chat() {
       ws = new WebSocket(url);
     } catch (e) {
       reconnectAttempts.current += 1;
+      if (reconnectAttempts.current >= MAX_RECONNECT_ATTEMPTS) {
+        setWsError(`Chat connection failed after ${MAX_RECONNECT_ATTEMPTS} attempts. Please refresh the page.`);
+        return;
+      }
       const backoffDelay = Math.min(2000 * Math.pow(2, reconnectAttempts.current - 1), 32000);
       setWsError(`WebSocket create failed: ${e instanceof Error ? e.message : String(e)} (attempt ${reconnectAttempts.current}/${MAX_RECONNECT_ATTEMPTS})`);
       reconnectTimer.current = setTimeout(() => {
@@ -259,7 +263,6 @@ export default function Chat() {
     wsRef.current = ws;
 
     ws.onopen = () => {
-      reconnectAttempts.current = 0;
       setConnected(true);
       setWsError(null);
       const id = identityRef.current;
@@ -280,6 +283,8 @@ export default function Chat() {
       } catch {
         return;
       }
+
+      reconnectAttempts.current = 0;
 
       if (data.type === "users" || data.type === "joined") {
         const self =
