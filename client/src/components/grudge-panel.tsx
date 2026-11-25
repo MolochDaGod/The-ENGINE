@@ -500,6 +500,7 @@ function SocialTab() {
   const [chatInput, setChatInput] = useState("");
   const [chatMessages, setChatMessages] = useState<any[]>([]);
   const [chatConnected, setChatConnected] = useState(false);
+  const [chatError, setChatError] = useState<string | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const roomRef = useRef(chatRoom);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -526,6 +527,7 @@ function SocialTab() {
       const MAX_RECONNECT_ATTEMPTS = 10;
       if (reconnectAttempts.current >= MAX_RECONNECT_ATTEMPTS) {
         setChatConnected(false);
+        setChatError(`Chat connection failed after ${MAX_RECONNECT_ATTEMPTS} attempts.`);
         return;
       }
       
@@ -538,6 +540,8 @@ function SocialTab() {
         setChatConnected(false);
         if (reconnectAttempts.current < MAX_RECONNECT_ATTEMPTS) {
           reconnectTimer.current = setTimeout(connect, backoffDelay);
+        } else {
+          setChatError(`Chat connection failed after ${MAX_RECONNECT_ATTEMPTS} attempts.`);
         }
         return;
       }
@@ -547,6 +551,7 @@ function SocialTab() {
         if (closed) return;
         reconnectAttempts.current = 0;
         setChatConnected(true);
+        setChatError(null);
         try {
           ws.send(JSON.stringify(buildJoinPayload(identity, roomRef.current)));
         } catch {
@@ -573,6 +578,8 @@ function SocialTab() {
           const backoffDelay = Math.min(2000 * Math.pow(2, reconnectAttempts.current - 1), 32000);
           if (reconnectAttempts.current < MAX_RECONNECT_ATTEMPTS) {
             reconnectTimer.current = setTimeout(connect, backoffDelay);
+          } else {
+            setChatError(`Chat connection failed after ${MAX_RECONNECT_ATTEMPTS} attempts.`);
           }
         }
       };
@@ -653,7 +660,10 @@ function SocialTab() {
           className="rounded border border-[hsl(225,20%,15%)] bg-[hsl(225,30%,6%)] h-48 flex flex-col"
         >
           <div className="flex-1 overflow-y-auto px-3 py-2 space-y-1 text-xs">
-            {chatMessages.length === 0 && (
+            {chatError && (
+              <p className="text-red-400 font-body text-center pt-6 text-[11px]">{chatError}</p>
+            )}
+            {!chatError && chatMessages.length === 0 && (
               <p className="text-[hsl(45,15%,40%)] font-body text-center pt-6">
                 {chatConnected ? `No messages in #${activeChannel.name} yet.` : "Connecting…"}
               </p>
