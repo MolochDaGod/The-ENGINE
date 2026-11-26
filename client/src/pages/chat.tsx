@@ -4,12 +4,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Send, Users, Hash, MessageSquare, Circle, Sparkles } from "lucide-react";
-import type { ChatMessage } from "@shared/schema";
-import { useAuth } from "@/components/auth-provider";
-import StudioAssistant from "@/components/studio-assistant";
-
-type ChatMode = "tavern" | "assistant";
 import {
   Send, Users, MessageSquare, Circle, Shield, Share2, Wifi, WifiOff, Check,
   Gamepad2, Mail, UserPlus, Loader2,
@@ -93,16 +87,6 @@ export default function Chat() {
   const { player } = useAuth();
   const queryClient = useQueryClient();
 
-  // If authed, use their Grudge display name; otherwise fall back to localStorage
-  const [username, setUsername] = useState(() => {
-    if (player) return player.displayName || player.username;
-    return localStorage.getItem(USERNAME_KEY) || "";
-  });
-  const [usernameInput, setUsernameInput] = useState(username);
-  const [hasJoined, setHasJoined] = useState(!!username || !!player);
-  const [currentRoom, setCurrentRoom] = useState("general");
-  const [mode, setMode] = useState<ChatMode>("tavern");
-  const [messages, setMessages] = useState<WsMessage[]>([]);
   const identity = useMemo(() => identityFromPlayer(player), [player]);
   const [guestName, setGuestName] = useState(() =>
     identity.displayName === "Guest" ? "" : identity.displayName,
@@ -123,6 +107,7 @@ export default function Chat() {
   const wsRef = useRef<WebSocket | null>(null);
   const intentionalClose = useRef(false);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reconnectAttempts = useRef(0);
   const hasJoinedRef = useRef(hasJoined);
   const roomRef = useRef(currentRoom);
   const identityRef = useRef(identity);
@@ -240,6 +225,12 @@ export default function Chat() {
       return;
     }
 
+    const MAX_RECONNECT_ATTEMPTS = 10;
+    if (reconnectAttempts.current >= MAX_RECONNECT_ATTEMPTS) {
+      setWsError(`Chat connection failed after ${MAX_RECONNECT_ATTEMPTS} attempts. Please refresh the page.`);
+      return;
+    }
+
     clearReconnect();
     intentionalClose.current = false;
     setWsError(null);
@@ -256,10 +247,16 @@ export default function Chat() {
     try {
       ws = new WebSocket(url);
     } catch (e) {
-      setWsError(`WebSocket create failed: ${e instanceof Error ? e.message : String(e)}`);
+      reconnectAttempts.current += 1;
+      if (reconnectAttempts.current >= MAX_RECONNECT_ATTEMPTS) {
+        setWsError(`Chat connection failed after ${MAX_RECONNECT_ATTEMPTS} attempts. Please refresh the page.`);
+        return;
+      }
+      const backoffDelay = Math.min(2000 * Math.pow(2, reconnectAttempts.current - 1), 32000);
+      setWsError(`WebSocket create failed: ${e instanceof Error ? e.message : String(e)} (attempt ${reconnectAttempts.current}/${MAX_RECONNECT_ATTEMPTS})`);
       reconnectTimer.current = setTimeout(() => {
         if (hasJoinedRef.current) connectWs();
-      }, 3000);
+      }, backoffDelay);
       return;
     }
 
@@ -286,6 +283,8 @@ export default function Chat() {
       } catch {
         return;
       }
+
+      reconnectAttempts.current = 0;
 
       if (data.type === "users" || data.type === "joined") {
         const self =
@@ -316,9 +315,16 @@ export default function Chat() {
       setOnlineUsers((prev) => (prev.length ? prev : self ? [self] : []));
       wsRef.current = null;
       if (!intentionalClose.current && hasJoinedRef.current) {
-        reconnectTimer.current = setTimeout(() => {
-          if (hasJoinedRef.current) connectWs();
-        }, 2500);
+        const MAX_RECONNECT_ATTEMPTS = 10;
+        if (reconnectAttempts.current < MAX_RECONNECT_ATTEMPTS) {
+          reconnectAttempts.current += 1;
+          const backoffDelay = Math.min(2000 * Math.pow(2, reconnectAttempts.current - 1), 32000);
+          reconnectTimer.current = setTimeout(() => {
+            if (hasJoinedRef.current) connectWs();
+          }, backoffDelay);
+        } else {
+          setWsError(`Chat connection failed after ${MAX_RECONNECT_ATTEMPTS} attempts. Please refresh the page.`);
+        }
       }
     };
   }, [queryClient]);
@@ -402,12 +408,6 @@ export default function Chat() {
     }
   }, [hasJoined, identity.isVerified, identity.grudgeId, identity.displayName]);
 
-  const handleJoin = (nextMode: ChatMode = "tavern") => {
-    const name = usernameInput.trim() || getRandomName();
-    setUsername(name);
-    setUsernameInput(name);
-    localStorage.setItem(USERNAME_KEY, name);
-    setMode(nextMode);
   const selectRoom = (roomId: string, tab?: HubTab) => {
     if (!isValidRoomId(roomId) && !isValidChannelId(roomId)) return;
     setCurrentRoom(roomId);
@@ -521,34 +521,6 @@ export default function Chat() {
 
   if (!hasJoined) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: "hsl(225,30%,6%)" }}>
-        <div className="w-full max-w-md mx-4">
-          <div className="fantasy-panel p-8 text-center">
-            <MessageSquare className="w-12 h-12 text-[hsl(43,85%,55%)] mx-auto mb-4" />
-            <h1 className="text-2xl font-heading gold-text mb-2">Grudge Studio Chat</h1>
-            <p className="text-[hsl(45,15%,55%)] font-body mb-6 text-sm">
-              Enter a name to join the tavern, or jump straight to the Studio Assistant.
-              Leave blank for a random name.
-            </p>
-            <div className="space-y-3">
-              <Input
-                value={usernameInput}
-                onChange={(e) => setUsernameInput(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleJoin()}
-                placeholder="Your display name..."
-                className="bg-[hsl(225,25%,15%)] border-[hsl(43,60%,30%)]/30 text-[hsl(45,30%,90%)] placeholder:text-[hsl(45,15%,35%)] text-center"
-                maxLength={30}
-              />
-              <Button onClick={() => handleJoin("tavern")} className="w-full gilded-button">
-                Enter the Tavern
-              </Button>
-              <Button
-                onClick={() => handleJoin("assistant")}
-                variant="outline"
-                className="w-full border-[hsl(43,60%,30%)]/40 text-[hsl(43,85%,60%)] hover:bg-[hsl(43,85%,55%)]/10"
-              >
-                <Sparkles className="w-4 h-4 mr-2" /> Ask the Studio Assistant
-              </Button>
       <div className="min-h-screen flex flex-col" style={{ background: "hsl(225,30%,6%)" }}>
         <div className="max-w-3xl mx-auto w-full px-4 py-8 flex-1">
           <div className="fantasy-panel p-6 sm:p-8 mb-6 text-center">
@@ -682,55 +654,6 @@ export default function Chat() {
             </div>
           )}
 
-        <div className="hidden md:flex flex-col w-56 shrink-0 gap-3">
-          <div className="fantasy-panel p-3">
-            <h3 className="text-xs font-heading text-[hsl(43,85%,55%)] uppercase tracking-wider mb-3" style={{ WebkitTextFillColor: "unset" }}>
-              Mode
-            </h3>
-            <div className="space-y-1">
-              <button
-                onClick={() => setMode("tavern")}
-                className={`w-full text-left px-3 py-2 rounded text-sm transition-colors flex items-center gap-2 ${
-                  mode === "tavern"
-                    ? "bg-[hsl(43,85%,55%)]/10 text-[hsl(43,85%,55%)] border border-[hsl(43,60%,30%)]/30"
-                    : "text-[hsl(45,15%,60%)] hover:bg-[hsl(225,25%,15%)] hover:text-[hsl(45,30%,80%)]"
-                }`}
-              >
-                <MessageSquare className="w-3.5 h-3.5" /> <span className="font-body">Tavern</span>
-              </button>
-              <button
-                onClick={() => setMode("assistant")}
-                className={`w-full text-left px-3 py-2 rounded text-sm transition-colors flex items-center gap-2 ${
-                  mode === "assistant"
-                    ? "bg-[hsl(43,85%,55%)]/10 text-[hsl(43,85%,55%)] border border-[hsl(43,60%,30%)]/30"
-                    : "text-[hsl(45,15%,60%)] hover:bg-[hsl(225,25%,15%)] hover:text-[hsl(45,30%,80%)]"
-                }`}
-              >
-                <Sparkles className="w-3.5 h-3.5" /> <span className="font-body">Studio AI</span>
-              </button>
-            </div>
-          </div>
-
-          {mode === "tavern" && (
-          <>
-          <div className="fantasy-panel p-3">
-            <h3 className="text-xs font-heading text-[hsl(43,85%,55%)] uppercase tracking-wider mb-3" style={{ WebkitTextFillColor: "unset" }}>
-              <Hash className="w-3 h-3 inline mr-1" /> Rooms
-            </h3>
-            <div className="space-y-1">
-              {rooms.map((room) => (
-                <button
-                  key={room.id}
-                  onClick={() => handleSwitchRoom(room.id)}
-                  className={`w-full text-left px-3 py-2 rounded text-sm transition-colors ${
-                    currentRoom === room.id
-                      ? "bg-[hsl(43,85%,55%)]/10 text-[hsl(43,85%,55%)] border border-[hsl(43,60%,30%)]/30"
-                      : "text-[hsl(45,15%,60%)] hover:bg-[hsl(225,25%,15%)] hover:text-[hsl(45,30%,80%)]"
-                  }`}
-                >
-                  <span className="font-body"># {room.name}</span>
-                </button>
-              ))}
           {hubTab === "friends" && (
             <div className="fantasy-panel p-4 flex-1 overflow-y-auto space-y-3">
               <h3 className="text-xs font-heading text-[hsl(43,85%,55%)] uppercase tracking-wider">Friends</h3>
@@ -895,43 +818,10 @@ export default function Chat() {
               )}
             </div>
           </div>
-          </>
-          )}
         </div>
 
         {/* Main thread */}
         <div className="flex-1 flex flex-col min-h-0">
-          <div className="md:hidden fantasy-panel px-2 py-2 mb-3 flex gap-2 shrink-0">
-            <button
-              onClick={() => setMode("tavern")}
-              className={`flex-1 px-3 py-1.5 rounded text-xs flex items-center justify-center gap-1.5 transition-colors ${
-                mode === "tavern"
-                  ? "bg-[hsl(43,85%,55%)]/15 text-[hsl(43,85%,55%)] border border-[hsl(43,60%,30%)]/30"
-                  : "text-[hsl(45,15%,60%)]"
-              }`}
-            >
-              <MessageSquare className="w-3 h-3" /> Tavern
-            </button>
-            <button
-              onClick={() => setMode("assistant")}
-              className={`flex-1 px-3 py-1.5 rounded text-xs flex items-center justify-center gap-1.5 transition-colors ${
-                mode === "assistant"
-                  ? "bg-[hsl(43,85%,55%)]/15 text-[hsl(43,85%,55%)] border border-[hsl(43,60%,30%)]/30"
-                  : "text-[hsl(45,15%,60%)]"
-              }`}
-            >
-              <Sparkles className="w-3 h-3" /> Studio AI
-            </button>
-          </div>
-
-          {mode === "assistant" ? (
-            <StudioAssistant />
-          ) : (
-          <>
-          <div className="fantasy-panel px-4 py-2 mb-3 flex items-center justify-between shrink-0">
-            <div className="flex items-center gap-3">
-              <h2 className="text-sm font-heading text-[hsl(43,85%,65%)]" style={{ WebkitTextFillColor: "unset" }}>
-                # {rooms.find((r) => r.id === currentRoom)?.name || currentRoom}
           <div className="fantasy-panel px-4 py-3 mb-3 flex items-center justify-between shrink-0">
             <div>
               <h2 className="text-base font-heading text-[hsl(45,30%,92%)] flex items-center gap-2">
@@ -991,37 +881,24 @@ export default function Chat() {
 
                   const name = msg.displayName || msg.username || "?";
                   const isOwn = name === displayName;
-                  const isAle =
-                    name.toLowerCase() === "ale" ||
-                    msg.grudgeId === "ale" ||
-                    msg.username?.toLowerCase() === "ale";
 
                   return (
-                    <div key={msg.id || `msg-${i}`} className={`flex gap-3 py-1.5 hover:bg-[hsl(225,25%,12%)]/50 px-2 rounded group ${isAle ? "bg-[hsl(270,40%,12%)]/40" : ""}`}>
+                    <div key={msg.id || `msg-${i}`} className="flex gap-3 py-1.5 hover:bg-[hsl(225,25%,12%)]/50 px-2 rounded group">
                       <div
                         className="w-8 h-8 rounded-full shrink-0 flex items-center justify-center text-xs font-bold mt-0.5"
                         style={{
-                          background: isAle
-                            ? "hsl(270,55%,28%)"
-                            : `hsl(${(name.charCodeAt(0) * 37) % 360}, 50%, 25%)`,
-                          color: isAle
-                            ? "hsl(270,70%,78%)"
-                            : `hsl(${(name.charCodeAt(0) * 37) % 360}, 60%, 70%)`,
+                          background: `hsl(${(name.charCodeAt(0) * 37) % 360}, 50%, 25%)`,
+                          color: `hsl(${(name.charCodeAt(0) * 37) % 360}, 60%, 70%)`,
                         }}
                       >
-                        {isAle ? "✦" : name[0]?.toUpperCase()}
+                        {name[0]?.toUpperCase()}
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-baseline gap-2 flex-wrap">
-                          <span className={`text-sm font-semibold ${isOwn ? "text-[hsl(43,85%,55%)]" : isAle ? "text-[hsl(270,70%,75%)]" : "text-[hsl(45,30%,85%)]"}`}>
+                          <span className={`text-sm font-semibold ${isOwn ? "text-[hsl(43,85%,55%)]" : "text-[hsl(45,30%,85%)]"}`}>
                             {name}
                           </span>
-                          {isAle && (
-                            <Badge variant="outline" className="text-[9px] border-[hsl(270,50%,45%)]/40 text-[hsl(270,60%,70%)]">
-                              AI
-                            </Badge>
-                          )}
-                          {msg.grudgeId && !isAle && (
+                          {msg.grudgeId && (
                             <span title="Grudge ID verified" className="inline-flex">
                               <Shield className="w-3 h-3 text-[hsl(270,60%,60%)]" aria-hidden />
                             </span>
@@ -1073,8 +950,8 @@ export default function Chat() {
                     placeholder={
                       connected
                         ? kind === "dm"
-                          ? `Message ${dmPeerLabel || "friend"}…  (@ale for AI)`
-                          : `Message #${titleName}…  try @ale`
+                          ? `Message ${dmPeerLabel || "friend"}…`
+                          : `Message #${titleName}…`
                         : `Message #${titleName} (offline queue)…`
                     }
                     className="bg-[hsl(225,25%,12%)] border-[hsl(43,60%,30%)]/20 text-[hsl(45,30%,90%)] placeholder:text-[hsl(45,15%,30%)] focus:border-[hsl(43,85%,55%)]/40"
@@ -1087,12 +964,10 @@ export default function Chat() {
                 </div>
               )}
               <p className="text-[10px] text-[hsl(45,15%,38%)] font-body mt-1.5 hidden sm:block">
-                Treaty · mention <span className="text-[hsl(43,85%,55%)]">@ale</span> for the AI assistant · friends · DMs · in-game
+                Treaty = channels · friends · DMs · in-game rooms · live WS presence
               </p>
             </div>
           </div>
-          </>
-          )}
         </div>
       </div>
     </div>

@@ -500,9 +500,11 @@ function SocialTab() {
   const [chatInput, setChatInput] = useState("");
   const [chatMessages, setChatMessages] = useState<any[]>([]);
   const [chatConnected, setChatConnected] = useState(false);
+  const [chatError, setChatError] = useState<string | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const roomRef = useRef(chatRoom);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reconnectAttempts = useRef(0);
   const intentionalClose = useRef(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const activeChannel = treatyChannelById(chatRoom) ?? TREATY_CHANNELS[0];
@@ -521,12 +523,26 @@ function SocialTab() {
       if (wsRef.current && (wsRef.current.readyState === WebSocket.OPEN || wsRef.current.readyState === WebSocket.CONNECTING)) {
         return;
       }
+      
+      const MAX_RECONNECT_ATTEMPTS = 10;
+      if (reconnectAttempts.current >= MAX_RECONNECT_ATTEMPTS) {
+        setChatConnected(false);
+        setChatError(`Chat connection failed after ${MAX_RECONNECT_ATTEMPTS} attempts.`);
+        return;
+      }
+      
       let ws: WebSocket;
       try {
         ws = new WebSocket(getTreatyWsUrl());
       } catch {
+        reconnectAttempts.current += 1;
         setChatConnected(false);
-        reconnectTimer.current = setTimeout(connect, 3000);
+        if (reconnectAttempts.current >= MAX_RECONNECT_ATTEMPTS) {
+          setChatError(`Chat connection failed after ${MAX_RECONNECT_ATTEMPTS} attempts.`);
+          return;
+        }
+        const backoffDelay = Math.min(2000 * Math.pow(2, reconnectAttempts.current - 1), 32000);
+        reconnectTimer.current = setTimeout(connect, backoffDelay);
         return;
       }
       wsRef.current = ws;
@@ -534,6 +550,7 @@ function SocialTab() {
       ws.onopen = () => {
         if (closed) return;
         setChatConnected(true);
+        setChatError(null);
         try {
           ws.send(JSON.stringify(buildJoinPayload(identity, roomRef.current)));
         } catch {
@@ -544,6 +561,7 @@ function SocialTab() {
       ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
+          reconnectAttempts.current = 0;
           if (data.type === "message" || data.type === "system") {
             setChatMessages((prev) => [...prev.slice(-50), data]);
           }
@@ -556,7 +574,13 @@ function SocialTab() {
         setChatConnected(false);
         if (wsRef.current === ws) wsRef.current = null;
         if (!intentionalClose.current && !closed) {
-          reconnectTimer.current = setTimeout(connect, 2500);
+          reconnectAttempts.current += 1;
+          if (reconnectAttempts.current >= MAX_RECONNECT_ATTEMPTS) {
+            setChatError(`Chat connection failed after ${MAX_RECONNECT_ATTEMPTS} attempts.`);
+            return;
+          }
+          const backoffDelay = Math.min(2000 * Math.pow(2, reconnectAttempts.current - 1), 32000);
+          reconnectTimer.current = setTimeout(connect, backoffDelay);
         }
       };
     };
@@ -636,7 +660,10 @@ function SocialTab() {
           className="rounded border border-[hsl(225,20%,15%)] bg-[hsl(225,30%,6%)] h-48 flex flex-col"
         >
           <div className="flex-1 overflow-y-auto px-3 py-2 space-y-1 text-xs">
-            {chatMessages.length === 0 && (
+            {chatError && (
+              <p className="text-red-400 font-body text-center pt-6 text-[11px]">{chatError}</p>
+            )}
+            {!chatError && chatMessages.length === 0 && (
               <p className="text-[hsl(45,15%,40%)] font-body text-center pt-6">
                 {chatConnected ? `No messages in #${activeChannel.name} yet.` : "Connecting…"}
               </p>
