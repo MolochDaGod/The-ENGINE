@@ -6,9 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Anchor, ArrowUpRight, Bot, ChevronLeft, ChevronRight, Crown, ExternalLink, Flame, Gamepad, Layers3, LayoutDashboard, Library, Loader2, Rocket, Sparkles, Swords, Trophy } from "lucide-react";
 import { useAuthModal } from "@/components/auth-modal";
 
-// Outbound URLs are environment-driven so production deploys (Railway/Vercel/Cloudflare)
-// can swap targets without code changes.
-const WARLORDS_URL = (import.meta.env.VITE_WARLORDS_URL as string | undefined) ?? "https://grudgewarlords.com";
+const SPAWN_WARLORDS = "https://www.spawn.co/@racalvin/grudge-warlords";
+const OLD_LAUNCHER = "https://grudgewarlords.com";
 const PLAY_NOW = [
   { name: "Spawn Warlords", href: "https://www.spawn.co/@racalvin/grudge-warlords" },
   { name: "Grudge Open", href: "https://open.grudge-studio.com" },
@@ -372,15 +371,6 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Era selector cards */}
-<div className="mt-8" >
-  <EraCarousel
-              eras={ ERAS }
-activeKey = { activeEra }
-setActiveKey = {(k: string) => setActiveEra(k as EraKey)}
-            />
-  </div>
-
           <div className="flex flex-wrap gap-2 mt-6">
             {PLAY_NOW.map((game) => (
               <a
@@ -395,25 +385,36 @@ setActiveKey = {(k: string) => setActiveEra(k as EraKey)}
             ))}
           </div>
 
-          <div className="flex flex-wrap gap-3 mt-8">
-  <a href={ WARLORDS_URL } target = "_blank" rel = "noopener noreferrer" >
+          <div className="flex flex-wrap items-center gap-3 mt-4">
+  <a href={ SPAWN_WARLORDS } target = "_blank" rel = "noopener noreferrer" >
     <Button className="gilded-button" >
-      <Swords className="w-4 h-4 mr-2" /> Play Grudge Warlords
+      <Swords className="w-4 h-4 mr-2" /> Play Spawn Warlords
         < ExternalLink className = "w-3.5 h-3.5 ml-1.5 opacity-70" />
           </Button>
   </a>
-  < Link href = "/games" >
+  <a href={OLD_LAUNCHER} target="_blank" rel="noopener noreferrer" className="text-xs text-[hsl(45,15%,60%)] hover:text-[hsl(43,85%,55%)] font-body">
+    Older launcher
+  </a>
+  <Link href="/games">
               <Button variant="outline" className="border-[hsl(43,60%,30%)] text-[hsl(45,30%,90%)] hover:bg-[hsl(225,25%,16%)]">
   <Gamepad className="w-4 h-4 mr-2" /> Browse Games
               </Button>
   </Link>
-  < Button
-variant = "ghost"
-className = "text-[hsl(45,15%,70%)] hover:text-[hsl(43,85%,55%)]"
-onClick = {() => openAuth({ initialTab: 'signin', reason: 'Sign in to access all Grudge Studio products.' })}
+  <Button
+variant="ghost"
+className="text-[hsl(45,15%,70%)] hover:text-[hsl(43,85%,55%)]"
+onClick={() => openAuth({ initialTab: 'signin', reason: 'Sign in to access all Grudge Studio products.' })}
             >
   <Sparkles className="w-4 h-4 mr-2" /> Sign In with Grudge ID
     </Button>
+          </div>
+
+          <div className="mt-8">
+            <EraCarousel
+              eras={ERAS}
+              activeKey={activeEra}
+              setActiveKey={(k: string) => setActiveEra(k as EraKey)}
+            />
           </div>
 
           {/* Featured live games carousel */}

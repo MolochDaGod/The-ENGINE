@@ -631,7 +631,7 @@ export const FLEET_REGISTRY: FleetRegistryEntry[] = [
   },
   {
     id: "super-engine",
-    name: "Grudge Studio Forge",
+    name: "Play hub",
     description: "Live fleet hub — preview and launch every Grudge game from one shell.",
     canonicalUrl: "/super-engine",
     status: "live",

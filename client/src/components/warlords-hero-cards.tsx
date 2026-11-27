@@ -51,8 +51,7 @@ const FACTION_STYLE: Record<FactionId, { border: string; label: string; tint: st
   },
 };
 
-const WARLORDS_URL =
-  (import.meta.env.VITE_WARLORDS_URL as string | undefined) ?? "https://grudgewarlords.com";
+const SPAWN_WARLORDS = "https://www.spawn.co/@racalvin/grudge-warlords";
 
 function HeroThumb({
   hero,
@@ -221,10 +220,10 @@ function HeroPopOut({
           </div>
 
           <div className="flex flex-col sm:flex-row gap-2 pt-1">
-            <a href={WARLORDS_URL} target="_blank" rel="noopener noreferrer" className="flex-1">
+            <a href={SPAWN_WARLORDS} target="_blank" rel="noopener noreferrer" className="flex-1">
               <Button className="w-full gilded-button text-xs h-9">
                 <Swords className="w-3.5 h-3.5 mr-1.5" />
-                Play Warlords
+                Play Spawn Warlords
                 <ExternalLink className="w-3 h-3 ml-1.5 opacity-70" />
               </Button>
             </a>

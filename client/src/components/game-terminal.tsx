@@ -437,7 +437,7 @@ export function GameTerminal({ games = FORGE_GAMES, defaultGameId }: GameTermina
                   <Terminal className="h-12 w-12 text-[hsl(43,85%,55%)]" />
                 </div>
                 <div>
-                  <h2 className="gold-text text-2xl">Grudge Studio Forge</h2>
+                  <h2 className="gold-text text-2xl">Play hub</h2>
                   <p className="mt-2 max-w-md font-mono text-xs leading-relaxed text-[hsl(45,15%,55%)]">
                     Unified game terminal — one container, every Grudge title. Pick from the catalog or deep-link
                     /super-engine/&lt;game-id&gt;.

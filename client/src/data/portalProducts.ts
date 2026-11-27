@@ -506,7 +506,7 @@ const _PORTAL_PRODUCTS_RAW = [
   },
   {
     id: "rpg-sprite-attack",
-    name: "Grudge Smash",
+    name: "RPG Sprite Attack",
     href: "/polyfighter",
     description: "2D Smash-style platform fighter (same title as /polyfighter) — sprite combat, AI, online PvP.",
     status: "live",
@@ -608,7 +608,7 @@ const _PORTAL_PRODUCTS_RAW = [
   },
   {
     id: "super-engine",
-    name: "Grudge Studio Forge",
+    name: "Play hub",
     href: "/super-engine",
     description: "Live fleet hub — preview and launch every Grudge game from one shell.",
     status: "live",
@@ -656,7 +656,10 @@ export const PORTAL_PRODUCTS: PortalProduct[] = _PORTAL_PRODUCTS_RAW as PortalPr
 
 export const featuredProducts = PORTAL_PRODUCTS.filter((product) => product.section === "featured");
 export const playProducts = PORTAL_PRODUCTS.filter(
-  (product) => product.section === "play" && product.status !== "planned",
+  (product) =>
+    product.section === "play" &&
+    product.status !== "planned" &&
+    product.id !== "rpg-sprite-attack",
 );
 export const studioProducts = PORTAL_PRODUCTS.filter((product) => product.section === "studio");
 export const legacyProducts = PORTAL_PRODUCTS.filter((product) => product.section === "legacy");

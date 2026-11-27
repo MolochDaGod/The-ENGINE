@@ -357,7 +357,7 @@ function entryToCard(entry: FleetRegistryEntry): FleetGameCard {
           ? "three 0.185 · Toon RTS · Rapier"
           : entry.id === "open" || entry.id === "mineloader"
             ? "three 0.185 · Rapier KCC · Railway player"
-            : "Grudge Studio Forge",
+            : "Play hub",
     route: entry.canonicalUrl,
     embedRoute: entry.embedUrl,
     allowEmbed: entry.allowEmbed,
