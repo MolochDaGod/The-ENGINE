@@ -9,6 +9,13 @@ import { useAuthModal } from "@/components/auth-modal";
 // Outbound URLs are environment-driven so production deploys (Railway/Vercel/Cloudflare)
 // can swap targets without code changes.
 const WARLORDS_URL = (import.meta.env.VITE_WARLORDS_URL as string | undefined) ?? "https://grudgewarlords.com";
+const PLAY_NOW = [
+  { name: "Spawn Warlords", href: "https://www.spawn.co/@racalvin/grudge-warlords" },
+  { name: "Grudge Open", href: "https://open.grudge-studio.com" },
+  { name: "GRUDOX", href: "https://grudox.grudge-studio.com" },
+  { name: "Mine-Loader", href: "https://mineloader.grudge-studio.com" },
+  { name: "Nexus Nemesis", href: "https://nemesis.grudge-studio.com" },
+];
 const DISCORD_URL = (import.meta.env.VITE_DISCORD_URL as string | undefined) ?? "https://discord.gg/grudge";
 import grudgeLogo from "@assets/uXpJmRe_1773828784729.png";
 import homeBg from "@assets/2kljxaj_1773841543581.png";
@@ -190,7 +197,7 @@ function FeaturedCarousel() {
 function EraSection({ era }: { era: typeof ERAS[number] }) {
   const eraProducts = era.productIds
     .map((id) => PORTAL_PRODUCTS.find((p) => p.id === id))
-    .filter(Boolean) as PortalProduct[];
+    .filter((p): p is PortalProduct => !!p && p.status !== "planned");
 
   return (
     <section
@@ -210,7 +217,7 @@ function EraSection({ era }: { era: typeof ERAS[number] }) {
                 {era.name}
               </h2>
               <Badge className="border text-[10px] uppercase tracking-wide" style={{ borderColor: era.accentBorder, color: era.accent, background: `${era.accent}15` }}>
-                {era.key === "armada" ? "Coming Soon" : "Active"}
+                {era.key === "armada" ? "Play" : "Active"}
               </Badge>
             </div>
             <p className="text-[hsl(45,15%,70%)] font-body leading-relaxed">
@@ -373,6 +380,20 @@ activeKey = { activeEra }
 setActiveKey = {(k: string) => setActiveEra(k as EraKey)}
             />
   </div>
+
+          <div className="flex flex-wrap gap-2 mt-6">
+            {PLAY_NOW.map((game) => (
+              <a
+                key={game.href}
+                href={game.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-3 py-1.5 rounded-full text-xs font-medium border border-[hsl(43,60%,30%)]/50 text-[hsl(45,30%,90%)] no-underline hover:border-[hsl(43,85%,55%)] hover:text-[hsl(43,85%,55%)]"
+              >
+                {game.name}
+              </a>
+            ))}
+          </div>
 
           <div className="flex flex-wrap gap-3 mt-8">
   <a href={ WARLORDS_URL } target = "_blank" rel = "noopener noreferrer" >

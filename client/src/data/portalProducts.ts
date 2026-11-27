@@ -469,16 +469,6 @@ const _PORTAL_PRODUCTS_RAW = [
     image: "/assets/games/thc-labz-card.png",
   },
   {
-    id: "conan-admin",
-    name: "Grudge Exiles",
-    href: "https://conan.grudge-studio.com",
-    description: "Conan Exiles community server — connect info, rules, and Discord. Staff admin: admin.conan4869.com.",
-    status: "live",
-    section: "studio",
-    external: true,
-    image: "/assets/games/conan-exiles-card.jpg",
-  },
-  {
     id: "dungeon-crawler",
     name: "Dungeon Crawler Quest",
     href: "https://dcq.grudge-studio.com",
@@ -665,7 +655,9 @@ const _PORTAL_PRODUCTS_RAW = [
 export const PORTAL_PRODUCTS: PortalProduct[] = _PORTAL_PRODUCTS_RAW as PortalProduct[];
 
 export const featuredProducts = PORTAL_PRODUCTS.filter((product) => product.section === "featured");
-export const playProducts = PORTAL_PRODUCTS.filter((product) => product.section === "play");
+export const playProducts = PORTAL_PRODUCTS.filter(
+  (product) => product.section === "play" && product.status !== "planned",
+);
 export const studioProducts = PORTAL_PRODUCTS.filter((product) => product.section === "studio");
 export const legacyProducts = PORTAL_PRODUCTS.filter((product) => product.section === "legacy");
 

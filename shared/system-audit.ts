@@ -17,7 +17,7 @@ export const SYSTEM_CANONICAL = {
   launcher: "https://launcher.grudge-studio.com",
   warlordsLegacy: "https://grudgewarlords.com",
   metaverse: "https://metaverse.grudge-studio.com",
-  warlordGenesis: "https://genesis.grudge-studio.com/play",
+  warlordGenesis: "https://warlord-genesis.vercel.app/play",
   islands: "https://islands.grudge-studio.com/arena",
 } as const;
 

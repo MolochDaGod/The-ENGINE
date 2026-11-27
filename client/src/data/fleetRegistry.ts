@@ -202,7 +202,7 @@ export const FLEET_REGISTRY: FleetRegistryEntry[] = [
     name: "Warlord Genesis",
     description:
       "Three-lane hero ground RTS — Grudge 6 champions, lane guards, deploy screen, weapon skills, and warcamp progression.",
-    canonicalUrl: "https://genesis.grudge-studio.com/play",
+    canonicalUrl: "https://warlord-genesis.vercel.app/play",
     status: "live",
     tags: ["rts", "pvp", "arena", "coop"],
     forge: true,

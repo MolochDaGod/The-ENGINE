@@ -148,7 +148,7 @@ export const UNIVERSE_LAUNCH = {
   },
   warlordGenesis: {
     gameKey: "warlord-genesis",
-    route: "https://genesis.grudge-studio.com/play",
+    route: "https://warlord-genesis.vercel.app/play",
     label: "Warlord Genesis",
   },
   nemesis: {
